@@ -1,0 +1,501 @@
+// ── SellBazar Admin Dashboard Styles ──────────────────────────────────────────
+// Dark-first CMS design with orange brand accent
+
+// ── Global theme transition ──────────────────────────────────────────────────
+.admin-shell *,
+.admin-shell *::before,
+.admin-shell *::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 0.25s;
+  transition-timing-function: ease;
+}
+// But keep transform/opacity transitions for animations (not overridden by theme)
+.admin-shell .nav-item,
+.admin-shell .admin-btn,
+.admin-shell .admin-stat-card {
+  transition: background-color 0.15s ease, border-color 0.25s ease, color 0.25s ease,
+              transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+// ── Admin Shell Variables ────────────────────────────────────────────────────
+.admin-shell {
+  --sidebar-w:           224px;
+  --sidebar-collapsed-w: 64px;
+  --topbar-h:            56px;
+  --admin-bg:            #0c0c0f;
+  --sidebar-bg:          #111116;
+  --sidebar-border:      rgba(255,255,255,0.06);
+  --surface:             #16161c;
+  --surface-hover:       #1e1e26;
+  --text-primary:        #f0f0f5;
+  --text-secondary:      #8888a0;
+  --brand:               #f97316;
+  --brand-dim:           rgba(249,115,22,0.12);
+  --active-bg:           rgba(249,115,22,0.14);
+  --active-border:       #f97316;
+}
+
+// Light mode overrides
+:root:not(.dark) .admin-shell {
+  --admin-bg:       #f1f1f5;
+  --sidebar-bg:     #ffffff;
+  --sidebar-border: rgba(0,0,0,0.07);
+  --surface:        #ffffff;
+  --surface-hover:  #f7f7fa;
+  --text-primary:   #18181b;
+  --text-secondary: #71717a;
+  --brand-dim:      rgba(249,115,22,0.08);
+  --active-bg:      rgba(249,115,22,0.1);
+}
+
+// ── Stat Cards ───────────────────────────────────────────────────────────────
+.admin-stat-card {
+  background: var(--surface);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 60%, rgba(249,115,22,0.04));
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .stat-value {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .stat-delta {
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    &.positive { color: #22c55e; }
+    &.negative { color: #ef4444; }
+    &.neutral  { color: var(--text-secondary); }
+  }
+}
+
+// ── Chart Containers ─────────────────────────────────────────────────────────
+.admin-chart-card {
+  background: var(--surface);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 14px;
+  padding: 20px;
+  overflow: hidden;
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chart-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .chart-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .chart-canvas-wrap {
+    position: relative;
+    width: 100%;
+  }
+}
+
+// ── Admin Table ──────────────────────────────────────────────────────────────
+.admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid var(--sidebar-border);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  thead tr {
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+
+  th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    background: var(--surface-hover);
+  }
+
+  td {
+    padding: 13px 16px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--sidebar-border);
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    transition: background 0.15s;
+    &:hover { background: var(--surface-hover); }
+    &:last-child td { border-bottom: none; }
+  }
+}
+
+// ── Status Badges ────────────────────────────────────────────────────────────
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+
+  &::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+
+  &.pending    { background: rgba(234,179,8,0.12);  color: #eab308; &::before { background: #eab308; } }
+  &.processing { background: rgba(59,130,246,0.12); color: #3b82f6; &::before { background: #3b82f6; } }
+  &.shipped    { background: rgba(168,85,247,0.12); color: #a855f7; &::before { background: #a855f7; } }
+  &.delivered  { background: rgba(34,197,94,0.12);  color: #22c55e; &::before { background: #22c55e; } }
+  &.cancelled  { background: rgba(239,68,68,0.12);  color: #ef4444; &::before { background: #ef4444; } }
+  &.active     { background: rgba(34,197,94,0.12);  color: #22c55e; &::before { background: #22c55e; } }
+  &.inactive   { background: rgba(239,68,68,0.12);  color: #ef4444; &::before { background: #ef4444; } }
+  &.low        { background: rgba(239,68,68,0.12);  color: #ef4444; &::before { background: #ef4444; } }
+  &.medium     { background: rgba(234,179,8,0.12);  color: #eab308; &::before { background: #eab308; } }
+  &.high       { background: rgba(34,197,94,0.12);  color: #22c55e; &::before { background: #22c55e; } }
+}
+
+// ── Admin Page Header ────────────────────────────────────────────────────────
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--text-primary);
+  }
+
+  .page-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+}
+
+// ── Admin Filters Bar ────────────────────────────────────────────────────────
+.admin-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+
+  .filter-input {
+    flex: 1;
+    min-width: 200px;
+    max-width: 340px;
+    padding: 9px 14px 9px 36px;
+    background: var(--surface);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 9px;
+    font-size: 13px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s;
+    &::placeholder { color: var(--text-secondary); }
+    &:focus { border-color: var(--brand); }
+  }
+
+  .filter-select {
+    padding: 9px 14px;
+    background: var(--surface);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 9px;
+    font-size: 13px;
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    &:focus { border-color: var(--brand); }
+  }
+
+  .search-wrap {
+    position: relative;
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-secondary);
+      font-size: 13px;
+      pointer-events: none;
+    }
+  }
+}
+
+// ── CMS Action Buttons ───────────────────────────────────────────────────────
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+
+  &.primary {
+    background: var(--brand);
+    color: white;
+    box-shadow: 0 4px 14px rgba(249,115,22,0.35);
+    &:hover { background: #ea580c; box-shadow: 0 6px 20px rgba(249,115,22,0.45); }
+  }
+
+  &.secondary {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--sidebar-border);
+    &:hover { background: var(--surface-hover); }
+  }
+
+  &.danger {
+    background: rgba(239,68,68,0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239,68,68,0.2);
+    &:hover { background: rgba(239,68,68,0.2); }
+  }
+
+  &.ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    &:hover { color: var(--text-primary); background: var(--surface-hover); }
+  }
+
+  &:active { transform: scale(0.97); }
+}
+
+// ── Mini progress bar ────────────────────────────────────────────────────────
+.admin-progress {
+  height: 5px;
+  background: var(--sidebar-border);
+  border-radius: 10px;
+  overflow: hidden;
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.6s ease;
+    background: linear-gradient(90deg, var(--brand), #fb923c);
+  }
+}
+
+// ── Settings form ────────────────────────────────────────────────────────────
+.admin-settings-group {
+  background: var(--surface);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 20px;
+
+  .settings-group-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--sidebar-border);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    i { color: var(--brand); }
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--sidebar-border);
+    gap: 16px;
+    flex-wrap: wrap;
+    &:last-child { border-bottom: none; }
+
+    .settings-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .settings-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+  }
+}
+
+// ── Toggle switch ────────────────────────────────────────────────────────────
+.admin-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+
+  input { opacity: 0; width: 0; height: 0; }
+
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--sidebar-border);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: background 0.2s;
+
+    &::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+  }
+
+  input:checked + .slider { background: var(--brand); }
+  input:checked + .slider::before { transform: translateX(18px); }
+}
+
+// ── Responsive grid helpers ──────────────────────────────────────────────────
+.admin-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  @media (max-width: 1200px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 600px)  { grid-template-columns: 1fr; }
+}
+
+.admin-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  @media (max-width: 768px) { grid-template-columns: 1fr; }
+}
+
+.admin-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  @media (max-width: 1024px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 600px)  { grid-template-columns: 1fr; }
+}
+
+// ── Mobile admin content ─────────────────────────────────────────────────────
+@media (max-width: 768px) {
+  .admin-page-header {
+    .page-title { font-size: 18px; }
+  }
+  .admin-table th, .admin-table td { padding: 10px 12px; }
+}
+
+// ── Empty state ──────────────────────────────────────────────────────────────
+.admin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+  gap: 12px;
+  font-size: 13px;
+  i { font-size: 32px; opacity: 0.4; }
+}
+
+// ── Skeleton loading ─────────────────────────────────────────────────────────
+.admin-skeleton {
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg,
+    var(--surface-hover) 25%,
+    var(--sidebar-border) 50%,
+    var(--surface-hover) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease infinite;
+}
+@keyframes skeleton-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+// ── Scrollbar inside admin ───────────────────────────────────────────────────
+.admin-shell {
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--sidebar-border); border-radius: 99px; }
+}

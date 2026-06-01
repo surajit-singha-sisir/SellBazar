@@ -1,30 +1,40 @@
 <template>
-  <div :class="['min-h-screen transition-colors duration-300', themeStore.isDark ? 'dark' : '']">
-    <AppHeader />
-    <CartDrawer />
-    <main class="bg-[var(--color-bg)] min-h-screen">
-      <RouterView v-slot="{ Component }">
-        <Transition name="page" mode="out-in">
-          <component :is="Component" />
-        </Transition>
-      </RouterView>
-    </main>
-    <AppFooter />
+  <div class="min-h-screen transition-colors duration-300">
+    <!-- Public storefront layout -->
+    <template v-if="!isAdminRoute">
+      <AppHeader />
+      <CartDrawer />
+      <main class="bg-[var(--color-bg)] min-h-screen">
+        <RouterView v-slot="{ Component }">
+          <Transition name="page" mode="out-in">
+            <component :is="Component" />
+          </Transition>
+        </RouterView>
+      </main>
+      <AppFooter />
+    </template>
+
+    <!-- Admin CMS layout (no header/footer — AdminLayout handles its own shell) -->
+    <template v-else>
+      <RouterView />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/useThemeStore'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import CartDrawer from '@/components/cart/CartDrawer.vue'
 
 const themeStore = useThemeStore()
+const route = useRoute()
 
-onMounted(() => {
-  document.documentElement.classList.toggle('dark', themeStore.isDark)
-})
+const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+
+// Theme is already applied to <html> by the store's immediate watcher — no duplication needed here.
 </script>
 
 <style>

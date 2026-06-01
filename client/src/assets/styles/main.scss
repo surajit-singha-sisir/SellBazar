@@ -1,5 +1,6 @@
 @use 'variables' as *;
 @use 'mixins' as *;
+@use 'admin';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
