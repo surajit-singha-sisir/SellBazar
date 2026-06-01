@@ -1,0 +1,53 @@
+// ── SellBazar Design Tokens 2027 ──────────────────────────────
+:root {
+  // Brand palette – warm orange + electric violet
+  --color-brand:        #f97316;
+  --color-brand-dark:   #ea580c;
+  --color-brand-light:  #fb923c;
+  --color-accent:       #d946ef;
+  --color-accent-light: #e879f9;
+
+  // Surface
+  --color-bg:           #ffffff;
+  --color-surface:      #fafafa;
+  --color-surface-2:    #f4f4f5;
+  --color-border:       #e4e4e7;
+
+  // Text
+  --color-text:         #09090b;
+  --color-text-2:       #52525b;
+  --color-text-muted:   #a1a1aa;
+
+  // Semantic
+  --color-success:      #22c55e;
+  --color-warning:      #eab308;
+  --color-danger:       #ef4444;
+  --color-info:         #3b82f6;
+
+  // Spacing
+  --radius-sm:   0.5rem;
+  --radius-md:   0.75rem;
+  --radius-lg:   1rem;
+  --radius-xl:   1.5rem;
+  --radius-2xl:  2rem;
+
+  // Shadows
+  --shadow-sm:   0 1px 4px rgba(0,0,0,0.06);
+  --shadow-md:   0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg:   0 8px 32px rgba(0,0,0,0.10);
+  --shadow-glow: 0 0 20px rgba(249,115,22,0.30);
+
+  // Transitions
+  --transition: 0.2s ease;
+  --transition-slow: 0.4s ease;
+}
+
+.dark {
+  --color-bg:         #050505;
+  --color-surface:    #0f0f0f;
+  --color-surface-2:  #1a1a1a;
+  --color-border:     #27272a;
+  --color-text:       #fafafa;
+  --color-text-2:     #a1a1aa;
+  --color-text-muted: #52525b;
+}

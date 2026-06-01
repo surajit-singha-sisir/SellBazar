@@ -1,0 +1,37 @@
+// ── Glassmorphism utilities ───────────────────────────────────
+@mixin glass($blur: 16px, $bg: rgba(255,255,255,0.06)) {
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+  background: $bg;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+@mixin glass-dark($blur: 16px) {
+  @include glass($blur, rgba(0,0,0,0.3));
+  border-color: rgba(255,255,255,0.06);
+}
+
+@mixin gradient-brand {
+  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-accent) 100%);
+}
+
+@mixin gradient-text {
+  background: linear-gradient(135deg, var(--color-brand), var(--color-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@mixin card-hover {
+  transition: transform var(--transition), box-shadow var(--transition);
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+@mixin shimmer {
+  background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface) 50%, var(--color-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
