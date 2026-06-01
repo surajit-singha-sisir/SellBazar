@@ -129,6 +129,37 @@
           </div>
         </div>
 
+        <!-- Data Export -->
+        <div class="admin-settings-group">
+          <div class="settings-group-header">
+            <i class="fa-sharp-duotone fa-solid fa-file-export"></i> Data Export
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Export All Products</div><div class="settings-desc">Download product catalog</div></div>
+            <div style="display:flex;gap:6px">
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('products','excel')"><i class="fa-solid fa-file-excel" style="color:#22c55e"></i> XLSX</button>
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('products','csv')"><i class="fa-solid fa-file-csv" style="color:#3b82f6"></i> CSV</button>
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('products','json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Export All Orders</div><div class="settings-desc">Download orders report</div></div>
+            <div style="display:flex;gap:6px">
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('orders','excel')"><i class="fa-solid fa-file-excel" style="color:#22c55e"></i> XLSX</button>
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('orders','csv')"><i class="fa-solid fa-file-csv" style="color:#3b82f6"></i> CSV</button>
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('orders','json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Export All Customers</div><div class="settings-desc">Download customer list</div></div>
+            <div style="display:flex;gap:6px">
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('customers','excel')"><i class="fa-solid fa-file-excel" style="color:#22c55e"></i> XLSX</button>
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('customers','csv')"><i class="fa-solid fa-file-csv" style="color:#3b82f6"></i> CSV</button>
+              <button class="admin-btn secondary" style="font-size:12px;padding:7px 12px" @click="exportData('customers','json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Danger zone -->
         <div class="admin-settings-group" style="border-color:rgba(239,68,68,0.2)">
           <div class="settings-group-header" style="color:#ef4444;border-color:rgba(239,68,68,0.2)">
@@ -162,11 +193,38 @@
 import { ref } from 'vue'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { useExport } from '@/composables/useExport'
 
 const adminStore  = useAdminStore()
 const themeStore  = useThemeStore()
+const exporter    = useExport()
 const saved       = ref(false)
 const brandColors = ['#f97316','#3b82f6','#a855f7','#22c55e','#ef4444','#06b6d4','#ec4899']
+
+function exportData(type: 'products'|'orders'|'customers', fmt: 'excel'|'csv'|'json') {
+  const filename = `${type}_${new Date().toISOString().slice(0,10)}`
+  let data: any[] = []
+  if (type === 'products') {
+    data = adminStore.products.map(p => ({
+      Name: p.name, Brand: p.brand, Category: p.category, Price: p.price,
+      SalePrice: p.salePrice, Stock: p.stock, Rating: p.rating, Seller: p.seller
+    }))
+  } else if (type === 'orders') {
+    data = adminStore.orders.map(o => ({
+      ID: o.id, Customer: o.customer?.name, Email: o.customer?.email,
+      Total: o.total, Payment: o.paymentMethod, Status: o.status,
+      Date: new Date(o.createdAt).toLocaleDateString()
+    }))
+  } else {
+    data = adminStore.customers.map(c => ({
+      Name: c.name, Email: c.email, Phone: c.phone, Orders: c.orderCount,
+      TotalSpent: c.totalSpent, LastOrder: c.lastOrder
+    }))
+  }
+  if (fmt === 'excel') exporter.exportExcel(data, filename, type)
+  else if (fmt === 'csv') exporter.exportCSV(data, filename)
+  else exporter.exportJSON(data, filename)
+}
 
 const defaultForm = () => ({
   storeName:      'SellBazar',

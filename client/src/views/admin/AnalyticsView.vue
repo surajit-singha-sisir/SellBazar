@@ -14,6 +14,17 @@
         <button class="admin-btn secondary" @click="rebuild">
           <i class="fa-sharp fa-solid fa-arrows-rotate" :class="{'fa-spin': adminStore.loading.orders}"></i> Refresh
         </button>
+        <div class="export-wrap" v-click-outside="() => exportOpen = false">
+          <button class="admin-btn secondary" @click="exportOpen = !exportOpen">
+            <i class="fa-sharp fa-solid fa-file-export"></i> Export <i class="fa-solid fa-chevron-down" style="font-size:10px"></i>
+          </button>
+          <div v-if="exportOpen" class="export-dropdown">
+            <button @click="doExport('excel')"><i class="fa-solid fa-file-excel" style="color:#22c55e"></i> Excel</button>
+            <button @click="doExport('pdf')"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> PDF</button>
+            <button @click="doExport('csv')"><i class="fa-solid fa-file-csv" style="color:#3b82f6"></i> CSV</button>
+            <button @click="doExport('json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -164,11 +175,33 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { useExport } from '@/composables/useExport'
 import Chart from 'chart.js/auto'
 
 const adminStore = useAdminStore()
 const themeStore = useThemeStore()
+const exporter   = useExport()
+const exportOpen = ref(false)
 const period = ref(30)
+
+function doExport(fmt: 'excel'|'pdf'|'csv'|'json') {
+  exportOpen.value = false
+  const daily = getDailyRevenue()
+  const data = daily.labels.map((label, i) => ({ Date: label, Revenue: daily.data[i] }))
+  const filename = `analytics_${new Date().toISOString().slice(0,10)}`
+  if (fmt === 'excel') exporter.exportExcel(data, filename, 'Revenue')
+  else if (fmt === 'csv') exporter.exportCSV(data, filename)
+  else if (fmt === 'json') exporter.exportJSON(data, filename)
+  else exporter.exportPDF(['Date','Revenue'], data.map(d=>[d.Date, `৳${d.Revenue}`]), filename, 'SellBazar — Revenue Analytics')
+}
+
+const vClickOutside = {
+  mounted(el: any, binding: any) {
+    el._clickHandler = (e: Event) => { if (!el.contains(e.target)) binding.value(e) }
+    document.addEventListener('click', el._clickHandler)
+  },
+  unmounted(el: any) { document.removeEventListener('click', el._clickHandler) }
+}
 const lineRef   = ref<HTMLCanvasElement | null>(null)
 const payRef    = ref<HTMLCanvasElement | null>(null)
 const funnelRef = ref<HTMLCanvasElement | null>(null)
@@ -298,3 +331,19 @@ watch([()=>adminStore.orders.length,()=>adminStore.products.length,period,()=>th
   await nextTick(); rebuild()
 })
 </script>
+
+<style scoped>
+.export-wrap { position: relative; }
+.export-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
+  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
+  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  min-width: 160px; overflow: hidden;
+}
+.export-dropdown button {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px;
+  background: none; border: none; color: var(--text-primary); font-size: 13px;
+  cursor: pointer; text-align: left; transition: background 0.15s;
+}
+.export-dropdown button:hover { background: var(--surface-hover); }
+</style>

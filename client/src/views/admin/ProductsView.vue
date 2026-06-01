@@ -6,9 +6,24 @@
         <h1 class="page-title">Products</h1>
         <p class="page-subtitle">{{ filtered.length }} of {{ adminStore.products.length }} products</p>
       </div>
-      <button class="admin-btn primary" @click="openAdd">
-        <i class="fa-sharp fa-solid fa-plus"></i> Add Product
-      </button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <!-- Export dropdown -->
+        <div class="export-wrap" v-click-outside="() => exportOpen = false">
+          <button class="admin-btn secondary" @click="exportOpen = !exportOpen">
+            <i class="fa-sharp fa-solid fa-file-export"></i> Export
+            <i class="fa-solid fa-chevron-down" style="font-size:10px;margin-left:2px"></i>
+          </button>
+          <div v-if="exportOpen" class="export-dropdown">
+            <button @click="doExport('excel')"><i class="fa-solid fa-file-excel" style="color:#22c55e"></i> Excel (.xlsx)</button>
+            <button @click="doExport('pdf')"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> PDF</button>
+            <button @click="doExport('csv')"><i class="fa-solid fa-file-csv" style="color:#3b82f6"></i> CSV</button>
+            <button @click="doExport('json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
+          </div>
+        </div>
+        <RouterLink to="/admin/products/add" class="admin-btn primary">
+          <i class="fa-sharp fa-solid fa-plus"></i> Add Product
+        </RouterLink>
+      </div>
     </div>
 
     <!-- ── Filters ────────────────────────────────────────────────────── -->
@@ -25,6 +40,12 @@
         <option value="">All Stock</option>
         <option value="low">Low (&lt;25)</option>
         <option value="ok">In Stock</option>
+        <option value="out">Out of Stock</option>
+      </select>
+      <select class="filter-select" v-model="featuredFilter">
+        <option value="">All Types</option>
+        <option value="featured">Featured</option>
+        <option value="new">New</option>
       </select>
     </div>
 
@@ -39,14 +60,30 @@
       </div>
       <table v-else class="admin-table">
         <thead><tr>
-          <th>Product</th><th>Category</th><th>Price</th><th>Stock</th>
-          <th>Rating</th><th>Status</th><th>Actions</th>
+          <th class="sortable" @click="setSort('name')">
+            Product <SortIcon field="name" :sort="sort" />
+          </th>
+          <th class="sortable" @click="setSort('category')">
+            Category <SortIcon field="category" :sort="sort" />
+          </th>
+          <th class="sortable" @click="setSort('price')">
+            Price <SortIcon field="price" :sort="sort" />
+          </th>
+          <th class="sortable" @click="setSort('stock')">
+            Stock <SortIcon field="stock" :sort="sort" />
+          </th>
+          <th class="sortable" @click="setSort('rating')">
+            Rating <SortIcon field="rating" :sort="sort" />
+          </th>
+          <th>Status</th>
+          <th>Store</th>
+          <th>Actions</th>
         </tr></thead>
         <tbody>
           <tr v-for="p in paginated" :key="p.id">
             <td>
               <div style="display:flex;align-items:center;gap:10px">
-                <img :src="p.images[0]" :alt="p.name"
+                <img :src="resolveImg(p.images[0])" :alt="p.name"
                   style="width:38px;height:38px;border-radius:8px;object-fit:cover;background:var(--surface-hover);flex-shrink:0"
                   onerror="this.src='https://placehold.co/38x38/f97316/fff?text=?'" />
                 <div>
@@ -61,8 +98,8 @@
               <div v-if="p.salePrice" style="font-size:11px;text-decoration:line-through;color:var(--text-secondary)">৳{{ p.price.toLocaleString() }}</div>
             </td>
             <td>
-              <span class="status-badge" :class="p.stock < 10 ? 'cancelled' : p.stock < 25 ? 'pending' : 'delivered'">
-                {{ p.stock }}
+              <span class="status-badge" :class="p.stock === 0 ? 'cancelled' : p.stock < 10 ? 'cancelled' : p.stock < 25 ? 'pending' : 'delivered'">
+                {{ p.stock === 0 ? 'Out' : p.stock }}
               </span>
             </td>
             <td>
@@ -73,15 +110,24 @@
               </div>
             </td>
             <td>
-              <span class="status-badge" :class="p.isFeatured ? 'delivered' : 'inactive'">
-                {{ p.isFeatured ? 'Featured' : 'Regular' }}
-              </span>
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span v-if="p.isFeatured" class="status-badge delivered" style="font-size:10px">Featured</span>
+                <span v-if="p.isNew" class="status-badge processing" style="font-size:10px">New</span>
+                <span v-if="!p.isFeatured && !p.isNew" class="status-badge inactive" style="font-size:10px">Regular</span>
+              </div>
+            </td>
+            <td>
+              <RouterLink :to="`/products/${p.slug}`" target="_blank"
+                class="admin-btn ghost" style="padding:5px 8px;font-size:11px" title="View store page">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              </RouterLink>
             </td>
             <td>
               <div style="display:flex;gap:6px">
-                <button class="admin-btn ghost" style="padding:5px 10px" title="Edit" @click="openEdit(p)">
+                <RouterLink :to="`/admin/products/edit/${p.id}`"
+                  class="admin-btn ghost" style="padding:5px 10px" title="Edit">
                   <i class="fa-sharp fa-solid fa-pen"></i>
-                </button>
+                </RouterLink>
                 <button class="admin-btn danger" style="padding:5px 10px" title="Delete" @click="confirmDelete(p)">
                   <i class="fa-sharp fa-solid fa-trash"></i>
                 </button>
@@ -97,7 +143,12 @@
       <span style="font-size:12px;color:var(--text-secondary)">
         Showing {{ Math.min((page-1)*perPage+1, filtered.length) }}–{{ Math.min(page*perPage, filtered.length) }} of {{ filtered.length }}
       </span>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <select class="filter-select" v-model.number="perPage" style="padding:4px 8px;font-size:12px">
+          <option :value="12">12 / page</option>
+          <option :value="25">25 / page</option>
+          <option :value="50">50 / page</option>
+        </select>
         <button class="admin-btn secondary" style="padding:6px 12px" :disabled="page===1" @click="page--">
           <i class="fa-solid fa-chevron-left"></i>
         </button>
@@ -108,147 +159,7 @@
       </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!-- ADD / EDIT PRODUCT MODAL                                           -->
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <Transition name="modal-fade">
-        <div v-if="showModal" class="modal-backdrop" @click.self="closeModal">
-          <div class="product-modal">
-
-            <!-- Modal Header -->
-            <div class="modal-header">
-              <div class="modal-title-group">
-                <div class="modal-icon">
-                  <i :class="editingId ? 'fa-sharp fa-solid fa-pen' : 'fa-sharp fa-solid fa-plus'"></i>
-                </div>
-                <div>
-                  <h2 class="modal-title">{{ editingId ? 'Edit Product' : 'Add New Product' }}</h2>
-                  <p class="modal-subtitle">{{ editingId ? 'Update product details' : 'Fill in the details to add a new product' }}</p>
-                </div>
-              </div>
-              <button class="modal-close" @click="closeModal"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <!-- Error Banner -->
-            <div v-if="formError" class="modal-error">
-              <i class="fa-solid fa-circle-exclamation"></i> {{ formError }}
-            </div>
-
-            <!-- Modal Body -->
-            <div class="modal-body">
-              <!-- Row 1: Name + Brand -->
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Product Name <span class="req">*</span></label>
-                  <input class="form-input" v-model="form.name" placeholder="e.g. Samsung Galaxy A55" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Brand <span class="req">*</span></label>
-                  <input class="form-input" v-model="form.brand" placeholder="e.g. Samsung" />
-                </div>
-              </div>
-
-              <!-- Row 2: Category + Seller -->
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Category <span class="req">*</span></label>
-                  <select class="form-input" v-model="form.category">
-                    <option value="" disabled>Select category</option>
-                    <option v-for="cat in allCategories" :key="cat" :value="cat">{{ cat }}</option>
-                    <option value="__custom__">+ Custom category</option>
-                  </select>
-                </div>
-                <div class="form-group" v-if="form.category === '__custom__'">
-                  <label class="form-label">Custom Category <span class="req">*</span></label>
-                  <input class="form-input" v-model="customCategory" placeholder="e.g. Sports" />
-                </div>
-                <div class="form-group" v-else>
-                  <label class="form-label">Seller</label>
-                  <input class="form-input" v-model="form.seller" placeholder="e.g. TechWorld BD" />
-                </div>
-              </div>
-
-              <!-- Row 3: Price + Sale Price + Stock -->
-              <div class="form-row form-row-3">
-                <div class="form-group">
-                  <label class="form-label">Price (৳) <span class="req">*</span></label>
-                  <input class="form-input" type="number" min="0" v-model.number="form.price" placeholder="0" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Sale Price (৳)</label>
-                  <input class="form-input" type="number" min="0" v-model.number="form.salePrice" placeholder="0 = no discount" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Stock <span class="req">*</span></label>
-                  <input class="form-input" type="number" min="0" v-model.number="form.stock" placeholder="0" />
-                </div>
-              </div>
-
-              <!-- Description -->
-              <div class="form-group">
-                <label class="form-label">Description</label>
-                <textarea class="form-input form-textarea" v-model="form.description" rows="3" placeholder="Product description…"></textarea>
-              </div>
-
-              <!-- Image URL -->
-              <div class="form-group">
-                <label class="form-label">Image URL</label>
-                <div style="display:flex;gap:8px;align-items:flex-start">
-                  <input class="form-input" v-model="form.imageUrl" placeholder="https://example.com/image.jpg" style="flex:1" />
-                  <div v-if="form.imageUrl" class="img-preview">
-                    <img :src="form.imageUrl" alt="preview" onerror="this.style.display='none'" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- Row 4: Location + Delivery Days -->
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Location</label>
-                  <input class="form-input" v-model="form.location" placeholder="e.g. Dhaka" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Delivery Days</label>
-                  <input class="form-input" type="number" min="1" v-model.number="form.deliveryDays" placeholder="3" />
-                </div>
-              </div>
-
-              <!-- Toggles -->
-              <div class="form-toggles">
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="form.isFeatured" />
-                  <span class="toggle-ui"></span>
-                  <span class="toggle-label">Featured Product</span>
-                </label>
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="form.isNew" />
-                  <span class="toggle-ui"></span>
-                  <span class="toggle-label">Mark as New</span>
-                </label>
-              </div>
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="modal-footer">
-              <button class="admin-btn secondary" @click="closeModal" :disabled="adminStore.loading.saving">
-                Cancel
-              </button>
-              <button class="admin-btn primary" @click="submitForm" :disabled="adminStore.loading.saving || !isFormValid">
-                <i v-if="adminStore.loading.saving" class="fa-solid fa-spinner-third fa-spin"></i>
-                <i v-else :class="editingId ? 'fa-sharp fa-solid fa-floppy-disk' : 'fa-sharp fa-solid fa-plus'"></i>
-                {{ adminStore.loading.saving ? 'Saving…' : editingId ? 'Save Changes' : 'Add Product' }}
-              </button>
-            </div>
-
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!-- DELETE CONFIRMATION DIALOG                                         -->
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- DELETE CONFIRMATION -->
     <Teleport to="body">
       <Transition name="modal-fade">
         <div v-if="deleteTarget" class="modal-backdrop" @click.self="deleteTarget = null">
@@ -263,9 +174,7 @@
               This action cannot be undone.
             </p>
             <div class="confirm-actions">
-              <button class="admin-btn secondary" @click="deleteTarget = null" :disabled="adminStore.loading.saving">
-                Cancel
-              </button>
+              <button class="admin-btn secondary" @click="deleteTarget = null" :disabled="adminStore.loading.saving">Cancel</button>
               <button class="admin-btn danger" style="flex:1" @click="doDelete" :disabled="adminStore.loading.saving">
                 <i v-if="adminStore.loading.saving" class="fa-solid fa-spinner-third fa-spin"></i>
                 <i v-else class="fa-sharp fa-solid fa-trash"></i>
@@ -277,7 +186,7 @@
       </Transition>
     </Teleport>
 
-    <!-- ── Toast notification ──────────────────────────────────────────── -->
+    <!-- Toast -->
     <Teleport to="body">
       <Transition name="toast-slide">
         <div v-if="toast.show" class="admin-toast" :class="toast.type">
@@ -290,166 +199,111 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, watch, defineComponent, h } from 'vue'
 import { useAdminStore } from '@/stores/useAdminStore'
+import { useExport } from '@/composables/useExport'
 import type { ApiProduct } from '@/composables/useAdminApi'
 
-const adminStore = useAdminStore()
+// Sort icon component
+const SortIcon = defineComponent({
+  props: { field: String, sort: Object },
+  setup(props) {
+    return () => {
+      const active = props.sort?.field === props.field
+      const dir = props.sort?.dir
+      if (!active) return h('i', { class: 'fa-solid fa-sort', style: 'opacity:0.3;font-size:10px;margin-left:4px' })
+      return h('i', { class: dir === 'asc' ? 'fa-solid fa-sort-up' : 'fa-solid fa-sort-down', style: 'color:var(--brand);font-size:10px;margin-left:4px' })
+    }
+  }
+})
 
-// ── Filters & pagination ────────────────────────────────────────────────────
-const search      = ref('')
-const catFilter   = ref('')
-const stockFilter = ref('')
-const page        = ref(1)
-const perPage     = 12
+const adminStore = useAdminStore()
+const exporter = useExport()
+
+// Filters
+const search        = ref('')
+const catFilter     = ref('')
+const stockFilter   = ref('')
+const featuredFilter= ref('')
+const page          = ref(1)
+const perPage       = ref(12)
+const exportOpen    = ref(false)
+
+// Sorting
+const sort = ref({ field: 'name', dir: 'asc' as 'asc' | 'desc' })
+function setSort(field: string) {
+  if (sort.value.field === field) sort.value.dir = sort.value.dir === 'asc' ? 'desc' : 'asc'
+  else { sort.value.field = field; sort.value.dir = 'asc' }
+}
 
 const categories = computed(() =>
   [...new Set(adminStore.products.map(p => p.category))].sort()
 )
 
-const allCategories = ['Electronics', 'Fashion', 'Grocery', 'Home & Living', 'Beauty', 'Business', 'Sports', 'Toys']
+watch([search, catFilter, stockFilter, featuredFilter, perPage], () => { page.value = 1 })
 
 const filtered = computed(() => {
-  let list = adminStore.products
+  let list = [...adminStore.products]
   if (search.value) {
     const q = search.value.toLowerCase()
-    list = list.filter(p => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q))
+    list = list.filter(p => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))
   }
   if (catFilter.value) list = list.filter(p => p.category === catFilter.value)
-  if (stockFilter.value === 'low') list = list.filter(p => p.stock < 25)
+  if (stockFilter.value === 'low') list = list.filter(p => p.stock > 0 && p.stock < 25)
   if (stockFilter.value === 'ok')  list = list.filter(p => p.stock >= 25)
+  if (stockFilter.value === 'out') list = list.filter(p => p.stock === 0)
+  if (featuredFilter.value === 'featured') list = list.filter(p => p.isFeatured)
+  if (featuredFilter.value === 'new') list = list.filter(p => p.isNew)
+
+  // Sort
+  list.sort((a: any, b: any) => {
+    const av = a[sort.value.field] ?? ''
+    const bv = b[sort.value.field] ?? ''
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv))
+    return sort.value.dir === 'asc' ? cmp : -cmp
+  })
   return list
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / perPage)))
-const paginated  = computed(() => filtered.value.slice((page.value-1)*perPage, page.value*perPage))
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / perPage.value)))
+const paginated  = computed(() => filtered.value.slice((page.value-1)*perPage.value, page.value*perPage.value))
 
-// ── Toast ────────────────────────────────────────────────────────────────────
-const toast = reactive({ show: false, message: '', type: 'success' as 'success' | 'error' })
-let toastTimer: number
-function showToast(message: string, type: 'success' | 'error' = 'success') {
-  clearTimeout(toastTimer)
-  toast.message = message
-  toast.type    = type
-  toast.show    = true
-  toastTimer    = window.setTimeout(() => { toast.show = false }, 3500)
+function resolveImg(url: string) {
+  if (!url) return 'https://placehold.co/38x38/f97316/fff?text=?'
+  return url.startsWith('/') ? `http://localhost:4000${url}` : url
 }
 
-// ── Modal state ──────────────────────────────────────────────────────────────
-const showModal    = ref(false)
-const editingId    = ref<string | null>(null)
-const formError    = ref('')
-const customCategory = ref('')
-
-const blankForm = () => ({
-  name:         '',
-  brand:        '',
-  category:     '',
-  seller:       '',
-  price:        0,
-  salePrice:    0,
-  stock:        0,
-  description:  '',
-  imageUrl:     '',
-  location:     'Dhaka',
-  deliveryDays: 3,
-  isFeatured:   false,
-  isNew:        true,
-})
-
-const form = reactive(blankForm())
-
-const isFormValid = computed(() =>
-  form.name.trim() !== '' &&
-  form.brand.trim() !== '' &&
-  (form.category !== '' && form.category !== '__custom__' || customCategory.value.trim() !== '') &&
-  form.price > 0 &&
-  form.stock >= 0
-)
-
-function openAdd() {
-  editingId.value = null
-  formError.value = ''
-  customCategory.value = ''
-  Object.assign(form, blankForm())
-  showModal.value = true
+// Export
+function doExport(fmt: 'excel' | 'pdf' | 'csv' | 'json') {
+  exportOpen.value = false
+  const data = filtered.value.map(p => ({
+    Name: p.name, Brand: p.brand, Category: p.category,
+    Price: p.price, SalePrice: p.salePrice, Stock: p.stock,
+    Rating: p.rating, Reviews: p.reviewCount,
+    Featured: p.isFeatured ? 'Yes' : 'No', New: p.isNew ? 'Yes' : 'No',
+    Seller: p.seller, Location: p.location, DeliveryDays: p.deliveryDays,
+  }))
+  const filename = `products_${new Date().toISOString().slice(0,10)}`
+  if (fmt === 'excel') exporter.exportExcel(data, filename, 'Products')
+  else if (fmt === 'csv') exporter.exportCSV(data, filename)
+  else if (fmt === 'json') exporter.exportJSON(data, filename)
+  else exporter.exportPDF(
+    ['Name','Brand','Category','Price','Sale','Stock','Rating','Featured'],
+    filtered.value.map(p => [p.name, p.brand, p.category, p.price, p.salePrice||'—', p.stock, p.rating, p.isFeatured?'✓':'—']),
+    filename, 'SellBazar — Products Export'
+  )
 }
 
-function openEdit(product: ApiProduct) {
-  editingId.value = product.id
-  formError.value = ''
-  customCategory.value = ''
-  Object.assign(form, {
-    name:         product.name,
-    brand:        product.brand,
-    category:     product.category,
-    seller:       product.seller,
-    price:        product.price,
-    salePrice:    product.salePrice,
-    stock:        product.stock,
-    description:  product.description,
-    imageUrl:     product.images?.[0] ?? '',
-    location:     product.location,
-    deliveryDays: product.deliveryDays,
-    isFeatured:   product.isFeatured ?? false,
-    isNew:        product.isNew ?? false,
-  })
-  showModal.value = true
-}
-
-function closeModal() {
-  showModal.value = false
-  editingId.value = null
-  formError.value = ''
-}
-
-async function submitForm() {
-  formError.value = ''
-  const resolvedCategory = form.category === '__custom__' ? customCategory.value.trim() : form.category
-
-  if (!form.name.trim() || !form.brand.trim() || !resolvedCategory || form.price <= 0) {
-    formError.value = 'Please fill in all required fields.'
-    return
-  }
-
-  const payload = {
-    name:         form.name.trim(),
-    brand:        form.brand.trim(),
-    category:     resolvedCategory,
-    categoryBn:   resolvedCategory,
-    seller:       form.seller.trim() || form.brand.trim(),
-    price:        form.price,
-    salePrice:    form.salePrice || 0,
-    stock:        form.stock,
-    description:  form.description.trim(),
-    images:       form.imageUrl.trim() ? [form.imageUrl.trim()] : [],
-    location:     form.location.trim() || 'Dhaka',
-    deliveryDays: form.deliveryDays || 3,
-    isFeatured:   form.isFeatured,
-    isNew:        form.isNew,
-  }
-
-  try {
-    if (editingId.value) {
-      await adminStore.updateProduct(editingId.value, payload)
-      showToast(`"${form.name}" updated successfully`)
-    } else {
-      await adminStore.createProduct(payload)
-      showToast(`"${form.name}" added successfully`)
-    }
-    closeModal()
-  } catch (e: any) {
-    formError.value = e.message ?? 'Failed to save product'
-  }
-}
-
-// ── Delete confirm ───────────────────────────────────────────────────────────
+// Delete
 const deleteTarget = ref<ApiProduct | null>(null)
-
-function confirmDelete(product: ApiProduct) {
-  deleteTarget.value = product
+const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
+let toastTimer = 0
+function showToast(msg: string, type: 'success' | 'error' = 'success') {
+  clearTimeout(toastTimer)
+  toast.value = { show: true, message: msg, type }
+  toastTimer = window.setTimeout(() => { toast.value.show = false }, 3500)
 }
-
+function confirmDelete(p: ApiProduct) { deleteTarget.value = p }
 async function doDelete() {
   if (!deleteTarget.value) return
   const name = deleteTarget.value.name
@@ -462,298 +316,60 @@ async function doDelete() {
     showToast(e.message ?? 'Delete failed', 'error')
   }
 }
+
+// Click outside directive
+const vClickOutside = {
+  mounted(el: any, binding: any) {
+    el._clickHandler = (e: Event) => { if (!el.contains(e.target)) binding.value(e) }
+    document.addEventListener('click', el._clickHandler)
+  },
+  unmounted(el: any) { document.removeEventListener('click', el._clickHandler) }
+}
 </script>
 
 <style scoped>
-/* ── Modal backdrop ─────────────────────────────────────────────────────── */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.65);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 16px;
+.export-wrap { position: relative; }
+.export-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
+  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
+  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  min-width: 160px; overflow: hidden;
 }
-
-/* ── Product modal ──────────────────────────────────────────────────────── */
-.product-modal {
-  background: var(--sidebar-bg);
-  border: 1px solid var(--sidebar-border);
-  border-radius: 20px;
-  width: 100%;
-  max-width: 680px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 32px 80px rgba(0,0,0,0.4);
-  overflow: hidden;
+.export-dropdown button {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 14px; background: none; border: none;
+  color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;
+  transition: background 0.15s;
 }
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--sidebar-border);
-  flex-shrink: 0;
-  gap: 12px;
-}
-.modal-title-group {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.modal-icon {
-  width: 40px;
-  height: 40px;
-  background: var(--brand-dim);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--brand);
-  font-size: 16px;
-  flex-shrink: 0;
-}
-.modal-title {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.03em;
-  margin: 0;
-}
-.modal-subtitle {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin: 2px 0 0;
-}
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 8px;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-.modal-close:hover { background: var(--surface-hover); color: var(--text-primary); }
-
-.modal-error {
-  margin: 14px 24px 0;
-  background: rgba(239,68,68,0.1);
-  border: 1px solid rgba(239,68,68,0.25);
-  color: #ef4444;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.modal-body {
-  padding: 20px 24px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.modal-footer {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  padding: 16px 24px;
-  border-top: 1px solid var(--sidebar-border);
-  flex-shrink: 0;
-}
-
-/* ── Form elements ──────────────────────────────────────────────────────── */
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.form-row-3 {
-  grid-template-columns: 1fr 1fr 1fr;
-}
-@media (max-width: 560px) {
-  .form-row, .form-row-3 { grid-template-columns: 1fr; }
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.form-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.req { color: var(--brand); }
-
-.form-input {
-  padding: 10px 13px;
-  background: var(--admin-bg);
-  border: 1px solid var(--sidebar-border);
-  border-radius: 9px;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  width: 100%;
-  box-sizing: border-box;
-}
-.form-input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(249,115,22,0.12);
-}
-.form-input::placeholder { color: var(--text-secondary); opacity: 0.6; }
-.form-textarea { resize: vertical; min-height: 72px; }
-
-select.form-input {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
-}
-
-/* ── Image preview ──────────────────────────────────────────────────────── */
-.img-preview {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--sidebar-border);
-  background: var(--surface-hover);
-  flex-shrink: 0;
-}
-.img-preview img { width: 100%; height: 100%; object-fit: cover; }
-
-/* ── Checkbox toggles ───────────────────────────────────────────────────── */
-.form-toggles {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-.toggle-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-.toggle-item input[type="checkbox"] { display: none; }
-.toggle-ui {
-  width: 38px;
-  height: 21px;
-  border-radius: 21px;
-  background: var(--sidebar-border);
-  position: relative;
-  flex-shrink: 0;
-  transition: background 0.2s;
-}
-.toggle-ui::before {
-  content: '';
-  position: absolute;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: white;
-  top: 3px;
-  left: 3px;
-  transition: transform 0.2s;
-}
-.toggle-item input:checked + .toggle-ui { background: var(--brand); }
-.toggle-item input:checked + .toggle-ui::before { transform: translateX(17px); }
-.toggle-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
-
-/* ── Delete confirm dialog ──────────────────────────────────────────────── */
+.export-dropdown button:hover { background: var(--surface-hover); }
+.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.sortable:hover { color: var(--brand); }
 .confirm-dialog {
-  background: var(--sidebar-bg);
-  border: 1px solid var(--sidebar-border);
-  border-radius: 18px;
-  padding: 32px;
-  width: 100%;
-  max-width: 380px;
-  text-align: center;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
+  border-radius: 18px; padding: 32px; width: 100%; max-width: 380px;
+  text-align: center; box-shadow: 0 24px 64px rgba(0,0,0,0.4);
 }
 .confirm-icon {
-  width: 60px;
-  height: 60px;
-  margin: 0 auto 16px;
-  background: rgba(239,68,68,0.1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  color: #ef4444;
+  width: 60px; height: 60px; margin: 0 auto 16px;
+  background: rgba(239,68,68,0.1); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; color: #ef4444;
 }
-.confirm-title {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin: 0 0 10px;
-  letter-spacing: -0.03em;
-}
-.confirm-body {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0 0 24px;
-}
-.confirm-body strong { color: var(--text-primary); }
-.confirm-actions {
-  display: flex;
-  gap: 10px;
-}
-
-/* ── Toast ──────────────────────────────────────────────────────────────── */
+.confirm-title { font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 10px; }
+.confirm-body { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 24px; }
+.confirm-actions { display: flex; gap: 10px; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
+.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.2s ease; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
 .admin-toast {
-  position: fixed;
-  bottom: 28px;
-  right: 28px;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 13px 18px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
+  position: fixed; bottom: 28px; right: 28px; z-index: 10000;
+  display: flex; align-items: center; gap: 10px; padding: 13px 18px;
+  border-radius: 12px; font-size: 14px; font-weight: 600; color: white;
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
 .admin-toast.success { background: #16a34a; }
 .admin-toast.error   { background: #dc2626; }
-
-/* ── Transitions ────────────────────────────────────────────────────────── */
-.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.2s ease; }
-.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
-.modal-fade-enter-active .product-modal,
-.modal-fade-enter-active .confirm-dialog { animation: modal-pop 0.2s ease; }
-@keyframes modal-pop {
-  from { transform: scale(0.95) translateY(10px); opacity: 0; }
-  to   { transform: scale(1) translateY(0); opacity: 1; }
-}
-
 .toast-slide-enter-active { animation: toast-in 0.25s ease; }
 .toast-slide-leave-active { animation: toast-in 0.2s ease reverse; }
-@keyframes toast-in {
-  from { transform: translateY(16px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
-}
+@keyframes toast-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 </style>

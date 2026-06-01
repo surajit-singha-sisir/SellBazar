@@ -27,7 +27,10 @@
           <div class="stat-label">Total Revenue</div>
           <div class="stat-value">৳{{ fmtCurrency(adminStore.totalRevenue) }}</div>
         </div>
-        <div class="stat-delta positive"><i class="fa-solid fa-arrow-trend-up"></i> +12.4% vs last month</div>
+        <div class="stat-delta" :class="revenueGrowth >= 0 ? 'positive' : 'negative'">
+          <i :class="revenueGrowth >= 0 ? 'fa-solid fa-arrow-trend-up' : 'fa-solid fa-arrow-trend-down'"></i>
+          {{ revenueGrowth >= 0 ? '+' : '' }}{{ revenueGrowth.toFixed(1) }}% vs last month
+        </div>
       </div>
       <div class="admin-stat-card">
         <div class="stat-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6">
@@ -62,6 +65,7 @@
         </div>
         <div class="stat-delta positive"><i class="fa-solid fa-star"></i> Across all products</div>
       </div>
+      <div v-if="adminStore.dashboard" class="admin-stat-card" style="display:none"></div>
     </div>
 
     <!-- Charts row -->
@@ -179,6 +183,7 @@ let doughnutChart: Chart | null = null
 const isLoading = computed(() =>
   adminStore.loading.products || adminStore.loading.orders
 )
+const revenueGrowth = computed(() => adminStore.dashboard?.revenueGrowth ?? 0)
 const recentOrders = computed(() =>
   [...adminStore.orders].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6)
 )
