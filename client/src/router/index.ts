@@ -45,11 +45,34 @@ const router = createRouter({
   ]
 })
 
+// ── JWT expiry helper ────────────────────────────────────────────────────────
+function isTokenValid(token: string | null): boolean {
+  if (!token) return false
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    // exp is in seconds; Date.now() is in ms
+    return payload.exp * 1000 > Date.now()
+  } catch {
+    return false
+  }
+}
+
+function clearAdminSession() {
+  localStorage.removeItem('sb-admin-token')
+  localStorage.removeItem('sb-admin-user')
+}
+
 // ── Navigation guard ────────────────────────────────────────────────────────
 router.beforeEach((to) => {
   const token = localStorage.getItem('sb-admin-token')
   const user  = localStorage.getItem('sb-admin-user')
-  const isLoggedIn = !!(token && user)
+
+  // Validate token expiry — clear stale session silently
+  const isLoggedIn = !!(user && isTokenValid(token))
+  if (!isLoggedIn && token) {
+    // Token exists but is expired/invalid — purge it
+    clearAdminSession()
+  }
 
   if (to.meta.requiresAdmin && !isLoggedIn) {
     return { name: 'admin-login', query: { redirect: to.fullPath } }

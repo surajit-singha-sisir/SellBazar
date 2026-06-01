@@ -11,13 +11,35 @@ export interface ApiProduct {
   createdAt: string
 }
 
+export interface ApiOrderItem {
+  productId?: string
+  name: string
+  quantity: number
+  price: number
+  image?: string
+}
+
+export interface ApiOrderCustomer {
+  name: string
+  email: string
+  phone: string
+  address: string
+}
+
 export interface ApiOrder {
   id: string
-  items: { name: string; quantity: number; price: number }[]
+  customer: ApiOrderCustomer
+  items: ApiOrderItem[]
+  subtotal: number
+  shipping: number
   total: number
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
   paymentMethod: string
+  paymentStatus: string
+  notes: string
+  trackingNumber: string
   createdAt: string
+  updatedAt: string
 }
 
 export interface AdminUser {
