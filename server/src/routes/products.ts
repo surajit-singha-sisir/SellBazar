@@ -1,9 +1,12 @@
 import { Router } from 'express'
 import { requireAdmin } from '../middleware/auth.js'
+import { createWriteStream, mkdirSync, existsSync } from 'fs'
+import { join, extname } from 'path'
+import { randomBytes } from 'crypto'
 
 const router = Router()
 
-// ── In-memory product store (replace with DB in production) ──────────────────
+// ── In-memory product store ───────────────────────────────────────────────────
 let products = [
   { id:'1', slug:'samsung-galaxy-a55', name:'Samsung Galaxy A55 5G', nameBn:'স্যামসাং গ্যালাক্সি A55', description:'6.6" AMOLED, 50MP camera, 5000mAh', price:45000, salePrice:39999, images:['https://placehold.co/400x400/f97316/fff?text=Galaxy+A55'], category:'Electronics', categoryBn:'ইলেকট্রনিক্স', brand:'Samsung', stock:42, rating:4.6, reviewCount:318, tags:['phone','5g','samsung'], isNew:true, isFeatured:false, deliveryDays:2, seller:'TechWorld BD', location:'Dhaka', createdAt:'2025-01-10T10:00:00Z' },
   { id:'2', slug:'nike-air-max-2027', name:'Nike Air Max 2027', nameBn:'নাইকি এয়ার ম্যাক্স', description:'Future-forward cushioning, breathable mesh', price:12000, salePrice:9499, images:['https://placehold.co/400x400/6366f1/fff?text=Nike+Air'], category:'Fashion', categoryBn:'ফ্যাশন', brand:'Nike', stock:80, rating:4.8, reviewCount:512, tags:['shoes','sneakers'], isNew:false, isFeatured:false, deliveryDays:3, seller:'SportZone', location:'Chittagong', createdAt:'2025-01-12T10:00:00Z' },
@@ -19,77 +22,80 @@ let products = [
   { id:'12', slug:'meril-splash-body-wash', name:'Meril Splash Body Wash', nameBn:'মেরিল স্প্ল্যাশ', description:'Fresh citrus scent, moisturizing formula, 500ml', price:350, salePrice:299, images:['https://placehold.co/400x400/a78bfa/fff?text=Meril+Splash'], category:'Beauty', categoryBn:'বিউটি', brand:'Meril', stock:300, rating:4.3, reviewCount:567, tags:['bodycare','meril','beauty'], isNew:false, isFeatured:false, deliveryDays:2, seller:'Meril Beauty', location:'Nationwide', createdAt:'2025-01-23T10:00:00Z' },
 ]
 
+export { products }
+
 function toSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 }
 
+// ── Upload directory setup ───────────────────────────────────────────────────
+const UPLOAD_DIR = join(process.cwd(), 'uploads')
+if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true })
+
 // ── PUBLIC routes ─────────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
-  const { category, q, limit, featured } = req.query as Record<string, string>
+  const { category, q, limit, featured, sortBy, order } = req.query as Record<string, string>
   let result = [...products]
   if (category && category !== 'All') result = result.filter(p => p.category === category)
-  if (q) result = result.filter(p => p.name.toLowerCase().includes(q.toLowerCase()))
+  if (q) result = result.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || p.brand.toLowerCase().includes(q.toLowerCase()))
   if (featured === 'true') result = result.filter(p => p.isFeatured)
+  // Sorting
+  if (sortBy) {
+    const dir = order === 'desc' ? -1 : 1
+    result.sort((a: any, b: any) => {
+      if (a[sortBy] < b[sortBy]) return -1 * dir
+      if (a[sortBy] > b[sortBy]) return 1 * dir
+      return 0
+    })
+  }
   if (limit) result = result.slice(0, parseInt(limit))
   res.json({ data: result, total: result.length })
 })
 
 router.get('/:slug', (req, res) => {
-  const product = products.find(p => p.slug === req.params.slug)
+  const product = products.find(p => p.slug === req.params.slug || p.id === req.params.slug)
   if (!product) return res.status(404).json({ error: 'Product not found' })
   res.json(product)
 })
 
-// ── ADMIN routes (JWT protected) ──────────────────────────────────────────────
-
-// POST /api/products  — Create new product
-router.post('/', requireAdmin, (req, res) => {
-  const { name, nameBn, description, price, salePrice, category, categoryBn, brand, stock, images, tags, isFeatured, isNew, deliveryDays, seller, location } = req.body
-  if (!name || !price || !category || !brand) {
-    return res.status(400).json({ error: 'name, price, category and brand are required' })
+// ── Image upload (admin protected) ───────────────────────────────────────────
+router.post('/upload-image', requireAdmin, (req: any, res) => {
+  const ct = req.headers['content-type'] ?? ''
+  if (!ct.includes('multipart/form-data')) {
+    return res.status(400).json({ error: 'Multipart form data required' })
   }
-  const newProduct = {
-    id: Date.now().toString(),
-    slug: toSlug(name),
-    name, nameBn: nameBn ?? '',
-    description: description ?? '',
-    price: Number(price),
-    salePrice: salePrice ? Number(salePrice) : 0,
-    images: images?.length ? images : [`https://placehold.co/400x400/f97316/fff?text=${encodeURIComponent(name.slice(0,12))}`],
-    category, categoryBn: categoryBn ?? category,
-    brand, stock: Number(stock ?? 0),
-    rating: 0, reviewCount: 0,
-    tags: tags ?? [],
-    isFeatured: isFeatured ?? false,
-    isNew: isNew ?? true,
-    deliveryDays: Number(deliveryDays ?? 3),
-    seller: seller ?? brand,
-    location: location ?? 'Dhaka',
-    createdAt: new Date().toISOString(),
-  }
-  products.unshift(newProduct)
-  res.status(201).json(newProduct)
-})
+  const boundary = ct.split('boundary=')[1]
+  if (!boundary) return res.status(400).json({ error: 'No boundary' })
 
-// PUT /api/products/:id  — Update product
-router.put('/:id', requireAdmin, (req, res) => {
-  const idx = products.findIndex(p => p.id === req.params.id)
-  if (idx === -1) return res.status(404).json({ error: 'Product not found' })
-  const updated = { ...products[idx], ...req.body, id: products[idx].id }
-  if (req.body.name) updated.slug = toSlug(req.body.name)
-  if (req.body.price) updated.price = Number(req.body.price)
-  if (req.body.salePrice !== undefined) updated.salePrice = Number(req.body.salePrice)
-  if (req.body.stock !== undefined) updated.stock = Number(req.body.stock)
-  products[idx] = updated
-  res.json(updated)
+  const chunks: Buffer[] = []
+  req.on('data', (chunk: Buffer) => chunks.push(chunk))
+  req.on('end', () => {
+    try {
+      const buf = Buffer.concat(chunks)
+      const sep = Buffer.from('--' + boundary)
+      let start = buf.indexOf(sep) + sep.length + 2 // skip \r\n
+      start = buf.indexOf(sep, start) // go to file part
+      // find file header end
+      const headerEnd = buf.indexOf(Buffer.from('\r\n\r\n'), start)
+      if (headerEnd === -1) return res.status(400).json({ error: 'Malformed upload' })
+      const header = buf.slice(start + sep.length + 2, headerEnd).toString()
+      const mimeMatch = header.match(/Content-Type:\s*(\S+)/)
+      const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg'
+      const extMap: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
+      const ext = extMap[mime] ?? '.jpg'
+      const filename = `${randomBytes(8).toString('hex')}${ext}`
+      const fileStart = headerEnd + 4 // skip \r\n\r\n
+      const fileEnd = buf.indexOf(Buffer.from('\r\n--' + boundary), fileStart)
+      const fileData = buf.slice(fileStart, fileEnd === -1 ? undefined : fileEnd)
+      const filePath = join(UPLOAD_DIR, filename)
+      const ws = createWriteStream(filePath)
+      ws.write(fileData)
+      ws.end()
+      ws.on('finish', () => {
+        res.json({ url: `/uploads/${filename}`, filename })
+      })
+    } catch (e) {
+      res.status(500).json({ error: 'Upload failed' })
+    }
+  })
 })
-
-// DELETE /api/products/:id  — Delete product
-router.delete('/:id', requireAdmin, (req, res) => {
-  const idx = products.findIndex(p => p.id === req.params.id)
-  if (idx === -1) return res.status(404).json({ error: 'Product not found' })
-  const [deleted] = products.splice(idx, 1)
-  res.json({ message: 'Product deleted', id: deleted.id })
-})
-
-export default router
