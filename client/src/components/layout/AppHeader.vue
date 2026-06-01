@@ -219,15 +219,16 @@ const searchWrap = ref<HTMLElement | null>(null)
 const userMenu   = ref<HTMLElement | null>(null)
 
 const navCategories = [
-  { label: 'Home',        to: '/',                      icon: 'fa-sharp fa-regular fa-house' },
-  { label: 'Electronics', to: '/products?cat=Electronics', icon: 'fa-sharp fa-regular fa-microchip' },
-  { label: 'Fashion',     to: '/products?cat=Fashion',     icon: 'fa-sharp fa-regular fa-shirt' },
-  { label: 'Grocery',     to: '/products?cat=Grocery',     icon: 'fa-sharp fa-regular fa-basket-shopping' },
-  { label: 'Beauty',      to: '/products?cat=Beauty',      icon: 'fa-sharp fa-regular fa-sparkles' },
-  { label: 'Home & Living', to: '/products?cat=Home',      icon: 'fa-sharp fa-regular fa-couch' },
-  { label: 'Sports',      to: '/products?cat=Sports',      icon: 'fa-sharp fa-regular fa-dumbbell' },
-  { label: 'Business',    to: '/products?cat=Business',    icon: 'fa-sharp fa-regular fa-briefcase' },
-  { label: '🔥 Deals',    to: '/deals',                    icon: 'fa-sharp fa-regular fa-tags' },
+  { label: 'Home',          to: '/',                          icon: 'fa-sharp fa-solid fa-house' },
+  { label: 'Electronics',   to: '/products?cat=Electronics',  icon: 'fa-sharp fa-solid fa-microchip' },
+  { label: 'Fashion',       to: '/products?cat=Fashion',      icon: 'fa-sharp fa-solid fa-shirt' },
+  { label: 'Grocery',       to: '/products?cat=Grocery',      icon: 'fa-sharp fa-solid fa-basket-shopping' },
+  { label: 'Beauty',        to: '/products?cat=Beauty',       icon: 'fa-sharp fa-solid fa-pump-soap' },
+  { label: 'Home & Living', to: '/products?cat=Home',         icon: 'fa-sharp fa-solid fa-couch' },
+  { label: 'Sports',        to: '/products?cat=Sports',       icon: 'fa-sharp fa-solid fa-dumbbell' },
+  { label: 'Business',      to: '/products?cat=Business',     icon: 'fa-sharp fa-solid fa-briefcase' },
+  { label: 'Books',         to: '/products?cat=Books',        icon: 'fa-sharp fa-solid fa-book-open' },
+  { label: 'Deals',         to: '/deals',                     icon: 'fa-sharp fa-solid fa-fire' },
 ]
 
 const suggestions = computed(() => {

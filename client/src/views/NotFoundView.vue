@@ -4,7 +4,7 @@
       <div class="relative">
         <div class="text-[120px] leading-none font-display font-extrabold gradient-text opacity-20 select-none">404</div>
         <div class="absolute inset-0 flex items-center justify-center">
-          <div class="text-6xl">🔍</div>
+          <div class="text-6xl">ðŸ”</div>
         </div>
       </div>
       <div>

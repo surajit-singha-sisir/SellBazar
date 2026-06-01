@@ -59,7 +59,7 @@
             <img src="https://www.google.com/favicon.ico" class="w-4 h-4" /> Google
           </button>
           <button class="btn-secondary text-sm justify-center py-2.5">
-            📱 Facebook
+            ðŸ“± Facebook
           </button>
         </div>
 

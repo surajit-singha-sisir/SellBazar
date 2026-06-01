@@ -14,7 +14,7 @@
           </div>
         </RouterLink>
         <p class="text-xs text-[var(--color-text-muted)] leading-relaxed mb-4">
-          Bangladesh's next-gen marketplace. Shop smarter, live better. 🇧🇩
+          Bangladesh's next-gen marketplace. Shop smarter, live better. &#127463;&#127465;
         </p>
         <div class="flex items-center gap-2 flex-wrap">
           <a href="#" class="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center hover:bg-orange-500 hover:text-white transition text-[var(--color-text-2)]">
@@ -29,6 +29,9 @@
           <a href="#" class="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center hover:bg-orange-500 hover:text-white transition text-[var(--color-text-2)]">
             <i class="fa-brands fa-tiktok text-xs"></i>
           </a>
+          <a href="#" class="w-8 h-8 rounded-lg bg-[var(--color-surface-2)] flex items-center justify-center hover:bg-orange-500 hover:text-white transition text-[var(--color-text-2)]">
+            <i class="fa-brands fa-x-twitter text-xs"></i>
+          </a>
         </div>
       </div>
 
@@ -37,7 +40,9 @@
         <h4 class="font-semibold text-sm mb-4">Shop</h4>
         <ul class="space-y-2.5">
           <li v-for="l in shopLinks" :key="l.label">
-            <RouterLink :to="l.to" class="text-xs text-[var(--color-text-muted)] hover:text-orange-500 transition">{{ l.label }}</RouterLink>
+            <RouterLink :to="l.to" class="text-xs text-[var(--color-text-muted)] hover:text-orange-500 transition flex items-center gap-1.5">
+              <i class="fa-sharp fa-regular fa-chevron-right text-[9px]"></i>{{ l.label }}
+            </RouterLink>
           </li>
         </ul>
       </div>
@@ -47,7 +52,9 @@
         <h4 class="font-semibold text-sm mb-4">Help</h4>
         <ul class="space-y-2.5">
           <li v-for="l in helpLinks" :key="l.label">
-            <a :href="l.href" class="text-xs text-[var(--color-text-muted)] hover:text-orange-500 transition">{{ l.label }}</a>
+            <a :href="l.href" class="text-xs text-[var(--color-text-muted)] hover:text-orange-500 transition flex items-center gap-1.5">
+              <i class="fa-sharp fa-regular fa-chevron-right text-[9px]"></i>{{ l.label }}
+            </a>
           </li>
         </ul>
       </div>
@@ -57,7 +64,9 @@
         <h4 class="font-semibold text-sm mb-4">Company</h4>
         <ul class="space-y-2.5">
           <li v-for="l in companyLinks" :key="l.label">
-            <a :href="l.href" class="text-xs text-[var(--color-text-muted)] hover:text-orange-500 transition">{{ l.label }}</a>
+            <a :href="l.href" class="text-xs text-[var(--color-text-muted)] hover:text-orange-500 transition flex items-center gap-1.5">
+              <i class="fa-sharp fa-regular fa-chevron-right text-[9px]"></i>{{ l.label }}
+            </a>
           </li>
         </ul>
       </div>
@@ -81,18 +90,32 @@
             </div>
           </a>
         </div>
+        <!-- Trust badges -->
+        <div class="mt-4 space-y-2">
+          <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i>
+            <span>100% Secure Checkout</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i>
+            <span>Fast Nationwide Delivery</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <i class="fa-sharp fa-solid fa-rotate-left text-orange-500"></i>
+            <span>7-Day Easy Returns</span>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Payment methods -->
     <div class="border-t border-[var(--color-border)] py-6">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p class="text-xs text-[var(--color-text-muted)]">Secure payments accepted:</p>
+        <p class="text-xs text-[var(--color-text-muted)] flex items-center gap-2">
+          <i class="fa-sharp fa-solid fa-lock text-green-500"></i> Secure payments accepted:
+        </p>
         <div class="flex items-center gap-2 flex-wrap justify-center">
-          <span v-for="pm in paymentMethods" :key="pm.name"
-            class="payment-badge"
-            :style="{ color: pm.color }"
-          >
+          <span v-for="pm in paymentMethods" :key="pm.name" class="payment-badge" :style="{ color: pm.color }">
             <i :class="pm.icon + ' text-sm'"></i>
             <span class="font-semibold">{{ pm.name }}</span>
           </span>
@@ -103,7 +126,10 @@
     <!-- Copyright -->
     <div class="border-t border-[var(--color-border)] py-4 bg-[var(--color-surface-2)]">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[var(--color-text-muted)]">
-        <p>© {{ new Date().getFullYear() }} SellBazar.com — Made with <i class="fa-solid fa-heart text-red-500"></i> in Bangladesh 🇧🇩</p>
+        <p>
+          &copy; {{ new Date().getFullYear() }} SellBazar.com &mdash; Made with
+          <i class="fa-sharp fa-solid fa-heart text-red-500"></i> in Bangladesh &#127463;&#127465;
+        </p>
         <div class="flex items-center gap-4">
           <a href="#" class="hover:text-orange-500 transition">Privacy Policy</a>
           <a href="#" class="hover:text-orange-500 transition">Terms</a>
@@ -115,35 +141,37 @@
 </template>
 
 <script setup lang="ts">
-const shopLinks    = [
-  { label: 'New Arrivals',    to: '/products?sort=new' },
-  { label: 'Best Sellers',    to: '/products?sort=popular' },
-  { label: 'Flash Deals',     to: '/deals' },
-  { label: 'Electronics',     to: '/products?cat=Electronics' },
-  { label: 'Fashion',         to: '/products?cat=Fashion' },
-  { label: 'Grocery',         to: '/products?cat=Grocery' },
+const shopLinks = [
+  { label: 'New Arrivals',  to: '/products?sort=new'      },
+  { label: 'Best Sellers',  to: '/products?sort=popular'  },
+  { label: 'Flash Deals',   to: '/deals'                  },
+  { label: 'Electronics',   to: '/products?cat=Electronics' },
+  { label: 'Fashion',       to: '/products?cat=Fashion'   },
+  { label: 'Grocery',       to: '/products?cat=Grocery'   },
+  { label: 'Books',         to: '/products?cat=Books'     },
 ]
-const helpLinks    = [
-  { label: 'Track Order',         href: '#' },
-  { label: 'Return & Exchange',   href: '#' },
-  { label: 'Shipping Info',       href: '#' },
-  { label: 'Payment Guide',       href: '#' },
-  { label: 'FAQs',                href: '#' },
-  { label: 'Contact Us',          href: '#' },
+const helpLinks = [
+  { label: 'Track Order',       href: '#' },
+  { label: 'Return & Exchange', href: '#' },
+  { label: 'Shipping Info',     href: '#' },
+  { label: 'Payment Guide',     href: '#' },
+  { label: 'FAQs',              href: '#' },
+  { label: 'Contact Us',        href: '#' },
 ]
 const companyLinks = [
-  { label: 'About SellBazar',   href: '#' },
-  { label: 'Sell on SellBazar', href: '#' },
-  { label: 'Careers',           href: '#' },
-  { label: 'Press',             href: '#' },
-  { label: 'Investor Relations',href: '#' },
+  { label: 'About SellBazar',    href: '#' },
+  { label: 'Sell on SellBazar',  href: '#' },
+  { label: 'Careers',            href: '#' },
+  { label: 'Press',              href: '#' },
+  { label: 'Investor Relations', href: '#' },
 ]
 const paymentMethods = [
-  { name: 'bKash',   icon: 'fa-sharp fa-solid fa-mobile-signal', color: '#e2136e' },
-  { name: 'Nagad',   icon: 'fa-sharp fa-solid fa-wallet',        color: '#f7931e' },
-  { name: 'Rocket',  icon: 'fa-sharp fa-solid fa-rocket',        color: '#8b3fcd' },
-  { name: 'VISA',    icon: 'fa-brands fa-cc-visa',               color: '#1a1f71' },
-  { name: 'Mastercard', icon: 'fa-brands fa-cc-mastercard',      color: '#eb001b' },
-  { name: 'Cash on Delivery', icon: 'fa-sharp fa-solid fa-money-bill-wave', color: '#22c55e' },
+  { name: 'bKash',           icon: 'fa-sharp fa-solid fa-mobile-screen-button', color: '#e2136e' },
+  { name: 'Nagad',           icon: 'fa-sharp fa-solid fa-wallet',               color: '#f7931e' },
+  { name: 'Rocket',          icon: 'fa-sharp fa-solid fa-rocket',               color: '#8b3fcd' },
+  { name: 'VISA',            icon: 'fa-brands fa-cc-visa',                      color: '#1a1f71' },
+  { name: 'Mastercard',      icon: 'fa-brands fa-cc-mastercard',                color: '#eb001b' },
+  { name: 'Cash on Delivery',icon: 'fa-sharp fa-solid fa-money-bill-wave',      color: '#22c55e' },
+  { name: 'Upay',            icon: 'fa-sharp fa-solid fa-building-columns',     color: '#005baa' },
 ]
 </script>

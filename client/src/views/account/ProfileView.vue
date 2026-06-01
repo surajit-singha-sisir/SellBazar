@@ -49,7 +49,7 @@
         <button @click="save" class="btn-primary">
           <i class="fa-sharp fa-regular fa-floppy-disk"></i> Save Changes
         </button>
-        <span v-if="saved" class="text-green-500 text-sm ml-3 font-medium">✓ Saved!</span>
+        <span v-if="saved" class="text-green-500 text-sm ml-3 font-medium">âœ“ Saved!</span>
       </div>
 
       <!-- Danger -->

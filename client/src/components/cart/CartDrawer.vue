@@ -23,7 +23,7 @@
       <!-- Empty state -->
       <div v-if="cartStore.items.length === 0" class="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
         <div class="w-20 h-20 rounded-3xl bg-orange-500/10 flex items-center justify-center">
-          <i class="fa-sharp fa-light fa-cart-shopping text-3xl text-orange-500"></i>
+          <i class="fa-sharp fa-regular fa-cart-shopping text-3xl text-orange-500"></i>
         </div>
         <div>
           <p class="font-semibold text-lg mb-1">Your cart is empty</p>
@@ -44,15 +44,15 @@
         <!-- Savings row -->
         <div v-if="cartStore.savings > 0" class="flex items-center justify-between text-xs">
           <span class="text-[var(--color-text-muted)]">You save</span>
-          <span class="text-green-500 font-semibold">৳{{ cartStore.savings.toLocaleString() }}</span>
+          <span class="text-green-500 font-semibold">à§³{{ cartStore.savings.toLocaleString() }}</span>
         </div>
 
         <!-- Total -->
         <div class="flex items-center justify-between">
           <span class="font-semibold">Subtotal ({{ cartStore.totalItems }} items)</span>
           <div class="text-right">
-            <p class="text-xs text-[var(--color-text-muted)] line-through" v-if="cartStore.savings > 0">৳{{ cartStore.totalPrice.toLocaleString() }}</p>
-            <p class="text-xl font-bold gradient-text">৳{{ cartStore.saleTotal.toLocaleString() }}</p>
+            <p class="text-xs text-[var(--color-text-muted)] line-through" v-if="cartStore.savings > 0">à§³{{ cartStore.totalPrice.toLocaleString() }}</p>
+            <p class="text-xl font-bold gradient-text">à§³{{ cartStore.saleTotal.toLocaleString() }}</p>
           </div>
         </div>
 
@@ -70,7 +70,7 @@
         <!-- Payment icons -->
         <div class="flex items-center justify-center gap-2 text-[10px] text-[var(--color-text-muted)]">
           <i class="fa-sharp fa-solid fa-shield-check text-green-500"></i>
-          Secured · bKash · Nagad · COD
+          Secured Â· bKash Â· Nagad Â· COD
         </div>
       </div>
     </div>

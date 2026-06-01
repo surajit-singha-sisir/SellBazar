@@ -17,7 +17,7 @@
             <p class="text-xs text-[var(--color-text-muted)]">{{ formatDate(order.createdAt) }}</p>
           </div>
           <div class="text-right">
-            <p class="font-bold text-orange-500">৳{{ order.total.toLocaleString() }}</p>
+            <p class="font-bold text-orange-500">à§³{{ order.total.toLocaleString() }}</p>
             <p class="text-xs text-[var(--color-text-muted)] mt-0.5 capitalize">
               <i class="fa-sharp fa-regular fa-credit-card mr-1"></i>{{ order.paymentMethod }}
             </p>
@@ -26,8 +26,8 @@
         <div class="divider my-3"></div>
         <div class="space-y-1.5">
           <div v-for="item in order.items" :key="item.name" class="flex items-center justify-between text-sm">
-            <span class="text-[var(--color-text-2)]">{{ item.name }} × {{ item.quantity }}</span>
-            <span class="font-medium">৳{{ (item.price * item.quantity).toLocaleString() }}</span>
+            <span class="text-[var(--color-text-2)]">{{ item.name }} Ã— {{ item.quantity }}</span>
+            <span class="font-medium">à§³{{ (item.price * item.quantity).toLocaleString() }}</span>
           </div>
         </div>
       </div>

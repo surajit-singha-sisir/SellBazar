@@ -4,8 +4,8 @@
     <div class="flex-1 min-w-0">
       <p class="text-sm font-medium line-clamp-2 leading-tight">{{ item.name }}</p>
       <div class="flex items-center gap-2 mt-1">
-        <span class="text-orange-500 font-bold text-sm">৳{{ (item.salePrice ?? item.price).toLocaleString() }}</span>
-        <span v-if="item.salePrice" class="text-[var(--color-text-muted)] line-through text-xs">৳{{ item.price.toLocaleString() }}</span>
+        <span class="text-orange-500 font-bold text-sm">à§³{{ (item.salePrice ?? item.price).toLocaleString() }}</span>
+        <span v-if="item.salePrice" class="text-[var(--color-text-muted)] line-through text-xs">à§³{{ item.price.toLocaleString() }}</span>
       </div>
       <div class="flex items-center justify-between mt-2">
         <div class="flex items-center gap-1 border border-[var(--color-border)] rounded-lg overflow-hidden">

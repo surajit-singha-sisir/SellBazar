@@ -1,8 +1,10 @@
 <template>
   <div class="bg-mesh min-h-screen">
-    <!-- Hero Section -->
+
+    <!-- ── Hero Section ──────────────────────────────────────────────── -->
     <section class="relative overflow-hidden py-12 px-4 sm:px-6 max-w-7xl mx-auto">
       <div class="grid lg:grid-cols-2 gap-8 items-center">
+
         <!-- Hero text -->
         <div class="space-y-6">
           <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-orange-500/30 bg-orange-500/5 text-sm font-medium text-orange-600">
@@ -21,13 +23,13 @@
               <i class="fa-sharp fa-solid fa-bolt"></i> Shop Now
             </RouterLink>
             <RouterLink to="/deals" class="btn-secondary text-base px-8 py-3.5">
-              🔥 Today's Deals
+              <i class="fa-sharp fa-solid fa-fire text-orange-400"></i> Today's Deals
             </RouterLink>
           </div>
           <!-- Trust badges -->
           <div class="flex flex-wrap gap-4 pt-2">
             <div class="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-              <i class="fa-sharp fa-solid fa-shield-check text-green-500"></i> Secure Payment
+              <i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i> Secure Payment
             </div>
             <div class="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
               <i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i> Fast Delivery
@@ -38,12 +40,13 @@
           </div>
         </div>
 
-        <!-- Hero visual -->
+        <!-- Hero visual — product mini-cards -->
         <div class="relative hidden lg:flex items-center justify-center">
           <div class="relative w-96 h-96">
             <div class="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500/20 to-fuchsia-500/20 blur-3xl"></div>
             <div class="relative grid grid-cols-2 gap-4 p-6">
-              <div v-for="p in productStore.featured.slice(0,4)" :key="p.id"
+              <div
+                v-for="p in productStore.featured.slice(0, 4)" :key="p.id"
                 class="card hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden cursor-pointer"
                 @click="$router.push(`/products/${p.slug}`)"
               >
@@ -59,7 +62,7 @@
       </div>
     </section>
 
-    <!-- Stats Bar -->
+    <!-- ── Stats Bar ──────────────────────────────────────────────────── -->
     <section class="border-y border-[var(--color-border)] bg-[var(--color-surface)] py-4 px-4">
       <div class="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div v-for="stat in stats" :key="stat.label" class="flex items-center gap-3 justify-center">
@@ -74,20 +77,20 @@
       </div>
     </section>
 
-    <!-- Categories -->
+    <!-- ── Categories ─────────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
       <div class="flex items-center justify-between mb-6">
         <h2 class="font-display text-2xl font-bold">Browse Categories</h2>
         <RouterLink to="/products" class="btn-ghost text-sm">See all <i class="fa-sharp fa-regular fa-arrow-right"></i></RouterLink>
       </div>
-      <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div class="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <RouterLink
           v-for="cat in categories" :key="cat.id"
           :to="`/products?cat=${cat.name}`"
           class="card flex flex-col items-center gap-2 py-4 px-2 hover:shadow-md hover:-translate-y-1 transition-all duration-200 text-center group"
         >
-          <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-xl transition-transform group-hover:scale-110" :style="`background: ${cat.color}18`">
-            {{ cat.icon }}
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" :style="`background: ${cat.color}18`">
+            <i :class="cat.icon + ' text-lg'" :style="`color: ${cat.color}`"></i>
           </div>
           <span class="text-xs font-medium leading-tight text-[var(--color-text-2)] group-hover:text-[var(--color-text)]">{{ cat.name }}</span>
           <span class="text-[10px] text-[var(--color-text-muted)]">{{ cat.count }}+</span>
@@ -95,7 +98,7 @@
       </div>
     </section>
 
-    <!-- Featured Products -->
+    <!-- ── Featured Products ──────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
       <div class="flex items-center justify-between mb-6">
         <div>
@@ -109,15 +112,18 @@
       </div>
     </section>
 
-    <!-- Deals Banner -->
+    <!-- ── Deals Banner ───────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
       <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-orange-600 via-orange-500 to-fuchsia-600 p-8 sm:p-12 text-white">
         <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 30px 30px;"></div>
         <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div>
-            <span class="text-4xl">🎉</span>
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fa-sharp fa-solid fa-tag text-white/80 text-2xl"></i>
+              <span class="text-sm font-semibold bg-white/20 px-3 py-1 rounded-full">Limited Time</span>
+            </div>
             <h2 class="font-display text-3xl font-extrabold mt-2">Eid Special Sale!</h2>
-            <p class="text-white/80 mt-1 text-lg">Up to 70% off — Limited time offer</p>
+            <p class="text-white/80 mt-1 text-lg">Up to 70% off — Hurry before it ends</p>
             <div class="flex gap-3 mt-4 text-center">
               <div v-for="t in countdown" :key="t.label" class="bg-white/20 rounded-xl px-4 py-2 min-w-[60px]">
                 <p class="font-display font-extrabold text-2xl">{{ t.value }}</p>
@@ -126,13 +132,13 @@
             </div>
           </div>
           <RouterLink to="/deals" class="shrink-0 bg-white text-orange-600 font-bold py-3 px-8 rounded-2xl hover:bg-orange-50 transition shadow-xl text-base">
-            Shop Deals →
+            <i class="fa-sharp fa-solid fa-fire mr-1"></i> Shop Deals
           </RouterLink>
         </div>
       </div>
     </section>
 
-    <!-- New Arrivals -->
+    <!-- ── New Arrivals ───────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
       <div class="flex items-center justify-between mb-6">
         <div>
@@ -146,19 +152,35 @@
       </div>
     </section>
 
-    <!-- Payment methods -->
+    <!-- ── Why SellBazar ──────────────────────────────────────────────── -->
+    <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
+      <h2 class="font-display text-2xl font-bold text-center mb-8">Why Choose SellBazar?</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div v-for="f in features" :key="f.title" class="card p-5 text-center hover:shadow-md transition">
+          <div class="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center" :style="`background:${f.color}18`">
+            <i :class="f.icon + ' text-xl'" :style="`color:${f.color}`"></i>
+          </div>
+          <h3 class="font-semibold text-sm mb-1">{{ f.title }}</h3>
+          <p class="text-xs text-[var(--color-text-muted)]">{{ f.desc }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Payment methods ────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
       <div class="card p-8 text-center">
         <h3 class="font-display font-bold text-xl mb-2">Secure & Easy Payments</h3>
         <p class="text-[var(--color-text-muted)] text-sm mb-6">Pay the way you prefer — trusted by millions of Bangladeshis</p>
         <div class="flex flex-wrap justify-center gap-3">
-          <div v-for="pm in paymentMethods" :key="pm.name" class="payment-badge hover:shadow-md transition">
-            <span>{{ pm.icon }}</span>
+          <div v-for="pm in paymentMethods" :key="pm.name"
+            class="payment-badge hover:shadow-md transition flex items-center gap-2">
+            <i :class="pm.icon + ' text-base'" :style="`color:${pm.color}`"></i>
             <span class="font-medium">{{ pm.name }}</span>
           </div>
         </div>
       </div>
     </section>
+
   </div>
 </template>
 
@@ -171,31 +193,38 @@ const productStore = useProductStore()
 onMounted(() => productStore.fetchProducts())
 
 const stats = [
-  { label: 'Products', value: '2M+', icon: 'fa-sharp fa-solid fa-boxes-stacked', color: '#f97316' },
-  { label: 'Sellers', value: '50K+', icon: 'fa-sharp fa-solid fa-store', color: '#d946ef' },
-  { label: 'Deliveries', value: '10M+', icon: 'fa-sharp fa-solid fa-truck-fast', color: '#3b82f6' },
-  { label: 'Happy Users', value: '5M+', icon: 'fa-sharp fa-solid fa-face-smile', color: '#22c55e' },
+  { label: 'Products',    value: '2M+',  icon: 'fa-sharp fa-solid fa-boxes-stacked',   color: '#f97316' },
+  { label: 'Sellers',     value: '50K+', icon: 'fa-sharp fa-solid fa-store',            color: '#d946ef' },
+  { label: 'Deliveries',  value: '10M+', icon: 'fa-sharp fa-solid fa-truck-fast',       color: '#3b82f6' },
+  { label: 'Happy Users', value: '5M+',  icon: 'fa-sharp fa-solid fa-face-smile-beam',  color: '#22c55e' },
 ]
 
 const categories = [
-  { id:'1', name:'Electronics', icon:'📱', color:'#3b82f6', count:45000 },
-  { id:'2', name:'Fashion',     icon:'👗', color:'#ec4899', count:80000 },
-  { id:'3', name:'Grocery',     icon:'🛒', color:'#22c55e', count:12000 },
-  { id:'4', name:'Beauty',      icon:'💄', color:'#a78bfa', count:8000 },
-  { id:'5', name:'Home',        icon:'🏠', color:'#f97316', count:25000 },
-  { id:'6', name:'Sports',      icon:'⚽', color:'#0ea5e9', count:15000 },
-  { id:'7', name:'Business',    icon:'💼', color:'#8b5cf6', count:5000 },
-  { id:'8', name:'Books',       icon:'📚', color:'#fbbf24', count:30000 },
+  { id: '1', name: 'Electronics', icon: 'fa-sharp fa-solid fa-microchip',       color: '#3b82f6', count: 45000 },
+  { id: '2', name: 'Fashion',     icon: 'fa-sharp fa-solid fa-shirt',            color: '#ec4899', count: 80000 },
+  { id: '3', name: 'Grocery',     icon: 'fa-sharp fa-solid fa-basket-shopping',  color: '#22c55e', count: 12000 },
+  { id: '4', name: 'Beauty',      icon: 'fa-sharp fa-solid fa-pump-soap',        color: '#a78bfa', count: 8000  },
+  { id: '5', name: 'Home',        icon: 'fa-sharp fa-solid fa-couch',            color: '#f97316', count: 25000 },
+  { id: '6', name: 'Sports',      icon: 'fa-sharp fa-solid fa-dumbbell',         color: '#0ea5e9', count: 15000 },
+  { id: '7', name: 'Business',    icon: 'fa-sharp fa-solid fa-briefcase',        color: '#8b5cf6', count: 5000  },
+  { id: '8', name: 'Books',       icon: 'fa-sharp fa-solid fa-book-open',        color: '#fbbf24', count: 30000 },
+]
+
+const features = [
+  { title: 'Free Delivery',    desc: 'On orders above ৳599',       icon: 'fa-sharp fa-solid fa-truck',            color: '#3b82f6' },
+  { title: 'Easy Returns',     desc: '7-day hassle-free returns',   icon: 'fa-sharp fa-solid fa-rotate-left',      color: '#f97316' },
+  { title: 'Secure Payments',  desc: 'bKash, Nagad & more',        icon: 'fa-sharp fa-solid fa-shield-halved',    color: '#22c55e' },
+  { title: '24/7 Support',     desc: 'Always here to help',        icon: 'fa-sharp fa-solid fa-headset',          color: '#d946ef' },
 ]
 
 const paymentMethods = [
-  { name:'bKash',  icon:'📱' },
-  { name:'Nagad',  icon:'💳' },
-  { name:'Rocket', icon:'🚀' },
-  { name:'VISA',   icon:'💵' },
-  { name:'Mastercard', icon:'🔵' },
-  { name:'Cash on Delivery', icon:'💰' },
-  { name:'Upay',   icon:'🏦' },
+  { name: 'bKash',           icon: 'fa-sharp fa-solid fa-mobile-screen-button', color: '#e2136e' },
+  { name: 'Nagad',           icon: 'fa-sharp fa-solid fa-wallet',               color: '#f7931e' },
+  { name: 'Rocket',          icon: 'fa-sharp fa-solid fa-rocket',               color: '#8b3fcd' },
+  { name: 'VISA',            icon: 'fa-brands fa-cc-visa',             color: '#1a1f71' },
+  { name: 'Mastercard',      icon: 'fa-brands fa-cc-mastercard',       color: '#eb001b' },
+  { name: 'Cash on Delivery',icon: 'fa-sharp fa-solid fa-money-bill-wave',      color: '#22c55e' },
+  { name: 'Upay',            icon: 'fa-sharp fa-solid fa-building-columns',     color: '#005baa' },
 ]
 
 // Countdown timer
@@ -214,9 +243,9 @@ onMounted(() => {
     if (m < 0) { m = 59; h-- }
     if (h < 0) { h = 23; m = 59; s = 59 }
     countdown.value = [
-      { label:'Hours', value: String(h).padStart(2,'0') },
-      { label:'Mins',  value: String(m).padStart(2,'0') },
-      { label:'Secs',  value: String(s).padStart(2,'0') },
+      { label: 'Hours', value: String(h).padStart(2, '0') },
+      { label: 'Mins',  value: String(m).padStart(2, '0') },
+      { label: 'Secs',  value: String(s).padStart(2, '0') },
     ]
   }, 1000)
 })

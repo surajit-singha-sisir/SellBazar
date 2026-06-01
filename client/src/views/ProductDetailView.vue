@@ -26,16 +26,99 @@
       </nav>
 
       <div class="grid lg:grid-cols-2 gap-8 lg:gap-12">
-        <!-- Image -->
+
+        <!-- Image Gallery -->
         <div class="space-y-3">
-          <div class="card overflow-hidden aspect-square bg-[var(--color-surface-2)]">
-            <img :src="product.images[0]" :alt="product.name" class="w-full h-full object-cover" />
+
+          <!-- Main Swiper with zoom wrapper -->
+          <div
+            class="card overflow-hidden aspect-square bg-[var(--color-surface-2)] relative cursor-zoom-in"
+            ref="zoomWrap"
+            @mousemove="onMouseMove"
+            @mouseenter="zoomActive = true"
+            @mouseleave="zoomActive = false"
+          >
+            <Swiper
+              :modules="mainModules"
+              :thumbs="{ swiper: thumbsSwiper }"
+              :navigation="{ prevEl: '.main-prev', nextEl: '.main-next' }"
+              :loop="true"
+              :space-between="0"
+              class="w-full h-full"
+              @swiper="onMainSwiper"
+              @slide-change="onSlideChange"
+              @click="openLightbox"
+            >
+              <SwiperSlide v-for="(img, i) in product.images" :key="i" class="w-full h-full">
+                <img
+                  :src="img"
+                  :alt="`${product.name} view ${i + 1}`"
+                  class="w-full h-full object-cover"
+                  draggable="false"
+                />
+              </SwiperSlide>
+            </Swiper>
+
+            <!-- Nav arrows -->
+            <button class="main-prev absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/40 hover:bg-black/65 text-white flex items-center justify-center transition backdrop-blur-sm">
+              <i class="fa-sharp fa-solid fa-chevron-left text-xs"></i>
+            </button>
+            <button class="main-next absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/40 hover:bg-black/65 text-white flex items-center justify-center transition backdrop-blur-sm">
+              <i class="fa-sharp fa-solid fa-chevron-right text-xs"></i>
+            </button>
+
+            <!-- Zoom lens -->
+            <div
+              v-show="zoomActive"
+              class="zoom-lens pointer-events-none absolute border-2 border-orange-400/70 rounded-md"
+              :style="lensStyle"
+            ></div>
+
+            <!-- Zoom result panel (teleported to body, floats right of image) -->
+            <Teleport to="body">
+              <div
+                v-show="zoomActive"
+                class="zoom-result pointer-events-none fixed hidden lg:block rounded-2xl border border-[var(--color-border)] shadow-2xl z-50"
+                :style="zoomResultStyle"
+              ></div>
+            </Teleport>
+
+            <!-- Slide counter -->
+            <div class="absolute bottom-3 right-3 z-10 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
+              {{ activeIdx + 1 }} / {{ product.images.length }}
+            </div>
           </div>
+
+          <!-- Thumbs Swiper -->
+          <Swiper
+            :modules="thumbModules"
+            watch-slides-progress
+            :slides-per-view="product.images.length"
+            :space-between="8"
+            class="thumbs-swiper w-full"
+            @swiper="onThumbsSwiper"
+          >
+            <SwiperSlide
+              v-for="(img, i) in product.images"
+              :key="i"
+              class="!aspect-square rounded-xl overflow-hidden border-2 cursor-pointer transition-all duration-200"
+              :class="i === activeIdx
+                ? 'border-orange-500 shadow-[0_0_0_2px_rgba(249,115,22,0.3)]'
+                : 'border-[var(--color-border)] opacity-60 hover:opacity-100 hover:border-orange-300'"
+            >
+              <img :src="img" :alt="`thumb ${i + 1}`" class="w-full h-full object-cover" draggable="false" />
+            </SwiperSlide>
+          </Swiper>
+
+          <!-- Hint -->
+          <p class="text-center text-xs text-[var(--color-text-muted)]">
+            <i class="fa-sharp fa-regular fa-magnifying-glass-plus mr-1 text-orange-400"></i>
+            Hover to zoom · Click image to enlarge
+          </p>
         </div>
 
-        <!-- Info -->
+        <!-- Product Info -->
         <div class="space-y-5">
-          <!-- Brand + badges -->
           <div class="flex flex-wrap gap-2">
             <span class="badge badge-brand">{{ product.brand }}</span>
             <span v-if="product.isNew"      class="badge badge-green">New Arrival</span>
@@ -45,26 +128,24 @@
           <h1 class="font-display font-extrabold text-3xl leading-tight">{{ product.name }}</h1>
           <p class="text-[var(--color-text-muted)] font-bangla text-lg">{{ product.nameBn }}</p>
 
-          <!-- Rating -->
           <div class="flex items-center gap-3">
             <div class="stars">
-              <i v-for="n in 5" :key="n" :class="n <= Math.round(product.rating) ? 'fa-sharp fa-solid fa-star' : 'fa-sharp fa-regular fa-star'" class="text-sm"></i>
+              <i v-for="n in 5" :key="n"
+                :class="n <= Math.round(product.rating) ? 'fa-sharp fa-solid fa-star' : 'fa-sharp fa-regular fa-star'"
+                class="text-sm"></i>
             </div>
             <span class="font-semibold">{{ product.rating }}</span>
             <span class="text-[var(--color-text-muted)] text-sm">({{ product.reviewCount.toLocaleString() }} reviews)</span>
           </div>
 
-          <!-- Price -->
           <div class="flex items-baseline gap-3">
             <span class="text-4xl font-extrabold text-orange-500">৳{{ (product.salePrice ?? product.price).toLocaleString() }}</span>
             <span v-if="product.salePrice" class="text-xl text-[var(--color-text-muted)] line-through">৳{{ product.price.toLocaleString() }}</span>
             <span v-if="product.salePrice" class="badge badge-red text-sm">{{ discountPct }}% OFF</span>
           </div>
 
-          <!-- Description -->
           <p class="text-[var(--color-text-2)] leading-relaxed">{{ product.description }}</p>
 
-          <!-- Stock + delivery -->
           <div class="card p-4 space-y-3 bg-[var(--color-surface-2)]">
             <div class="flex items-center gap-3 text-sm">
               <i class="fa-sharp fa-solid fa-circle-check text-green-500"></i>
@@ -85,14 +166,15 @@
             </div>
           </div>
 
-          <!-- Quantity + Cart -->
           <div class="flex items-center gap-3">
             <div class="flex items-center border border-[var(--color-border)] rounded-xl overflow-hidden">
-              <button @click="qty = Math.max(1, qty - 1)" class="w-10 h-12 flex items-center justify-center hover:bg-[var(--color-surface-2)] transition">
+              <button @click="qty = Math.max(1, qty - 1)"
+                class="w-10 h-12 flex items-center justify-center hover:bg-[var(--color-surface-2)] transition">
                 <i class="fa-sharp fa-solid fa-minus text-xs"></i>
               </button>
               <span class="w-12 text-center font-bold">{{ qty }}</span>
-              <button @click="qty++" class="w-10 h-12 flex items-center justify-center hover:bg-[var(--color-surface-2)] transition">
+              <button @click="qty++"
+                class="w-10 h-12 flex items-center justify-center hover:bg-[var(--color-surface-2)] transition">
                 <i class="fa-sharp fa-solid fa-plus text-xs"></i>
               </button>
             </div>
@@ -106,7 +188,6 @@
             </button>
           </div>
 
-          <!-- Tags -->
           <div class="flex flex-wrap gap-2">
             <span v-for="tag in product.tags" :key="tag" class="tag">#{{ tag }}</span>
           </div>
@@ -122,33 +203,168 @@
       </div>
     </template>
   </div>
+
+  <!-- Lightbox -->
+  <Teleport to="body">
+    <Transition name="lb">
+      <div
+        v-if="lightboxOpen"
+        class="fixed inset-0 z-[200] flex items-center justify-center bg-black/92 backdrop-blur-sm"
+        @click.self="lightboxOpen = false"
+      >
+        <button
+          @click="lightboxOpen = false"
+          class="absolute top-4 right-4 text-white/80 hover:text-white w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition z-10"
+        >
+          <i class="fa-sharp fa-solid fa-xmark text-lg"></i>
+        </button>
+
+        <div class="w-full max-w-3xl px-14" v-if="product">
+          <Swiper
+            :modules="lbModules"
+            :navigation="{ prevEl: '.lb-prev', nextEl: '.lb-next' }"
+            :pagination="{ clickable: true, dynamicBullets: true }"
+            :initial-slide="activeIdx"
+            :loop="true"
+            :space-between="24"
+            class="lb-swiper"
+            @swiper="onLbSwiper"
+          >
+            <SwiperSlide
+              v-for="(img, i) in product.images"
+              :key="i"
+              class="flex items-center justify-center"
+            >
+              <img
+                :src="img"
+                :alt="`${product.name} view ${i + 1}`"
+                class="max-h-[80vh] max-w-full object-contain rounded-xl"
+              />
+            </SwiperSlide>
+          </Swiper>
+        </div>
+
+        <button class="lb-prev absolute left-3 text-white/80 hover:text-white w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition z-10">
+          <i class="fa-sharp fa-solid fa-chevron-left"></i>
+        </button>
+        <button class="lb-next absolute right-3 text-white/80 hover:text-white w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition z-10">
+          <i class="fa-sharp fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useProductStore } from '@/stores/useProductStore'
-import { useCartStore } from '@/stores/useCartStore'
-import { useWishlistStore } from '@/stores/useWishlistStore'
-import ProductCard from '@/components/product/ProductCard.vue'
+import { Swiper, SwiperSlide } from 'swiper/vue'
+import { Navigation, Pagination, Thumbs } from 'swiper/modules'
+import type { Swiper as SwiperType } from 'swiper'
+import 'swiper/css'
+import 'swiper/css/navigation'
+import 'swiper/css/pagination'
+import 'swiper/css/thumbs'
 
-const route = useRoute()
-const productStore = useProductStore()
-const cartStore = useCartStore()
+import { useProductStore }  from '@/stores/useProductStore'
+import { useCartStore }     from '@/stores/useCartStore'
+import { useWishlistStore } from '@/stores/useWishlistStore'
+import ProductCard          from '@/components/product/ProductCard.vue'
+
+const route         = useRoute()
+const productStore  = useProductStore()
+const cartStore     = useCartStore()
 const wishlistStore = useWishlistStore()
 
 const loading = ref(true)
-const qty = ref(1)
-const added = ref(false)
+const qty     = ref(1)
+const added   = ref(false)
 
+// ── Swiper instances ──────────────────────────────────────────
+const mainModules  = [Navigation, Thumbs]
+const thumbModules = [Thumbs]
+const lbModules    = [Navigation, Pagination]
+
+const mainSwiper   = ref<SwiperType | null>(null)
+const thumbsSwiper = ref<SwiperType | null>(null)
+
+const activeIdx = ref(0)
+
+function onMainSwiper(sw: SwiperType)   { mainSwiper.value   = sw }
+function onThumbsSwiper(sw: SwiperType) { thumbsSwiper.value = sw }
+function onLbSwiper(_sw: SwiperType)    { /* lightbox swiper ready */ }
+
+function onSlideChange(sw: SwiperType) {
+  activeIdx.value = sw.realIndex
+}
+
+// ── Zoom ─────────────────────────────────────────────────────
+const zoomWrap   = ref<HTMLElement | null>(null)
+const zoomActive = ref(false)
+
+const LENS_SIZE   = 110
+const ZOOM_SCALE  = 2.8
+const RESULT_SIZE = 330
+
+const lensStyle       = ref<Record<string, string>>({})
+const zoomResultStyle = ref<Record<string, string>>({})
+
+function onMouseMove(e: MouseEvent) {
+  if (!zoomWrap.value) return
+  const rect = zoomWrap.value.getBoundingClientRect()
+  const x    = e.clientX - rect.left
+  const y    = e.clientY - rect.top
+  const half = LENS_SIZE / 2
+  const lx   = Math.min(Math.max(x - half, 0), rect.width  - LENS_SIZE)
+  const ly   = Math.min(Math.max(y - half, 0), rect.height - LENS_SIZE)
+
+  lensStyle.value = {
+    width:  LENS_SIZE + 'px',
+    height: LENS_SIZE + 'px',
+    left:   lx + 'px',
+    top:    ly + 'px',
+  }
+
+  zoomResultStyle.value = {
+    width:  RESULT_SIZE + 'px',
+    height: RESULT_SIZE + 'px',
+    left:   (rect.right + 14) + 'px',
+    top:    rect.top + 'px',
+    backgroundImage:    `url(${product.value?.images[activeIdx.value]})`,
+    backgroundSize:     `${rect.width * ZOOM_SCALE}px ${rect.height * ZOOM_SCALE}px`,
+    backgroundPosition: `${-(lx * ZOOM_SCALE)}px ${-(ly * ZOOM_SCALE)}px`,
+    backgroundRepeat:   'no-repeat',
+    backgroundColor:    'var(--color-surface-2)',
+  }
+}
+
+// ── Lightbox ─────────────────────────────────────────────────
+const lightboxOpen = ref(false)
+
+function openLightbox() { lightboxOpen.value = true }
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape') lightboxOpen.value = false
+}
+
+// ── Product ───────────────────────────────────────────────────
 const product = computed(() => productStore.getBySlug(route.params.slug as string))
+
 const discountPct = computed(() => {
   if (!product.value?.salePrice) return 0
   return Math.round((1 - product.value.salePrice / product.value.price) * 100)
 })
+
 const related = computed(() => {
   if (!product.value) return []
-  return productStore.products.filter(p => p.category === product.value!.category && p.id !== product.value!.id).slice(0, 4)
+  return productStore.products
+    .filter(p => p.category === product.value!.category && p.id !== product.value!.id)
+    .slice(0, 4)
+})
+
+watch(() => product.value, () => {
+  activeIdx.value = 0
+  mainSwiper.value?.slideTo(0)
 })
 
 function addToCart() {
@@ -164,6 +380,55 @@ async function load() {
   loading.value = false
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  window.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 watch(() => route.params.slug, load)
 </script>
+
+<style scoped lang="scss">
+/* Thumbs: active slide highlight */
+.thumbs-swiper :deep(.swiper-slide-thumb-active) {
+  border-color: rgb(249 115 22) !important;
+  opacity: 1 !important;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+}
+
+/* Zoom lens */
+.zoom-lens {
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Zoom result */
+.zoom-result {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
+}
+
+/* Override Swiper nav button colours inside main swiper */
+:deep(.swiper-button-prev),
+:deep(.swiper-button-next) {
+  display: none; /* we use custom buttons */
+}
+
+/* Lightbox pagination dots */
+.lb-swiper :deep(.swiper-pagination-bullet) {
+  background: rgba(255, 255, 255, 0.45);
+  opacity: 1;
+}
+.lb-swiper :deep(.swiper-pagination-bullet-active) {
+  background: #ffffff;
+  transform: scale(1.3);
+}
+.lb-swiper :deep(.swiper-pagination) {
+  bottom: -28px;
+}
+
+/* Lightbox fade transition */
+.lb-enter-active,
+.lb-leave-active { transition: opacity 0.2s ease; }
+.lb-enter-from,
+.lb-leave-to     { opacity: 0; }
+</style>
