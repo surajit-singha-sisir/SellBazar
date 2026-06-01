@@ -13,6 +13,7 @@ export default createRouter({
     { path: '/register',            name: 'register',       component: () => import('@/views/auth/RegisterView.vue') },
     { path: '/account/orders',      name: 'orders',         component: () => import('@/views/account/OrdersView.vue') },
     { path: '/account/profile',     name: 'profile',        component: () => import('@/views/account/ProfileView.vue') },
+    { path: '/account/wishlist',    name: 'wishlist',       component: () => import('@/views/account/WishlistView.vue') },
     { path: '/deals',               name: 'deals',          component: () => import('@/views/DealsView.vue') },
     { path: '/:pathMatch(.*)*',     name: 'not-found',      component: () => import('@/views/NotFoundView.vue') },
   ]
