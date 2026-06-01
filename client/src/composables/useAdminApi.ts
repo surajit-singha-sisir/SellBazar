@@ -42,6 +42,39 @@ export interface ApiOrder {
   updatedAt: string
 }
 
+export interface ApiCustomer {
+  id: string
+  name: string
+  email: string
+  phone: string
+  address: string
+  orderCount: number
+  totalSpent: number
+  lastOrder: string
+  firstOrder: string
+  paymentMethod: string
+  orders: string[]
+}
+
+export interface DashboardStats {
+  totalRevenue: number
+  thisMonthRevenue: number
+  lastMonthRevenue: number
+  revenueGrowth: number
+  totalOrders: number
+  statusCounts: Record<string, number>
+  pendingOrders: number
+  totalProducts: number
+  lowStockCount: number
+  outOfStock: number
+  avgRating: number
+  uniqueCustomers: number
+  last7Days: { date: string; revenue: number; orders: number }[]
+  revenueByStatus: { status: string; total: number; count: number }[]
+  categoryBreakdown: { name: string; count: number }[]
+  recentOrders: ApiOrder[]
+}
+
 export interface AdminUser {
   id: string; email: string; role: string; name: string
 }
@@ -55,8 +88,11 @@ function getToken(): string | null {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> ?? {}),
+  }
+  // Don't set Content-Type for FormData (browser sets it with boundary)
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json'
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
@@ -77,6 +113,11 @@ export function useAdminApi() {
   }
   async function adminMe() {
     return request<{ admin: AdminUser }>('/admin/me')
+  }
+
+  // ── Dashboard ───────────────────────────────────────────────────────────────
+  async function fetchDashboard() {
+    return request<DashboardStats>('/admin/dashboard')
   }
 
   // ── Products ────────────────────────────────────────────────────────────────
@@ -101,9 +142,38 @@ export function useAdminApi() {
     return request<{ message: string; id: string }>(`/products/${id}`, { method: 'DELETE' })
   }
 
+  // ── Image Upload ─────────────────────────────────────────────────────────────
+  async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
+    const form = new FormData()
+    form.append('image', file)
+    return request<{ url: string; filename: string }>('/admin/upload', {
+      method: 'POST',
+      body: form,
+    })
+  }
+
   // ── Orders ──────────────────────────────────────────────────────────────────
-  async function fetchOrders() {
-    return request<{ data: ApiOrder[]; total: number }>('/orders')
+  async function fetchOrders(params?: { status?: string; q?: string; page?: number; limit?: number }) {
+    const qs = new URLSearchParams()
+    if (params?.status) qs.set('status', params.status)
+    if (params?.q)      qs.set('q', params.q)
+    if (params?.page)   qs.set('page', String(params.page))
+    if (params?.limit)  qs.set('limit', String(params.limit))
+    const query = qs.toString() ? `?${qs}` : ''
+    return request<{ data: ApiOrder[]; total: number }>(`/orders${query}`)
+  }
+
+  async function updateOrder(id: string, data: Partial<ApiOrder>) {
+    return request<ApiOrder>(`/orders/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+  }
+
+  async function deleteOrder(id: string) {
+    return request<{ message: string; id: string }>(`/orders/${id}`, { method: 'DELETE' })
+  }
+
+  // ── Customers ───────────────────────────────────────────────────────────────
+  async function fetchCustomers() {
+    return request<{ data: ApiCustomer[]; total: number }>('/admin/customers')
   }
 
   // ── Health ──────────────────────────────────────────────────────────────────
@@ -111,5 +181,13 @@ export function useAdminApi() {
     return request<{ status: string; service: string; time: string }>('/health')
   }
 
-  return { adminLogin, adminMe, fetchProducts, createProduct, updateProduct, deleteProduct, fetchOrders, fetchHealth }
+  return {
+    adminLogin, adminMe,
+    fetchDashboard,
+    fetchProducts, createProduct, updateProduct, deleteProduct,
+    uploadImage,
+    fetchOrders, updateOrder, deleteOrder,
+    fetchCustomers,
+    fetchHealth,
+  }
 }

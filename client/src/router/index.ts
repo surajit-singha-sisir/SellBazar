@@ -31,12 +31,14 @@ const router = createRouter({
       component: () => import('@/components/admin/AdminLayout.vue'),
       meta: { requiresAdmin: true },
       children: [
-        { path: '',           name: 'admin',           component: () => import('@/views/admin/DashboardView.vue') },
-        { path: 'products',   name: 'admin-products',  component: () => import('@/views/admin/ProductsView.vue') },
-        { path: 'orders',     name: 'admin-orders',    component: () => import('@/views/admin/OrdersView.vue') },
-        { path: 'analytics',  name: 'admin-analytics', component: () => import('@/views/admin/AnalyticsView.vue') },
-        { path: 'customers',  name: 'admin-customers', component: () => import('@/views/admin/CustomersView.vue') },
-        { path: 'settings',   name: 'admin-settings',  component: () => import('@/views/admin/SettingsView.vue') },
+        { path: '',                   name: 'admin',              component: () => import('@/views/admin/DashboardView.vue') },
+        { path: 'products',          name: 'admin-products',     component: () => import('@/views/admin/ProductsView.vue') },
+        { path: 'products/add',      name: 'admin-product-add',  component: () => import('@/views/admin/ProductFormView.vue') },
+        { path: 'products/edit/:id', name: 'admin-product-edit', component: () => import('@/views/admin/ProductFormView.vue') },
+        { path: 'orders',            name: 'admin-orders',       component: () => import('@/views/admin/OrdersView.vue') },
+        { path: 'analytics',         name: 'admin-analytics',    component: () => import('@/views/admin/AnalyticsView.vue') },
+        { path: 'customers',         name: 'admin-customers',    component: () => import('@/views/admin/CustomersView.vue') },
+        { path: 'settings',          name: 'admin-settings',     component: () => import('@/views/admin/SettingsView.vue') },
       ]
     },
 

@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useAdminApi, type ApiProduct, type ApiOrder, type AdminUser } from '@/composables/useAdminApi'
+import { useAdminApi, type ApiProduct, type ApiOrder, type ApiCustomer, type DashboardStats, type AdminUser } from '@/composables/useAdminApi'
 
 export const useAdminStore = defineStore('admin', () => {
   const api = useAdminApi()
 
-  // ── Auth state ───────────────────────────────────────────────────────────────
+  // ── Auth state ────────────────────────────────────────────────────────────
   const adminUser = ref<AdminUser | null>(
     JSON.parse(localStorage.getItem('sb-admin-user') ?? 'null')
   )
@@ -25,32 +25,40 @@ export const useAdminStore = defineStore('admin', () => {
     localStorage.removeItem('sb-admin-user')
     products.value = []
     orders.value = []
+    customers.value = []
+    dashboard.value = null
   }
 
-  // ── Data state ───────────────────────────────────────────────────────────────
+  // ── Data state ────────────────────────────────────────────────────────────
   const products     = ref<ApiProduct[]>([])
   const orders       = ref<ApiOrder[]>([])
+  const customers    = ref<ApiCustomer[]>([])
+  const dashboard    = ref<DashboardStats | null>(null)
   const serverOnline = ref<boolean | null>(null)
-  const loading      = ref({ products: false, orders: false, health: false, saving: false })
+  const loading      = ref({ products: false, orders: false, customers: false, dashboard: false, health: false, saving: false })
   const error        = ref<string | null>(null)
 
-  // ── Derived stats ────────────────────────────────────────────────────────────
+  // ── Derived stats (fallback when dashboard not loaded) ────────────────────
   const totalRevenue = computed(() =>
-    orders.value.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0)
+    dashboard.value?.totalRevenue ??
+    orders.value.filter(o => o.paymentStatus === 'paid').reduce((s, o) => s + o.total, 0)
   )
   const pendingOrders = computed(() =>
+    dashboard.value?.pendingOrders ??
     orders.value.filter(o => ['pending', 'processing'].includes(o.status)).length
   )
   const lowStock = computed(() =>
+    dashboard.value?.lowStockCount ??
     products.value.filter(p => p.stock < 25).length
   )
   const categoryBreakdown = computed(() => {
+    if (dashboard.value?.categoryBreakdown) return dashboard.value.categoryBreakdown
     const map: Record<string, number> = {}
     products.value.forEach(p => { map[p.category] = (map[p.category] ?? 0) + 1 })
-    return Object.entries(map).map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
+    return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
   })
   const revenueByStatus = computed(() => {
+    if (dashboard.value?.revenueByStatus) return dashboard.value.revenueByStatus
     const statuses = ['delivered', 'shipped', 'processing', 'pending', 'cancelled'] as const
     return statuses.map(status => ({
       status,
@@ -59,9 +67,17 @@ export const useAdminStore = defineStore('admin', () => {
     }))
   })
 
-  // ── Load actions ─────────────────────────────────────────────────────────────
+  // ── Load actions ──────────────────────────────────────────────────────────
   async function loadAll() {
-    await Promise.all([loadProducts(), loadOrders(), checkHealth()])
+    await Promise.all([loadProducts(), loadOrders(), checkHealth(), loadDashboard()])
+  }
+
+  async function loadDashboard() {
+    loading.value.dashboard = true
+    try {
+      dashboard.value = await api.fetchDashboard()
+    } catch { /* fallback to computed */ }
+    finally { loading.value.dashboard = false }
   }
 
   async function loadProducts() {
@@ -85,6 +101,15 @@ export const useAdminStore = defineStore('admin', () => {
     finally { loading.value.orders = false }
   }
 
+  async function loadCustomers() {
+    loading.value.customers = true
+    try {
+      const res = await api.fetchCustomers()
+      customers.value = res.data
+    } catch { customers.value = [] }
+    finally { loading.value.customers = false }
+  }
+
   async function checkHealth() {
     loading.value.health = true
     try {
@@ -94,7 +119,7 @@ export const useAdminStore = defineStore('admin', () => {
     finally { loading.value.health = false }
   }
 
-  // ── CRUD actions ─────────────────────────────────────────────────────────────
+  // ── Product CRUD ──────────────────────────────────────────────────────────
   async function createProduct(data: Partial<ApiProduct>) {
     loading.value.saving = true
     try {
@@ -122,15 +147,41 @@ export const useAdminStore = defineStore('admin', () => {
     } finally { loading.value.saving = false }
   }
 
+  // ── Order CRUD ────────────────────────────────────────────────────────────
+  async function updateOrder(id: string, data: Partial<ApiOrder>) {
+    loading.value.saving = true
+    try {
+      const updated = await api.updateOrder(id, data)
+      const idx = orders.value.findIndex(o => o.id === id)
+      if (idx !== -1) orders.value[idx] = updated
+      return updated
+    } finally { loading.value.saving = false }
+  }
+
+  async function deleteOrder(id: string) {
+    loading.value.saving = true
+    try {
+      await api.deleteOrder(id)
+      orders.value = orders.value.filter(o => o.id !== id)
+    } finally { loading.value.saving = false }
+  }
+
+  // ── Image upload ──────────────────────────────────────────────────────────
+  async function uploadImage(file: File) {
+    return api.uploadImage(file)
+  }
+
   return {
     // auth
     adminUser, isAdminLoggedIn, adminLogin, adminLogout,
     // data
-    products, orders, serverOnline, loading, error,
+    products, orders, customers, dashboard, serverOnline, loading, error,
     // stats
     totalRevenue, pendingOrders, lowStock, categoryBreakdown, revenueByStatus,
     // actions
-    loadAll, loadProducts, loadOrders, checkHealth,
+    loadAll, loadDashboard, loadProducts, loadOrders, loadCustomers, checkHealth,
     createProduct, updateProduct, deleteProduct,
+    updateOrder, deleteOrder,
+    uploadImage,
   }
 })

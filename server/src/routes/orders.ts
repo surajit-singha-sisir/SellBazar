@@ -121,6 +121,8 @@ let orders = [
   },
 ]
 
+export { orders }
+
 // ── ADMIN routes (all protected) ──────────────────────────────────────────────
 
 // GET /api/orders  — list all orders with optional filters
