@@ -24,8 +24,8 @@
           <div class="flex-1 min-w-0">
             <RouterLink :to="`/products/${item.slug}`" class="font-semibold text-sm hover:text-orange-500 transition line-clamp-2">{{ item.name }}</RouterLink>
             <div class="flex items-center gap-2 mt-1">
-              <span class="text-orange-500 font-bold">à§³{{ (item.salePrice ?? item.price).toLocaleString() }}</span>
-              <span v-if="item.salePrice" class="price-original text-xs">à§³{{ item.price.toLocaleString() }}</span>
+              <span class="text-orange-500 font-bold">৳{{ (item.salePrice ?? item.price).toLocaleString() }}</span>
+              <span v-if="item.salePrice" class="price-original text-xs">৳{{ item.price.toLocaleString() }}</span>
             </div>
             <div class="flex items-center justify-between mt-3">
               <div class="flex items-center border border-[var(--color-border)] rounded-lg overflow-hidden">
@@ -38,7 +38,7 @@
                 </button>
               </div>
               <div class="flex items-center gap-2">
-                <span class="font-bold text-sm">à§³{{ ((item.salePrice ?? item.price) * item.quantity).toLocaleString() }}</span>
+                <span class="font-bold text-sm">৳{{ ((item.salePrice ?? item.price) * item.quantity).toLocaleString() }}</span>
                 <button @click="cartStore.remove(item.id)" class="text-red-400 hover:text-red-500 transition p-1 ml-2">
                   <i class="fa-sharp fa-regular fa-trash-can text-sm"></i>
                 </button>
@@ -64,11 +64,11 @@
           <div class="space-y-2 text-sm">
             <div class="flex justify-between">
               <span class="text-[var(--color-text-muted)]">Subtotal ({{ cartStore.totalItems }} items)</span>
-              <span>à§³{{ cartStore.totalPrice.toLocaleString() }}</span>
+              <span>৳{{ cartStore.totalPrice.toLocaleString() }}</span>
             </div>
             <div v-if="cartStore.savings > 0" class="flex justify-between text-green-600">
               <span>Discount</span>
-              <span>-à§³{{ cartStore.savings.toLocaleString() }}</span>
+              <span>-৳{{ cartStore.savings.toLocaleString() }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-[var(--color-text-muted)]">Delivery</span>
@@ -78,7 +78,7 @@
           <div class="divider"></div>
           <div class="flex justify-between font-bold text-lg">
             <span>Total</span>
-            <span class="gradient-text">à§³{{ cartStore.saleTotal.toLocaleString() }}</span>
+            <span class="gradient-text">৳{{ cartStore.saleTotal.toLocaleString() }}</span>
           </div>
           <RouterLink to="/checkout" class="btn-primary w-full justify-center py-3.5">
             <i class="fa-sharp fa-solid fa-lock text-xs"></i> Proceed to Checkout

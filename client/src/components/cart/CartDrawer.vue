@@ -44,15 +44,15 @@
         <!-- Savings row -->
         <div v-if="cartStore.savings > 0" class="flex items-center justify-between text-xs">
           <span class="text-[var(--color-text-muted)]">You save</span>
-          <span class="text-green-500 font-semibold">à§³{{ cartStore.savings.toLocaleString() }}</span>
+          <span class="text-green-500 font-semibold">৳{{ cartStore.savings.toLocaleString() }}</span>
         </div>
 
         <!-- Total -->
         <div class="flex items-center justify-between">
           <span class="font-semibold">Subtotal ({{ cartStore.totalItems }} items)</span>
           <div class="text-right">
-            <p class="text-xs text-[var(--color-text-muted)] line-through" v-if="cartStore.savings > 0">à§³{{ cartStore.totalPrice.toLocaleString() }}</p>
-            <p class="text-xl font-bold gradient-text">à§³{{ cartStore.saleTotal.toLocaleString() }}</p>
+            <p class="text-xs text-[var(--color-text-muted)] line-through" v-if="cartStore.savings > 0">৳{{ cartStore.totalPrice.toLocaleString() }}</p>
+            <p class="text-xl font-bold gradient-text">৳{{ cartStore.saleTotal.toLocaleString() }}</p>
           </div>
         </div>
 
