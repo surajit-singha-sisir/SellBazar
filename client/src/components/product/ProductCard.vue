@@ -18,14 +18,28 @@
       <i :class="wishlistStore.has(product.id) ? 'fa-sharp fa-solid fa-heart' : 'fa-sharp fa-regular fa-heart'" class="text-xs"></i>
     </button>
 
-    <!-- Image -->
-    <RouterLink :to="`/products/${product.slug}`" class="block aspect-square bg-[var(--color-surface-2)] overflow-hidden">
+    <!-- Image with auto carousel on hover -->
+    <RouterLink :to="`/products/${product.slug}`" class="block aspect-square bg-[var(--color-surface-2)] overflow-hidden relative"
+      @mouseenter="startCarousel"
+      @mouseleave="stopCarousel"
+    >
       <img
-        :src="product.images[0]"
+        :src="product.images[currentImageIdx]"
         :alt="product.name"
         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         loading="lazy"
       />
+      <!-- Image dots indicator (only if multiple images) -->
+      <div v-if="product.images.length > 1" class="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-10">
+        <span
+          v-for="(_, i) in product.images"
+          :key="i"
+          class="block rounded-full transition-all duration-300"
+          :class="i === currentImageIdx
+            ? 'w-3.5 h-1.5 bg-white'
+            : 'w-1.5 h-1.5 bg-white/50'"
+        ></span>
+      </div>
     </RouterLink>
 
     <!-- Info -->
@@ -71,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import type { Product } from '@/types'
 import { useCartStore } from '@/stores/useCartStore'
 import { useWishlistStore } from '@/stores/useWishlistStore'
@@ -80,6 +94,24 @@ const props = defineProps<{ product: Product }>()
 const cartStore = useCartStore()
 const wishlistStore = useWishlistStore()
 const adding = ref(false)
+
+const currentImageIdx = ref(0)
+let carouselTimer: ReturnType<typeof setInterval> | null = null
+
+function startCarousel() {
+  if (props.product.images.length <= 1) return
+  currentImageIdx.value = 0
+  carouselTimer = setInterval(() => {
+    currentImageIdx.value = (currentImageIdx.value + 1) % props.product.images.length
+  }, 900)
+}
+
+function stopCarousel() {
+  if (carouselTimer) { clearInterval(carouselTimer); carouselTimer = null }
+  currentImageIdx.value = 0
+}
+
+onUnmounted(() => stopCarousel())
 
 const discountPct = computed(() => {
   if (!props.product.salePrice) return 0

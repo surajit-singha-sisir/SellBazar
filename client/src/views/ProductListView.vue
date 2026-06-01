@@ -110,11 +110,11 @@ const activeCategory = ref('All')
 const activePrice = ref('')
 
 const priceRanges = [
-  { label: 'Under à§³500',      min: 0,      max: 500 },
-  { label: 'à§³500 â€“ à§³2,000',   min: 500,    max: 2000 },
-  { label: 'à§³2,000 â€“ à§³10,000', min: 2000,   max: 10000 },
-  { label: 'à§³10,000 â€“ à§³50,000', min: 10000, max: 50000 },
-  { label: 'Over à§³50,000',    min: 50000,  max: Infinity },
+  { label: 'Under ৳500',      min: 0,      max: 500 },
+  { label: '৳500 – ৳2,000',   min: 500,    max: 2000 },
+  { label: '৳2,000 – ৳10,000', min: 2000,   max: 10000 },
+  { label: '৳10,000 – ৳50,000', min: 10000, max: 50000 },
+  { label: 'Over ৳50,000',    min: 50000,  max: Infinity },
 ]
 
 function setCategory(cat: string) {

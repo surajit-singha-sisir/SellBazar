@@ -30,18 +30,13 @@
         <!-- Image Gallery -->
         <div class="space-y-3">
 
-          <!-- Main Swiper with zoom wrapper -->
-          <div
-            class="card overflow-hidden aspect-square bg-[var(--color-surface-2)] relative cursor-zoom-in"
-            ref="zoomWrap"
-            @mousemove="onMouseMove"
-            @mouseenter="zoomActive = true"
-            @mouseleave="zoomActive = false"
-          >
+          <!-- Main Swiper -->
+          <div class="card overflow-hidden aspect-square bg-[var(--color-surface-2)] relative">
             <Swiper
               :modules="mainModules"
               :thumbs="{ swiper: thumbsSwiper }"
               :navigation="{ prevEl: '.main-prev', nextEl: '.main-next' }"
+              :autoplay="{ delay: 3000, disableOnInteraction: false, pauseOnMouseEnter: true }"
               :loop="true"
               :space-between="0"
               class="w-full h-full"
@@ -49,7 +44,7 @@
               @slide-change="onSlideChange"
               @click="openLightbox"
             >
-              <SwiperSlide v-for="(img, i) in product.images" :key="i" class="w-full h-full">
+              <SwiperSlide v-for="(img, i) in product.images" :key="i" class="w-full h-full cursor-pointer">
                 <img
                   :src="img"
                   :alt="`${product.name} view ${i + 1}`"
@@ -66,22 +61,6 @@
             <button class="main-next absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/40 hover:bg-black/65 text-white flex items-center justify-center transition backdrop-blur-sm">
               <i class="fa-sharp fa-solid fa-chevron-right text-xs"></i>
             </button>
-
-            <!-- Zoom lens -->
-            <div
-              v-show="zoomActive"
-              class="zoom-lens pointer-events-none absolute border-2 border-orange-400/70 rounded-md"
-              :style="lensStyle"
-            ></div>
-
-            <!-- Zoom result panel (teleported to body, floats right of image) -->
-            <Teleport to="body">
-              <div
-                v-show="zoomActive"
-                class="zoom-result pointer-events-none fixed hidden lg:block rounded-2xl border border-[var(--color-border)] shadow-2xl z-50"
-                :style="zoomResultStyle"
-              ></div>
-            </Teleport>
 
             <!-- Slide counter -->
             <div class="absolute bottom-3 right-3 z-10 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
@@ -112,8 +91,8 @@
 
           <!-- Hint -->
           <p class="text-center text-xs text-[var(--color-text-muted)]">
-            <i class="fa-sharp fa-regular fa-magnifying-glass-plus mr-1 text-orange-400"></i>
-            Hover to zoom · Click image to enlarge
+            <i class="fa-sharp fa-regular fa-hand-pointer mr-1 text-orange-400"></i>
+            Click image to enlarge · Auto-slides every 3s
           </p>
         </div>
 
@@ -259,12 +238,13 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Swiper, SwiperSlide } from 'swiper/vue'
-import { Navigation, Pagination, Thumbs } from 'swiper/modules'
+import { Navigation, Pagination, Thumbs, Autoplay } from 'swiper/modules'
 import type { Swiper as SwiperType } from 'swiper'
 import 'swiper/css'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import 'swiper/css/thumbs'
+import 'swiper/css/autoplay'
 
 import { useProductStore }  from '@/stores/useProductStore'
 import { useCartStore }     from '@/stores/useCartStore'
@@ -281,7 +261,7 @@ const qty     = ref(1)
 const added   = ref(false)
 
 // ── Swiper instances ──────────────────────────────────────────
-const mainModules  = [Navigation, Thumbs]
+const mainModules  = [Navigation, Thumbs, Autoplay]
 const thumbModules = [Thumbs]
 const lbModules    = [Navigation, Pagination]
 
@@ -296,46 +276,6 @@ function onLbSwiper(_sw: SwiperType)    { /* lightbox swiper ready */ }
 
 function onSlideChange(sw: SwiperType) {
   activeIdx.value = sw.realIndex
-}
-
-// ── Zoom ─────────────────────────────────────────────────────
-const zoomWrap   = ref<HTMLElement | null>(null)
-const zoomActive = ref(false)
-
-const LENS_SIZE   = 110
-const ZOOM_SCALE  = 2.8
-const RESULT_SIZE = 330
-
-const lensStyle       = ref<Record<string, string>>({})
-const zoomResultStyle = ref<Record<string, string>>({})
-
-function onMouseMove(e: MouseEvent) {
-  if (!zoomWrap.value) return
-  const rect = zoomWrap.value.getBoundingClientRect()
-  const x    = e.clientX - rect.left
-  const y    = e.clientY - rect.top
-  const half = LENS_SIZE / 2
-  const lx   = Math.min(Math.max(x - half, 0), rect.width  - LENS_SIZE)
-  const ly   = Math.min(Math.max(y - half, 0), rect.height - LENS_SIZE)
-
-  lensStyle.value = {
-    width:  LENS_SIZE + 'px',
-    height: LENS_SIZE + 'px',
-    left:   lx + 'px',
-    top:    ly + 'px',
-  }
-
-  zoomResultStyle.value = {
-    width:  RESULT_SIZE + 'px',
-    height: RESULT_SIZE + 'px',
-    left:   (rect.right + 14) + 'px',
-    top:    rect.top + 'px',
-    backgroundImage:    `url(${product.value?.images[activeIdx.value]})`,
-    backgroundSize:     `${rect.width * ZOOM_SCALE}px ${rect.height * ZOOM_SCALE}px`,
-    backgroundPosition: `${-(lx * ZOOM_SCALE)}px ${-(ly * ZOOM_SCALE)}px`,
-    backgroundRepeat:   'no-repeat',
-    backgroundColor:    'var(--color-surface-2)',
-  }
 }
 
 // ── Lightbox ─────────────────────────────────────────────────
@@ -394,17 +334,6 @@ watch(() => route.params.slug, load)
   border-color: rgb(249 115 22) !important;
   opacity: 1 !important;
   box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
-}
-
-/* Zoom lens */
-.zoom-lens {
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* Zoom result */
-.zoom-result {
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
 }
 
 /* Override Swiper nav button colours inside main swiper */
