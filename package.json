@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "concurrently -n CLIENT,SERVER -c cyan,green \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
     "install:all": "npm install --include=dev && npm install --include=dev --prefix client && npm install --prefix server",
-    "build": "npm run build --prefix client && npm run build --prefix server",
+    "build": "cd client && npx vite build && cd ../server && npx tsc",
     "start": "npm run start --prefix server"
   },
   "devDependencies": {
