@@ -200,7 +200,7 @@ async function submitModal() {
     }
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('adminToken') ?? ''}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('sb-admin-token') ?? ''}` },
       body: JSON.stringify(body),
     })
     if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? 'Request failed') }
@@ -217,7 +217,7 @@ async function confirmDeleteCategory(cat: Cat) {
   if (!confirm(`Delete category "${cat.name}"? This cannot be undone.`)) return
   await fetch(`${API}/categories/${cat.slug}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${localStorage.getItem('adminToken') ?? ''}` },
+    headers: { Authorization: `Bearer ${localStorage.getItem('sb-admin-token') ?? ''}` },
   })
   await loadCategories()
 }
@@ -226,7 +226,7 @@ async function confirmDeleteSub(cat: Cat, sub: Sub) {
   if (!confirm(`Delete subcategory "${sub.name}"?`)) return
   await fetch(`${API}/categories/${cat.slug}/subcategories/${sub.slug}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${localStorage.getItem('adminToken') ?? ''}` },
+    headers: { Authorization: `Bearer ${localStorage.getItem('sb-admin-token') ?? ''}` },
   })
   await loadCategories()
 }

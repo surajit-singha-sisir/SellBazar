@@ -174,11 +174,54 @@ app.get('/api/categories', (_, res) => {
   }))
   res.json({ data, total:data.length })
 })
+app.post('/api/categories', requireAdmin, (req, res) => {
+  const { name, nameBn, slug, icon, color } = req.body
+  if (!name||!slug) return res.status(400).json({ error:'name and slug required' })
+  if (CATEGORIES.find(c=>c.slug===slug)) return res.status(409).json({ error:'Slug already exists' })
+  const c = { id:'c'+Date.now(), slug, name, nameBn:nameBn||name, icon:icon||'tag', color:color||'#6b7280', subcategories:[] }
+  CATEGORIES.push(c); res.status(201).json(c)
+})
 app.get('/api/categories/:slug', (req, res) => {
   const c = CATEGORIES.find(c=>c.slug===req.params.slug)
   if (!c) return res.status(404).json({ error:'Category not found' })
   res.json({ ...c, productCount:products.filter(p=>p.category===c.name).length,
     subcategories:c.subcategories.map(s=>({ ...s, productCount:products.filter(p=>p.subcategory===s.slug).length })) })
+})
+app.put('/api/categories/:slug', requireAdmin, (req, res) => {
+  const idx = CATEGORIES.findIndex(c=>c.slug===req.params.slug)
+  if (idx===-1) return res.status(404).json({ error:'Category not found' })
+  CATEGORIES[idx] = { ...CATEGORIES[idx], ...req.body, id:CATEGORIES[idx].id, subcategories:CATEGORIES[idx].subcategories }
+  res.json(CATEGORIES[idx])
+})
+app.delete('/api/categories/:slug', requireAdmin, (req, res) => {
+  const idx = CATEGORIES.findIndex(c=>c.slug===req.params.slug)
+  if (idx===-1) return res.status(404).json({ error:'Category not found' })
+  const [d] = CATEGORIES.splice(idx,1); res.json({ message:'Deleted', slug:d.slug })
+})
+// Subcategory routes
+app.post('/api/categories/:slug/subcategories', requireAdmin, (req, res) => {
+  const cat = CATEGORIES.find(c=>c.slug===req.params.slug)
+  if (!cat) return res.status(404).json({ error:'Category not found' })
+  const { name, nameBn, slug, icon } = req.body
+  if (!name||!slug) return res.status(400).json({ error:'name and slug required' })
+  if (cat.subcategories.find(s=>s.slug===slug)) return res.status(409).json({ error:'Subcategory slug already exists' })
+  const sub = { id:'s'+Date.now(), slug, name, nameBn:nameBn||name, icon:icon||'tag' }
+  cat.subcategories.push(sub); res.status(201).json(sub)
+})
+app.put('/api/categories/:slug/subcategories/:subSlug', requireAdmin, (req, res) => {
+  const cat = CATEGORIES.find(c=>c.slug===req.params.slug)
+  if (!cat) return res.status(404).json({ error:'Category not found' })
+  const idx = cat.subcategories.findIndex(s=>s.slug===req.params.subSlug)
+  if (idx===-1) return res.status(404).json({ error:'Subcategory not found' })
+  cat.subcategories[idx] = { ...cat.subcategories[idx], ...req.body, id:cat.subcategories[idx].id }
+  res.json(cat.subcategories[idx])
+})
+app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, (req, res) => {
+  const cat = CATEGORIES.find(c=>c.slug===req.params.slug)
+  if (!cat) return res.status(404).json({ error:'Category not found' })
+  const idx = cat.subcategories.findIndex(s=>s.slug===req.params.subSlug)
+  if (idx===-1) return res.status(404).json({ error:'Subcategory not found' })
+  const [d] = cat.subcategories.splice(idx,1); res.json({ message:'Deleted', slug:d.slug })
 })
 
 // ── ORDERS
@@ -238,6 +281,13 @@ app.get('/api/admin/customers', requireAdmin, (req, res) => {
   orders.forEach(o=>{ const e=o.customer&&o.customer.email||o.id; if(!map[e]) map[e]={...o.customer,orderCount:0,totalSpent:0,orders:[]}; map[e].orderCount++; map[e].totalSpent+=o.total; map[e].orders.push(o.id) })
   const data = Object.values(map).sort((a,b)=>b.totalSpent-a.totalSpent)
   res.json({ data, total:data.length })
+})
+
+// ── IMAGE UPLOAD (returns a placeholder URL since Vercel is stateless)
+app.post('/api/admin/upload', requireAdmin, (req, res) => {
+  // Vercel serverless has no persistent disk — we return the URL as-is if provided,
+  // or a placeholder. Clients should use direct URL input for images.
+  res.json({ url: '', filename: '' , message: 'Use image URL input instead — serverless functions have no persistent storage.' })
 })
 
 module.exports = app
