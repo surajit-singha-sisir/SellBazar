@@ -139,21 +139,99 @@ export function useAdminApi() {
     return request<{ data: ApiProduct[]; total: number }>(`/products${query}`)
   }
 
+  // ── Image compression → WebP conversion (Canvas API, zero dependencies) ──
+  //
+  // Pipeline for every uploaded file:
+  //   original File  →  resize to ≤ MAX_PX on longest side
+  //                  →  encode as WebP at WEBP_QUALITY
+  //                  →  if browser lacks WebP support, fall back to JPEG
+  //                  →  return a Blob ready for multipart upload
+  //
+  // Typical output: a 1200px product photo goes from 2–5 MB → 80–200 KB WebP.
+  const MAX_PX       = 1920   // longest side in pixels (keeps crisp detail)
+  const WEBP_QUALITY = 0.82   // 0–1; 0.82 gives excellent quality/size balance
+
+  function compressToWebP(file: File): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file)
+      const img = new Image()
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl)
+
+        // ── Calculate new dimensions, preserving aspect ratio ──────────────
+        let { naturalWidth: w, naturalHeight: h } = img
+        if (w > MAX_PX || h > MAX_PX) {
+          if (w >= h) { h = Math.round((h / w) * MAX_PX); w = MAX_PX }
+          else        { w = Math.round((w / h) * MAX_PX); h = MAX_PX }
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width  = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')!
+
+        // White background so transparent PNGs don't become black in WebP
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+
+        // ── Try WebP first, fall back to JPEG if browser doesn't support it ─
+        canvas.toBlob(
+          blob => {
+            if (blob) return resolve(blob)
+            // WebP not supported (very old Safari) — try JPEG
+            canvas.toBlob(
+              jpegBlob => {
+                if (jpegBlob) return resolve(jpegBlob)
+                reject(new Error('Canvas toBlob failed'))
+              },
+              'image/jpeg',
+              WEBP_QUALITY
+            )
+          },
+          'image/webp',
+          WEBP_QUALITY
+        )
+      }
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error('Could not load image for compression'))
+      }
+
+      img.src = objectUrl
+    })
+  }
+
   // ── ImgBB Image Upload ────────────────────────────────────────────────────
-  // Uploads a File directly to ImgBB via multipart/form-data POST.
-  // Returns the display_url (i.ibb.co CDN link) — a real https:// URL that
-  // is stored in the product's images array, keeping the JSON payload tiny.
-  // ImgBB limit: 25 MB per image.
+  //
+  // Full pipeline:
+  //   File  →  compressToWebP()  →  POST to ImgBB  →  returns https:// URL
+  //
+  // The URL stored in form.images[] is always a short i.ibb.co CDN link —
+  // never a base64 blob — so the JSON payload sent to the backend stays tiny.
+  //
+  // ImgBB raw limit: 32 MB — we enforce 25 MB on the *original* file as a
+  // safety margin (the compressed WebP will be far smaller anyway).
   const IMGBB_API_KEY = 'f3c12080238055cf04e5a657a47ee058'
 
   async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
     if (!file.type.startsWith('image/')) throw new Error('Only image files are supported')
     if (file.size > 25 * 1024 * 1024)   throw new Error('Image must be smaller than 25 MB')
 
-    const formData = new FormData()
-    formData.append('image', file)
-    formData.append('name', file.name.replace(/\.[^.]+$/, ''))  // filename without extension
+    // Step 1 — compress & convert to WebP
+    const compressed = await compressToWebP(file)
 
+    // Step 2 — build multipart payload
+    const baseName = file.name.replace(/\.[^.]+$/, '')   // strip extension
+    const webpFile = new File([compressed], `${baseName}.webp`, { type: compressed.type })
+
+    const formData = new FormData()
+    formData.append('image', webpFile)
+    formData.append('name', baseName)
+
+    // Step 3 — upload to ImgBB
     const res = await fetch(
       `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
       { method: 'POST', body: formData }
@@ -167,29 +245,27 @@ export function useAdminApi() {
     const json = await res.json()
     if (!json.success) throw new Error('ImgBB upload was not successful')
 
-    // display_url is the full-size CDN image URL (i.ibb.co/…)
-    return { url: json.data.display_url as string, filename: file.name }
+    // display_url → full-resolution CDN image (i.ibb.co/…)
+    return { url: json.data.display_url as string, filename: `${baseName}.webp` }
   }
 
   // ── Compress legacy base64 data URLs on edit-product load ─────────────────
-  // Any product saved before the ImgBB migration might have base64 in images[].
-  // This recompresses them so the next save doesn't 413.
+  // Products saved before the ImgBB migration may have base64 in images[].
+  // Recompress them (still as JPEG for simplicity) so the next save doesn't 413.
   // Real https:// URLs are passed through untouched.
-  function compressImageSrc(src: string): Promise<string> {
+  function compressLegacyDataUrl(src: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const img = new Image()
-      img.crossOrigin = 'anonymous'
       img.onload = () => {
-        const MAX = 1200
-        let w = img.naturalWidth, h = img.naturalHeight
-        if (w > MAX || h > MAX) {
-          if (w >= h) { h = Math.round((h / w) * MAX); w = MAX }
-          else        { w = Math.round((w / h) * MAX); h = MAX }
+        let { naturalWidth: w, naturalHeight: h } = img
+        if (w > MAX_PX || h > MAX_PX) {
+          if (w >= h) { h = Math.round((h / w) * MAX_PX); w = MAX_PX }
+          else        { w = Math.round((w / h) * MAX_PX); h = MAX_PX }
         }
         const canvas = document.createElement('canvas')
         canvas.width = w; canvas.height = h
         canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
-        resolve(canvas.toDataURL('image/jpeg', 0.78))
+        resolve(canvas.toDataURL('image/jpeg', WEBP_QUALITY))
       }
       img.onerror = () => reject(new Error('Could not load image for compression'))
       img.src = src
@@ -199,23 +275,23 @@ export function useAdminApi() {
   async function compressImages(images: string[]): Promise<string[]> {
     return Promise.all(
       images.map(async url => {
-        if (!url.startsWith('data:')) return url          // real URL — keep as-is
+        if (!url.startsWith('data:')) return url               // real URL — keep as-is
         const kb = Math.round((url.length * 0.75) / 1024)
-        if (kb <= 250) return url                         // already small enough
-        try { return await compressImageSrc(url) }
-        catch { return url }
+        if (kb <= 250) return url                              // already small enough
+        try { return await compressLegacyDataUrl(url) }
+        catch { return url }                                   // best-effort
       })
     )
   }
 
   // ── Payload guard before every save ──────────────────────────────────────
-  // Safety net: drop any base64 still > 500 KB (shouldn't happen with ImgBB,
-  // but protects against legacy data that couldn't be recompressed above).
+  // Last-resort: drop any base64 still > 500 KB that slipped through above.
+  // With ImgBB active this should never fire for new uploads.
   const LIMIT_BYTES = 500 * 1024
   function sanitiseImages(images: string[]): string[] {
     if (!images?.length) return images
     return images.filter(url => {
-      if (!url.startsWith('data:')) return true          // real URL — always keep
+      if (!url.startsWith('data:')) return true
       const bytes = Math.ceil(url.length * 0.75)
       if (bytes > LIMIT_BYTES) {
         console.warn(`[SellBazar] Dropped oversized base64 image (${Math.round(bytes / 1024)} KB)`)
