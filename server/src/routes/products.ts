@@ -44,9 +44,9 @@ function toSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 }
 
-// ── Upload directory setup ───────────────────────────────────────────────────
-const UPLOAD_DIR = join(process.cwd(), 'uploads')
-if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true })
+// ── Upload directory setup (local only) ──────────────────────────────────────
+const UPLOAD_DIR = join(process.env.VERCEL ? '/tmp' : process.cwd(), 'uploads')
+try { if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true }) } catch {}
 
 // ── PUBLIC routes ─────────────────────────────────────────────────────────────
 router.get('/', (req, res) => {

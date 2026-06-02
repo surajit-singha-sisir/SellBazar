@@ -10,8 +10,8 @@ import ordersRouter from './orders.js'
 const router = Router()
 
 // ── Upload setup ─────────────────────────────────────────────────────────────
-const UPLOAD_DIR = join(process.cwd(), 'uploads')
-if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true })
+const UPLOAD_DIR = join(process.env.VERCEL ? '/tmp' : process.cwd(), 'uploads')
+try { if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true }) } catch {}
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
