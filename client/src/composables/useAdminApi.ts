@@ -139,14 +139,12 @@ export function useAdminApi() {
     return request<{ data: ApiProduct[]; total: number }>(`/products${query}`)
   }
 
-  // ── Shared canvas compress helper ────────────────────────────────────────────
-  // Works with any image source the browser can load: File object URL, http URL,
-  // or an existing data URL.  Always outputs JPEG ≤ 1200px / quality 0.78.
-  // Typical result: 60–180 KB data URL regardless of the original size.
+  // ── Canvas compress helper (used only for legacy base64 cleanup on edit load) ─
+  // Resizes to ≤ 1200px and re-encodes as JPEG 0.78 quality.
   function compressImageSrc(src: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const img = new Image()
-      img.crossOrigin = 'anonymous'   // needed for external http URLs
+      img.crossOrigin = 'anonymous'
       img.onload = () => {
         const MAX = 1200
         let w = img.naturalWidth, h = img.naturalHeight
@@ -164,45 +162,74 @@ export function useAdminApi() {
     })
   }
 
-  // ── Image Upload (File → compressed data URL) ─────────────────────────────
+  // ── Image Upload → Cloudinary CDN (returns a real https:// URL) ──────────
+  // Requires two Vite env vars (set in .env.local / Vercel dashboard):
+  //   VITE_CLOUDINARY_CLOUD_NAME   – your Cloudinary cloud name
+  //   VITE_CLOUDINARY_UPLOAD_PRESET – an *unsigned* upload preset
   async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
     if (!file.type.startsWith('image/')) throw new Error('Only image files are supported')
     if (file.size > 20 * 1024 * 1024)   throw new Error('Image must be smaller than 20 MB')
-    const objectUrl = URL.createObjectURL(file)
-    try {
-      const dataUrl = await compressImageSrc(objectUrl)
-      return { url: dataUrl, filename: file.name.replace(/\.[^.]+$/, '.jpg') }
-    } finally {
-      URL.revokeObjectURL(objectUrl)
+
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined
+    const preset    = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined
+
+    if (!cloudName || !preset || cloudName === 'your_cloud_name') {
+      throw new Error(
+        'Cloudinary is not configured.\n' +
+        'Add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET to your .env.local file ' +
+        '(or Vercel Environment Variables) then restart the dev server.\n' +
+        'See client/.env.example for instructions.'
+      )
     }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('upload_preset', preset)
+    formData.append('folder', 'sellbazar/products')
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      { method: 'POST', body: formData }
+    )
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err?.error?.message ?? `Cloudinary upload failed (HTTP ${res.status})`)
+    }
+
+    const data = await res.json()
+    // Use the secure_url (https) returned by Cloudinary
+    return { url: data.secure_url as string, filename: file.name }
   }
 
-  // ── Compress all data URLs in an images array ─────────────────────────────
-  // Called on edit-product load so any oversized legacy data URLs stored in
-  // the server are recompressed before they can be re-saved.
+  // ── Compress legacy base64 data URLs in an images array ──────────────────
+  // Called on edit-product load so any oversized base64 images stored before
+  // the Cloudinary migration are recompressed before a re-save.
+  // Real https:// URLs (Cloudinary, Unsplash, etc.) are passed through as-is.
   async function compressImages(images: string[]): Promise<string[]> {
     return Promise.all(
       images.map(async url => {
-        if (!url.startsWith('data:')) return url          // http URL — keep as-is
+        if (!url.startsWith('data:')) return url          // real URL — keep as-is
         const kb = Math.round((url.length * 0.75) / 1024)
         if (kb <= 250) return url                         // already small enough
         try { return await compressImageSrc(url) }
-        catch { return url }                              // best-effort; keep original on error
+        catch { return url }
       })
     )
   }
 
   // ── Payload guard before every save ──────────────────────────────────────
-  // After compressImages() the data URLs should all be small, but this is a
-  // last-resort safety net: if any single image is still > 3 MB it is dropped.
-  const LIMIT_BYTES = 3 * 1024 * 1024
+  // Safety net: drop any base64 blob that is still > 500 KB after compression.
+  // With Cloudinary configured this should never trigger; it only fires when
+  // someone pastes an old base64 URL that couldn't be recompressed.
+  const LIMIT_BYTES = 500 * 1024
   function sanitiseImages(images: string[]): string[] {
     if (!images?.length) return images
     return images.filter(url => {
-      if (!url.startsWith('data:')) return true
+      if (!url.startsWith('data:')) return true          // real URL — always keep
       const bytes = Math.ceil(url.length * 0.75)
       if (bytes > LIMIT_BYTES) {
-        console.warn(`[SellBazar] Dropped image still > 3 MB after compression (${Math.round(bytes / 1024)} KB)`)
+        console.warn(`[SellBazar] Dropped oversized base64 image (${Math.round(bytes / 1024)} KB) — configure Cloudinary to avoid this`)
         return false
       }
       return true
