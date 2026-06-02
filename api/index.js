@@ -381,11 +381,19 @@ app.post('/api/admin/admins/:id/reset-password', requireSuperAdmin, (req, res) =
   res.json({ message: 'Password updated successfully' })
 })
 
-// ── IMAGE UPLOAD (returns a placeholder URL since Vercel is stateless)
+// ── IMAGE UPLOAD
+// Vercel serverless has no persistent disk, so we cannot store files.
+// The client handles conversion to Base64 data URLs entirely client-side.
+// This endpoint is kept for compatibility but is no longer called by the
+// default upload flow.  If a dataUrl is posted in the JSON body we echo it
+// back so older integrations still work without a round-trip failure.
 app.post('/api/admin/upload', requireAdmin, (req, res) => {
-  // Vercel serverless has no persistent disk — we return the URL as-is if provided,
-  // or a placeholder. Clients should use direct URL input for images.
-  res.json({ url: '', filename: '' , message: 'Use image URL input instead — serverless functions have no persistent storage.' })
+  const dataUrl = req.body && req.body.dataUrl
+  if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+    return res.json({ url: dataUrl, filename: req.body.filename || 'image', message: 'ok' })
+  }
+  // No persistent storage — tell caller to use client-side Base64 conversion
+  res.status(422).json({ url: '', filename: '', message: 'Serverless environment has no persistent storage. Convert images to Base64 on the client instead.' })
 })
 
 module.exports = app

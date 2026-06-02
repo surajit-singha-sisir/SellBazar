@@ -152,12 +152,22 @@ export function useAdminApi() {
   }
 
   // ── Image Upload ─────────────────────────────────────────────────────────────
+  // Converts the file to a Base64 data URL entirely on the client — no server
+  // round-trip needed.  Vercel serverless has no persistent disk, so uploading
+  // to the API would just return an empty URL anyway.
   async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
-    const form = new FormData()
-    form.append('image', file)
-    return request<{ url: string; filename: string }>('/admin/upload', {
-      method: 'POST',
-      body: form,
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        return reject(new Error('Only image files are supported'))
+      }
+      const MAX_BYTES = 8 * 1024 * 1024 // 8 MB guard
+      if (file.size > MAX_BYTES) {
+        return reject(new Error('Image must be smaller than 8 MB'))
+      }
+      const reader = new FileReader()
+      reader.onload  = () => resolve({ url: reader.result as string, filename: file.name })
+      reader.onerror = () => reject(new Error('Failed to read image file'))
+      reader.readAsDataURL(file)
     })
   }
 

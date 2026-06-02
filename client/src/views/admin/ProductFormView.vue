@@ -298,11 +298,11 @@ function showToast(msg: string, type: 'success' | 'error' = 'success') {
 }
 
 function resolveImg(url: string) {
-  if (url.startsWith('/')) {
-    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
-    return `${base}${url}`
-  }
-  return url
+  // Base64 data URLs and external http(s) URLs are used as-is.
+  // Only relative paths (legacy server uploads) get the API base prepended.
+  if (url.startsWith('data:') || url.startsWith('http')) return url
+  const base = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
+  return `${base}${url}`
 }
 
 onMounted(async () => {
