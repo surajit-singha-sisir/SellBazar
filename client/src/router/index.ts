@@ -53,6 +53,7 @@ const router = createRouter({
         { path: 'customers',         name: 'admin-customers',    component: () => import('@/views/admin/CustomersView.vue') },
         { path: 'settings',          name: 'admin-settings',     component: () => import('@/views/admin/SettingsView.vue') },
         { path: 'reports',           name: 'admin-reports',      component: () => import('@/views/admin/ReportView.vue') },
+        { path: 'icons',             name: 'admin-icons',        component: () => import('@/views/admin/IconBrowserView.vue') },
       ],
     },
 

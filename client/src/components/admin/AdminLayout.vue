@@ -173,6 +173,7 @@ const manageNav = [
   { to: '/admin/customers',  label: 'Customers',  icon: 'fa-sharp-duotone fa-solid fa-users'          },
   { to: '/admin/reports',    label: 'Reports',    icon: 'fa-sharp-duotone fa-solid fa-chart-bar'      },
   { to: '/admin/settings',   label: 'Settings',   icon: 'fa-sharp-duotone fa-solid fa-gear'           },
+  { to: '/admin/icons',      label: 'Icon Browser', icon: 'fa-sharp-duotone fa-solid fa-icons'        },
 ]
 
 const pageLabels: Record<string, string> = {
@@ -184,6 +185,7 @@ const pageLabels: Record<string, string> = {
   'admin-customers':   'Customers',
   'admin-reports':     'Reports',
   'admin-settings':    'Settings',
+  'admin-icons':       'Icon Browser',
 }
 const currentPageLabel = computed(() => pageLabels[String(route.name)] ?? 'Admin')
 
