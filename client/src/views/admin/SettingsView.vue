@@ -5,8 +5,10 @@
         <h1 class="page-title">Settings</h1>
         <p class="page-subtitle">Configure your SellBazar store &amp; admin preferences.</p>
       </div>
-      <button class="admin-btn primary" @click="save">
-        <i class="fa-sharp fa-solid fa-floppy-disk"></i> Save Changes
+      <button class="admin-btn primary" @click="save" :disabled="saving">
+        <i v-if="saving" class="fa-solid fa-spinner-third fa-spin"></i>
+        <i v-else class="fa-sharp fa-solid fa-floppy-disk"></i>
+        {{ saving ? 'Saving…' : 'Save Changes' }}
       </button>
     </div>
 
@@ -18,8 +20,9 @@
     </Transition>
 
     <div class="admin-grid-2">
-      <!-- Store info -->
+      <!-- LEFT column -->
       <div>
+        <!-- Store Information -->
         <div class="admin-settings-group">
           <div class="settings-group-header">
             <i class="fa-sharp-duotone fa-solid fa-store"></i> Store Information
@@ -54,30 +57,46 @@
           </div>
         </div>
 
-        <!-- Server connection -->
+        <!-- Server Connection (no API URL row) -->
         <div class="admin-settings-group">
           <div class="settings-group-header">
             <i class="fa-sharp-duotone fa-solid fa-server"></i> Server Connection
           </div>
           <div class="settings-row">
-            <div><div class="settings-label">API Base URL</div><div class="settings-desc">Express server endpoint</div></div>
-            <input class="settings-input" v-model="form.apiUrl" style="font-family:monospace;font-size:12px" />
-          </div>
-          <div class="settings-row">
             <div><div class="settings-label">Server Status</div><div class="settings-desc">Live connection health</div></div>
-            <span class="status-badge" :class="adminStore.serverOnline ? 'delivered' : 'cancelled'">
-              <i :class="adminStore.serverOnline ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
-              {{ adminStore.serverOnline ? 'Connected' : 'Disconnected' }}
-            </span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="status-badge" :class="adminStore.serverOnline ? 'delivered' : 'cancelled'">
+                <i :class="adminStore.serverOnline ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
+                {{ adminStore.serverOnline ? 'Connected' : 'Disconnected' }}
+              </span>
+              <button class="admin-btn secondary" style="padding:5px 10px;font-size:11px" @click="adminStore.checkHealth()" title="Re-check now">
+                <i class="fa-solid fa-arrows-rotate" :class="{'fa-spin': adminStore.loading.health}"></i>
+              </button>
+            </div>
           </div>
           <div class="settings-row">
-            <div><div class="settings-label">Auto Refresh</div><div class="settings-desc">Reload data every 60s</div></div>
+            <div>
+              <div class="settings-label">Auto Refresh</div>
+              <div class="settings-desc">Reload dashboard data automatically</div>
+            </div>
             <label class="admin-toggle"><input type="checkbox" v-model="form.autoRefresh" /><span class="slider"></span></label>
+          </div>
+          <div class="settings-row" v-if="form.autoRefresh">
+            <div>
+              <div class="settings-label">Refresh Interval</div>
+              <div class="settings-desc">How often to reload data</div>
+            </div>
+            <select class="settings-select" v-model.number="form.autoRefreshInterval">
+              <option :value="30">Every 30 seconds</option>
+              <option :value="60">Every 60 seconds</option>
+              <option :value="120">Every 2 minutes</option>
+              <option :value="300">Every 5 minutes</option>
+            </select>
           </div>
         </div>
       </div>
 
-      <!-- Right column -->
+      <!-- RIGHT column -->
       <div>
         <!-- Appearance -->
         <div class="admin-settings-group">
@@ -99,12 +118,17 @@
             </select>
           </div>
           <div class="settings-row">
-            <div><div class="settings-label">Brand Color</div><div class="settings-desc">Primary accent color</div></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button v-for="c in brandColors" :key="c"
+            <div>
+              <div class="settings-label">Brand Color</div>
+              <div class="settings-desc">Primary accent color (applied live)</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <button
+                v-for="c in brandColors"
+                :key="c"
                 class="color-swatch"
                 :style="{background:c, outline: form.brandColor===c ? '2px solid var(--text-primary)' : 'none', outlineOffset:'2px'}"
-                @click="form.brandColor=c"
+                @click="pickColor(c)"
               ></button>
             </div>
           </div>
@@ -170,16 +194,16 @@
               <div class="settings-label" style="color:#ef4444">Clear Cache</div>
               <div class="settings-desc">Flush API response cache</div>
             </div>
-            <button class="admin-btn danger" style="font-size:12px;padding:7px 12px">
+            <button class="admin-btn danger" style="font-size:12px;padding:7px 12px" @click="clearCache">
               <i class="fa-sharp fa-solid fa-trash-can"></i> Clear
             </button>
           </div>
           <div class="settings-row">
             <div>
               <div class="settings-label" style="color:#ef4444">Reset Admin Data</div>
-              <div class="settings-desc">Wipe local admin preferences</div>
+              <div class="settings-desc">Wipe all saved preferences to defaults</div>
             </div>
-            <button class="admin-btn danger" style="font-size:12px;padding:7px 12px" @click="resetForm">
+            <button class="admin-btn danger" style="font-size:12px;padding:7px 12px" @click="resetSettings">
               <i class="fa-sharp fa-solid fa-rotate-left"></i> Reset
             </button>
           </div>
@@ -190,66 +214,83 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useExport } from '@/composables/useExport'
 
-const adminStore  = useAdminStore()
-const themeStore  = useThemeStore()
-const exporter    = useExport()
-const saved       = ref(false)
+const adminStore    = useAdminStore()
+const themeStore    = useThemeStore()
+const settingsStore = useSettingsStore()
+const exporter      = useExport()
+
+const saving  = ref(false)
+const saved   = ref(false)
 const brandColors = ['#f97316','#3b82f6','#a855f7','#22c55e','#ef4444','#06b6d4','#ec4899']
 
-function exportData(type: 'products'|'orders'|'customers', fmt: 'excel'|'csv'|'json') {
-  const filename = `${type}_${new Date().toISOString().slice(0,10)}`
+// Local form — mirrors the store; only committed on Save
+const form = reactive({ ...settingsStore.settings })
+
+// Live-preview brand color while the user hovers swatches
+function pickColor(c: string) {
+  form.brandColor = c
+  settingsStore.applyBrandColor(c)   // preview immediately
+}
+
+async function save() {
+  saving.value = true
+  // small async tick so the spinner renders
+  await new Promise(r => setTimeout(r, 200))
+  settingsStore.save({ ...form })
+  saving.value = false
+  saved.value  = true
+  setTimeout(() => { saved.value = false }, 3000)
+}
+
+function clearCache() {
+  // Clear any cached API data from the admin store
+  if (confirm('Clear cached data? The page will reload fresh data.')) {
+    adminStore.loadAll()
+    saved.value = true
+    setTimeout(() => { saved.value = false }, 2000)
+  }
+}
+
+function resetSettings() {
+  if (confirm('Reset all settings to defaults?')) {
+    settingsStore.reset()
+    // Sync the local form back to defaults
+    Object.assign(form, settingsStore.settings)
+    saved.value = true
+    setTimeout(() => { saved.value = false }, 2500)
+  }
+}
+
+function exportData(type: 'products' | 'orders' | 'customers', fmt: 'excel' | 'csv' | 'json') {
+  const filename = `${type}_${new Date().toISOString().slice(0, 10)}`
   let data: any[] = []
   if (type === 'products') {
     data = adminStore.products.map(p => ({
-      Name: p.name, Brand: p.brand, Category: p.category, Price: p.price,
-      SalePrice: p.salePrice, Stock: p.stock, Rating: p.rating, Seller: p.seller
+      Name: p.name, Brand: p.brand, Category: p.category,
+      Price: p.price, SalePrice: p.salePrice, Stock: p.stock,
+      Rating: p.rating, Seller: p.seller,
     }))
   } else if (type === 'orders') {
     data = adminStore.orders.map(o => ({
       ID: o.id, Customer: o.customer?.name, Email: o.customer?.email,
       Total: o.total, Payment: o.paymentMethod, Status: o.status,
-      Date: new Date(o.createdAt).toLocaleDateString()
+      Date: new Date(o.createdAt).toLocaleDateString(),
     }))
   } else {
     data = adminStore.customers.map(c => ({
-      Name: c.name, Email: c.email, Phone: c.phone, Orders: c.orderCount,
-      TotalSpent: c.totalSpent, LastOrder: c.lastOrder
+      Name: c.name, Email: c.email, Phone: c.phone,
+      Orders: c.orderCount, TotalSpent: c.totalSpent, LastOrder: c.lastOrder,
     }))
   }
   if (fmt === 'excel') exporter.exportExcel(data, filename, type)
   else if (fmt === 'csv') exporter.exportCSV(data, filename)
   else exporter.exportJSON(data, filename)
-}
-
-const defaultForm = () => ({
-  storeName:      'SellBazar',
-  storeUrl:       'https://sellbazar.com',
-  supportEmail:   'support@sellbazar.com',
-  currency:       'BDT',
-  timezone:       'Asia/Dhaka',
-  apiUrl:         'http://localhost:4000',
-  autoRefresh:    false,
-  sidebarDefault: 'expanded',
-  brandColor:     '#f97316',
-  notifyOrders:   true,
-  notifyStock:    true,
-  notifyDaily:    false,
-})
-
-const form = ref(defaultForm())
-
-function save() {
-  saved.value = true
-  setTimeout(() => { saved.value = false }, 3000)
-}
-
-function resetForm() {
-  if (confirm('Reset all settings to defaults?')) form.value = defaultForm()
 }
 </script>
 
@@ -264,31 +305,29 @@ function resetForm() {
   outline: none;
   min-width: 180px;
   transition: border-color 0.15s;
-  &:focus { border-color: var(--brand); }
+}
+.settings-input:focus, .settings-select:focus { border-color: var(--brand); }
+select.settings-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  background-color: var(--admin-bg, #0c0c0f);
+  cursor: pointer;
 }
 .color-swatch {
-  width: 24px; height: 24px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  transition: transform 0.15s;
-  &:hover { transform: scale(1.15); }
+  width: 24px; height: 24px; border-radius: 6px;
+  border: none; cursor: pointer; transition: transform 0.15s;
 }
+.color-swatch:hover { transform: scale(1.2); }
 .settings-toast {
-  position: fixed;
-  bottom: 28px;
-  right: 28px;
-  background: #22c55e;
-  color: white;
-  padding: 12px 20px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 9999;
-  box-shadow: 0 8px 24px rgba(34,197,94,0.35);
+  position: fixed; bottom: 28px; right: 28px;
+  background: #22c55e; color: white;
+  padding: 12px 20px; border-radius: 10px;
+  font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+  z-index: 9999; box-shadow: 0 8px 24px rgba(34,197,94,0.35);
 }
 .toast-slide-enter-active, .toast-slide-leave-active { transition: all 0.25s ease; }
 .toast-slide-enter-from, .toast-slide-leave-to { opacity: 0; transform: translateY(12px); }

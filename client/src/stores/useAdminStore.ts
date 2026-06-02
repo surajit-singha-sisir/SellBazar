@@ -148,7 +148,10 @@ export const useAdminStore = defineStore('admin', () => {
     loading.value.saving = true
     try {
       const created = await api.createProduct(data)
+      // Prepend locally for immediate UI feedback, then refresh from server
       products.value.unshift(created)
+      // Refresh full list to get correct server state (order, IDs, etc.)
+      loadProducts()
       return created
     } finally { loading.value.saving = false }
   }

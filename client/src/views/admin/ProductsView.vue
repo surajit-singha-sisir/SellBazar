@@ -85,6 +85,9 @@
             Rating <SortIcon field="rating" :sort="sort" />
           </th>
           <th>Status</th>
+          <th class="sortable" @click="setSort('createdAt')">
+            Date Added <SortIcon field="createdAt" :sort="sort" />
+          </th>
           <th>Store</th>
           <th>Actions</th>
         </tr></thead>
@@ -127,6 +130,11 @@
                 <span v-if="p.isFeatured" class="status-badge delivered" style="font-size:10px">Featured</span>
                 <span v-if="p.isNew" class="status-badge processing" style="font-size:10px">New</span>
                 <span v-if="!p.isFeatured && !p.isNew" class="status-badge inactive" style="font-size:10px">Regular</span>
+              </div>
+            </td>
+            <td>
+              <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap">
+                {{ p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—' }}
               </div>
             </td>
             <td>
@@ -243,11 +251,11 @@ const page          = ref(1)
 const perPage       = ref(12)
 const exportOpen    = ref(false)
 
-// Sorting
-const sort = ref({ field: 'name', dir: 'asc' as 'asc' | 'desc' })
+// Sorting — default: newest first (createdAt desc)
+const sort = ref({ field: 'createdAt', dir: 'desc' as 'asc' | 'desc' })
 function setSort(field: string) {
   if (sort.value.field === field) sort.value.dir = sort.value.dir === 'asc' ? 'desc' : 'asc'
-  else { sort.value.field = field; sort.value.dir = 'asc' }
+  else { sort.value.field = field; sort.value.dir = field === 'createdAt' ? 'desc' : 'asc' }
 }
 
 const categories = computed(() =>
@@ -295,11 +303,13 @@ const paginated  = computed(() => filtered.value.slice((page.value-1)*perPage.va
 
 function resolveImg(url: string) {
   if (!url) return 'https://placehold.co/38x38/f97316/fff?text=?'
-  if (url.startsWith('/')) {
+  // API sometimes returns space-joined URLs in images[0] — take the first one only
+  const first = url.trim().split(/\s+/)[0]
+  if (first.startsWith('/')) {
     const base = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
-    return `${base}${url}`
+    return `${base}${first}`
   }
-  return url
+  return first
 }
 
 // Export
