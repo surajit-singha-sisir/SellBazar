@@ -139,26 +139,73 @@ export function useAdminApi() {
     return request<{ data: ApiProduct[]; total: number }>(`/products${query}`)
   }
 
-  // Vercel hard limit is 4.5 MB per request body.  Base64 adds ~33 % overhead,
-  // so we budget 3 MB of raw data URL bytes → safely under 4 MB on the wire.
-  // Images that are still large data URLs (e.g. uploaded before the canvas
-  // compression fix) are stripped and replaced with a placeholder so the save
-  // never 413s.  Newly uploaded images are always compressed to ≤ ~200 KB each.
-  const BODY_BUDGET_BYTES = 3 * 1024 * 1024          // 3 MB raw budget
-  const PLACEHOLDER = 'https://placehold.co/800x800/f97316/fff?text=Image'
+  // ── Shared canvas compress helper ────────────────────────────────────────────
+  // Works with any image source the browser can load: File object URL, http URL,
+  // or an existing data URL.  Always outputs JPEG ≤ 1200px / quality 0.78.
+  // Typical result: 60–180 KB data URL regardless of the original size.
+  function compressImageSrc(src: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'   // needed for external http URLs
+      img.onload = () => {
+        const MAX = 1200
+        let w = img.naturalWidth, h = img.naturalHeight
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round((h / w) * MAX); w = MAX }
+          else        { w = Math.round((w / h) * MAX); h = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', 0.78))
+      }
+      img.onerror = () => reject(new Error('Could not load image for compression'))
+      img.src = src
+    })
+  }
 
+  // ── Image Upload (File → compressed data URL) ─────────────────────────────
+  async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
+    if (!file.type.startsWith('image/')) throw new Error('Only image files are supported')
+    if (file.size > 20 * 1024 * 1024)   throw new Error('Image must be smaller than 20 MB')
+    const objectUrl = URL.createObjectURL(file)
+    try {
+      const dataUrl = await compressImageSrc(objectUrl)
+      return { url: dataUrl, filename: file.name.replace(/\.[^.]+$/, '.jpg') }
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
+  }
+
+  // ── Compress all data URLs in an images array ─────────────────────────────
+  // Called on edit-product load so any oversized legacy data URLs stored in
+  // the server are recompressed before they can be re-saved.
+  async function compressImages(images: string[]): Promise<string[]> {
+    return Promise.all(
+      images.map(async url => {
+        if (!url.startsWith('data:')) return url          // http URL — keep as-is
+        const kb = Math.round((url.length * 0.75) / 1024)
+        if (kb <= 250) return url                         // already small enough
+        try { return await compressImageSrc(url) }
+        catch { return url }                              // best-effort; keep original on error
+      })
+    )
+  }
+
+  // ── Payload guard before every save ──────────────────────────────────────
+  // After compressImages() the data URLs should all be small, but this is a
+  // last-resort safety net: if any single image is still > 3 MB it is dropped.
+  const LIMIT_BYTES = 3 * 1024 * 1024
   function sanitiseImages(images: string[]): string[] {
     if (!images?.length) return images
-    let budget = BODY_BUDGET_BYTES
-    return images.map(url => {
-      if (!url.startsWith('data:')) return url   // external URL — keep as-is
-      const bytes = Math.ceil(url.length * 0.75)  // approx decoded bytes
-      if (bytes > budget) {
-        console.warn(`[SellBazar] Image stripped from payload (${Math.round(bytes/1024)} KB, budget exhausted). Re-upload to compress it.`)
-        return PLACEHOLDER
+    return images.filter(url => {
+      if (!url.startsWith('data:')) return true
+      const bytes = Math.ceil(url.length * 0.75)
+      if (bytes > LIMIT_BYTES) {
+        console.warn(`[SellBazar] Dropped image still > 3 MB after compression (${Math.round(bytes / 1024)} KB)`)
+        return false
       }
-      budget -= bytes
-      return url
+      return true
     })
   }
 
@@ -174,58 +221,6 @@ export function useAdminApi() {
 
   async function deleteProduct(id: string) {
     return request<{ message: string; id: string }>(`/products/${id}`, { method: 'DELETE' })
-  }
-
-  // ── Image Upload ─────────────────────────────────────────────────────────────
-  // Compresses + resizes the image entirely in the browser via <canvas> before
-  // converting to a Base64 data URL.  This keeps each image under ~150 KB so
-  // the product payload always stays well within Vercel's 4.5 MB body limit,
-  // regardless of the original file size.
-  //
-  //  Max output dimensions : 1200 × 1200 px (longest edge)
-  //  Output format         : image/jpeg, quality 0.78
-  //  Typical output size   : 60–150 KB  (≈ 80–200 KB as Base64)
-  async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
-    if (!file.type.startsWith('image/')) {
-      throw new Error('Only image files are supported')
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      throw new Error('Image must be smaller than 20 MB')
-    }
-
-    return new Promise((resolve, reject) => {
-      const img = new Image()
-      const objectUrl = URL.createObjectURL(file)
-
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl)
-
-        // ── resize so longest edge ≤ 1200 px ──────────────────────────────
-        const MAX = 1200
-        let { naturalWidth: w, naturalHeight: h } = img
-        if (w > MAX || h > MAX) {
-          if (w >= h) { h = Math.round((h / w) * MAX); w = MAX }
-          else        { w = Math.round((w / h) * MAX); h = MAX }
-        }
-
-        const canvas = document.createElement('canvas')
-        canvas.width  = w
-        canvas.height = h
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, w, h)
-
-        // ── encode as JPEG at quality 0.78 ────────────────────────────────
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.78)
-        resolve({ url: dataUrl, filename: file.name.replace(/\.[^.]+$/, '.jpg') })
-      }
-
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl)
-        reject(new Error('Failed to decode image file'))
-      }
-
-      img.src = objectUrl
-    })
   }
 
   // ── Orders ──────────────────────────────────────────────────────────────────
@@ -262,7 +257,7 @@ export function useAdminApi() {
     fetchDashboard,
     fetchCategories,
     fetchProducts, createProduct, updateProduct, deleteProduct,
-    uploadImage,
+    uploadImage, compressImages,
     fetchOrders, updateOrder, deleteOrder,
     fetchCustomers,
     fetchHealth,

@@ -357,6 +357,8 @@ onMounted(async () => {
       if (quillInstance && p.description) {
         quillInstance.clipboard.dangerouslyPasteHTML(p.description)
       }
+      // Recompress any oversized legacy data URLs so the next save never 413s
+      form.images = await api.compressImages(form.images)
     }
   }
 })
