@@ -139,12 +139,37 @@ export function useAdminApi() {
     return request<{ data: ApiProduct[]; total: number }>(`/products${query}`)
   }
 
+  // Vercel hard limit is 4.5 MB per request body.  Base64 adds ~33 % overhead,
+  // so we budget 3 MB of raw data URL bytes → safely under 4 MB on the wire.
+  // Images that are still large data URLs (e.g. uploaded before the canvas
+  // compression fix) are stripped and replaced with a placeholder so the save
+  // never 413s.  Newly uploaded images are always compressed to ≤ ~200 KB each.
+  const BODY_BUDGET_BYTES = 3 * 1024 * 1024          // 3 MB raw budget
+  const PLACEHOLDER = 'https://placehold.co/800x800/f97316/fff?text=Image'
+
+  function sanitiseImages(images: string[]): string[] {
+    if (!images?.length) return images
+    let budget = BODY_BUDGET_BYTES
+    return images.map(url => {
+      if (!url.startsWith('data:')) return url   // external URL — keep as-is
+      const bytes = Math.ceil(url.length * 0.75)  // approx decoded bytes
+      if (bytes > budget) {
+        console.warn(`[SellBazar] Image stripped from payload (${Math.round(bytes/1024)} KB, budget exhausted). Re-upload to compress it.`)
+        return PLACEHOLDER
+      }
+      budget -= bytes
+      return url
+    })
+  }
+
   async function createProduct(data: Partial<ApiProduct>) {
-    return request<ApiProduct>('/products', { method: 'POST', body: JSON.stringify(data) })
+    const payload = { ...data, images: sanitiseImages(data.images ?? []) }
+    return request<ApiProduct>('/products', { method: 'POST', body: JSON.stringify(payload) })
   }
 
   async function updateProduct(id: string, data: Partial<ApiProduct>) {
-    return request<ApiProduct>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+    const payload = { ...data, images: sanitiseImages(data.images ?? []) }
+    return request<ApiProduct>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
   }
 
   async function deleteProduct(id: string) {
@@ -152,22 +177,54 @@ export function useAdminApi() {
   }
 
   // ── Image Upload ─────────────────────────────────────────────────────────────
-  // Converts the file to a Base64 data URL entirely on the client — no server
-  // round-trip needed.  Vercel serverless has no persistent disk, so uploading
-  // to the API would just return an empty URL anyway.
+  // Compresses + resizes the image entirely in the browser via <canvas> before
+  // converting to a Base64 data URL.  This keeps each image under ~150 KB so
+  // the product payload always stays well within Vercel's 4.5 MB body limit,
+  // regardless of the original file size.
+  //
+  //  Max output dimensions : 1200 × 1200 px (longest edge)
+  //  Output format         : image/jpeg, quality 0.78
+  //  Typical output size   : 60–150 KB  (≈ 80–200 KB as Base64)
   async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Only image files are supported')
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      throw new Error('Image must be smaller than 20 MB')
+    }
+
     return new Promise((resolve, reject) => {
-      if (!file.type.startsWith('image/')) {
-        return reject(new Error('Only image files are supported'))
+      const img = new Image()
+      const objectUrl = URL.createObjectURL(file)
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl)
+
+        // ── resize so longest edge ≤ 1200 px ──────────────────────────────
+        const MAX = 1200
+        let { naturalWidth: w, naturalHeight: h } = img
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round((h / w) * MAX); w = MAX }
+          else        { w = Math.round((w / h) * MAX); h = MAX }
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width  = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, w, h)
+
+        // ── encode as JPEG at quality 0.78 ────────────────────────────────
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.78)
+        resolve({ url: dataUrl, filename: file.name.replace(/\.[^.]+$/, '.jpg') })
       }
-      const MAX_BYTES = 8 * 1024 * 1024 // 8 MB guard
-      if (file.size > MAX_BYTES) {
-        return reject(new Error('Image must be smaller than 8 MB'))
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error('Failed to decode image file'))
       }
-      const reader = new FileReader()
-      reader.onload  = () => resolve({ url: reader.result as string, filename: file.name })
-      reader.onerror = () => reject(new Error('Failed to read image file'))
-      reader.readAsDataURL(file)
+
+      img.src = objectUrl
     })
   }
 

@@ -2,6 +2,12 @@
   "version": 2,
   "buildCommand": "npm install --prefix client && cd client && npx vite build",
   "outputDirectory": "client/dist",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 10,
+      "memory": 256
+    }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/((?!api).*)", "destination": "/index.html" }

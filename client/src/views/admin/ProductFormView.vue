@@ -163,9 +163,9 @@
             <input ref="fileInput" type="file" accept="image/*" multiple style="display:none" @change="onFileChange" />
             <i class="fa-solid fa-cloud-arrow-up" style="font-size:28px;color:var(--brand);margin-bottom:8px"></i>
             <div style="font-weight:600;font-size:13px">Drop images here or click to upload</div>
-            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">PNG, JPG, WEBP — max 8MB each</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">PNG, JPG, WEBP — any size (auto-compressed to ≤ 1200px)</div>
             <div v-if="uploading" style="margin-top:8px;color:var(--brand);font-size:12px">
-              <i class="fa-solid fa-spinner-third fa-spin"></i> Uploading…
+              <i class="fa-solid fa-spinner-third fa-spin"></i> Compressing &amp; uploading…
             </div>
           </div>
 
@@ -183,6 +183,7 @@
               <img :src="resolveImg(img)" :alt="`Image ${idx+1}`" class="img-thumb"
                 onerror="this.src='https://placehold.co/80x80/f97316/fff?text=?'" />
               <span v-if="idx === 0" class="img-primary-badge">Main</span>
+              <span v-if="img.startsWith('data:')" class="img-size-badge">{{ imgKb(img) }}KB</span>
               <button class="img-remove-btn" @click="removeImage(idx)">
                 <i class="fa-solid fa-xmark"></i>
               </button>
@@ -303,6 +304,13 @@ function resolveImg(url: string) {
   if (url.startsWith('data:') || url.startsWith('http')) return url
   const base = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
   return `${base}${url}`
+}
+
+// Returns the approximate decoded KB of a data URL so admins can see image size
+function imgKb(dataUrl: string): number {
+  // Base64 string length × 0.75 = raw bytes; subtract the data: header
+  const base64Part = dataUrl.split(',')[1] ?? ''
+  return Math.round((base64Part.length * 0.75) / 1024)
 }
 
 onMounted(async () => {
@@ -493,6 +501,12 @@ select.form-input {
 .img-primary-badge {
   position: absolute; top: 2px; left: 2px; background: var(--brand);
   color: white; font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 4px;
+}
+.img-size-badge {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.62); color: #fff;
+  font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+  white-space: nowrap; pointer-events: none;
 }
 .img-remove-btn {
   position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
