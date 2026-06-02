@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAdminApi, type ApiProduct, type ApiOrder, type ApiCustomer, type DashboardStats, type AdminUser } from '@/composables/useAdminApi'
 import { useNotificationStore } from '@/stores/useNotificationStore'
+import { useProductStore } from '@/stores/useProductStore'
 
 export const useAdminStore = defineStore('admin', () => {
   const api = useAdminApi()
@@ -92,6 +93,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       const res = await api.fetchProducts()
       products.value = res.data
+      // ── Keep public store in sync after every full reload ─────────────────
+      const productStore = useProductStore()
+      productStore.products = res.data as any
     } catch (e: any) {
       error.value = e.message
       products.value = []
@@ -148,10 +152,11 @@ export const useAdminStore = defineStore('admin', () => {
     loading.value.saving = true
     try {
       const created = await api.createProduct(data)
-      // Prepend locally for immediate UI feedback, then refresh from server
+      // Update admin store
       products.value.unshift(created)
-      // Refresh full list to get correct server state (order, IDs, etc.)
-      loadProducts()
+      // ── Sync public product store so client views update immediately ──────
+      const productStore = useProductStore()
+      productStore.products.unshift(created as any)
       return created
     } finally { loading.value.saving = false }
   }
@@ -160,8 +165,13 @@ export const useAdminStore = defineStore('admin', () => {
     loading.value.saving = true
     try {
       const updated = await api.updateProduct(id, data)
+      // Update admin store
       const idx = products.value.findIndex(p => p.id === id)
       if (idx !== -1) products.value[idx] = updated
+      // ── Sync public product store ─────────────────────────────────────────
+      const productStore = useProductStore()
+      const pidx = productStore.products.findIndex((p: any) => p.id === id)
+      if (pidx !== -1) productStore.products[pidx] = updated as any
       return updated
     } finally { loading.value.saving = false }
   }
@@ -170,7 +180,11 @@ export const useAdminStore = defineStore('admin', () => {
     loading.value.saving = true
     try {
       await api.deleteProduct(id)
+      // Update admin store
       products.value = products.value.filter(p => p.id !== id)
+      // ── Sync public product store ─────────────────────────────────────────
+      const productStore = useProductStore()
+      productStore.products = productStore.products.filter((p: any) => p.id !== id)
     } finally { loading.value.saving = false }
   }
 

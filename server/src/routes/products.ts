@@ -75,6 +75,88 @@ router.get('/:slug', (req, res) => {
   res.json(product)
 })
 
+// ── ADMIN: Create product ────────────────────────────────────────────────────
+router.post('/', requireAdmin, (req: any, res) => {
+  const body = req.body
+  if (!body.name || !body.brand || !body.category || !body.price) {
+    return res.status(400).json({ error: 'name, brand, category and price are required' })
+  }
+  // Generate a unique numeric-style id and a URL slug
+  const id   = String(Date.now())
+  const slug = toSlug(body.name) + '-' + id.slice(-4)
+
+  const product: any = {
+    id,
+    slug,
+    name:         String(body.name),
+    nameBn:       body.nameBn        ? String(body.nameBn)       : String(body.name),
+    brand:        String(body.brand),
+    category:     String(body.category),
+    subcategory:  body.subcategory   ? String(body.subcategory)  : '',
+    categoryBn:   body.categoryBn    ? String(body.categoryBn)   : String(body.category),
+    seller:       body.seller        ? String(body.seller)        : String(body.brand),
+    description:  body.description   ? String(body.description)  : '',
+    price:        Number(body.price),
+    salePrice:    Number(body.salePrice)   || 0,
+    stock:        Number(body.stock)       ?? 0,
+    deliveryDays: Number(body.deliveryDays) || 3,
+    rating:       Number(body.rating)      || 4.5,
+    reviewCount:  0,
+    location:     body.location      ? String(body.location)     : 'Dhaka',
+    isFeatured:   Boolean(body.isFeatured),
+    isNew:        body.isNew !== undefined ? Boolean(body.isNew) : true,
+    images:       Array.isArray(body.images) ? body.images : [],
+    tags:         Array.isArray(body.tags)   ? body.tags   : [],
+    createdAt:    new Date().toISOString(),
+  }
+
+  products.push(product)
+  res.status(201).json(product)
+})
+
+// ── ADMIN: Update product ────────────────────────────────────────────────────
+router.put('/:id', requireAdmin, (req: any, res) => {
+  const idx = products.findIndex((p: any) => p.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Product not found' })
+
+  const body    = req.body
+  const current = products[idx] as any
+
+  // Merge — only overwrite fields that were actually sent
+  const updated: any = {
+    ...current,
+    ...(body.name         !== undefined && { name:        String(body.name) }),
+    ...(body.nameBn       !== undefined && { nameBn:      String(body.nameBn) }),
+    ...(body.brand        !== undefined && { brand:       String(body.brand) }),
+    ...(body.category     !== undefined && { category:    String(body.category) }),
+    ...(body.subcategory  !== undefined && { subcategory: String(body.subcategory) }),
+    ...(body.categoryBn   !== undefined && { categoryBn:  String(body.categoryBn) }),
+    ...(body.seller       !== undefined && { seller:      String(body.seller) }),
+    ...(body.description  !== undefined && { description: String(body.description) }),
+    ...(body.price        !== undefined && { price:       Number(body.price) }),
+    ...(body.salePrice    !== undefined && { salePrice:   Number(body.salePrice) }),
+    ...(body.stock        !== undefined && { stock:       Number(body.stock) }),
+    ...(body.deliveryDays !== undefined && { deliveryDays: Number(body.deliveryDays) }),
+    ...(body.rating       !== undefined && { rating:      Number(body.rating) }),
+    ...(body.location     !== undefined && { location:    String(body.location) }),
+    ...(body.isFeatured   !== undefined && { isFeatured:  Boolean(body.isFeatured) }),
+    ...(body.isNew        !== undefined && { isNew:       Boolean(body.isNew) }),
+    ...(Array.isArray(body.images)      && { images:      body.images }),
+    ...(Array.isArray(body.tags)        && { tags:        body.tags }),
+  }
+
+  products[idx] = updated
+  res.json(updated)
+})
+
+// ── ADMIN: Delete product ────────────────────────────────────────────────────
+router.delete('/:id', requireAdmin, (req: any, res) => {
+  const idx = products.findIndex((p: any) => p.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Product not found' })
+  const [deleted] = products.splice(idx, 1)
+  res.json({ message: 'Product deleted', id: (deleted as any).id })
+})
+
 // ── Image upload (admin protected) ───────────────────────────────────────────
 router.post('/upload-image', requireAdmin, (req: any, res) => {
   const ct = req.headers['content-type'] ?? ''
