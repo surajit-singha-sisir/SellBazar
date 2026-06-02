@@ -26,6 +26,81 @@
       <i class="fa-solid fa-circle-exclamation"></i> {{ formError }}
     </div>
 
+    <!-- ── JSON Import card (Add mode only) ─────────────────────────────── -->
+    <div v-if="!isEdit" class="pf-card pf-json-card">
+      <div class="pf-json-header" @click="jsonPanelOpen = !jsonPanelOpen">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="pf-json-icon"><i class="fa-solid fa-file-code"></i></span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text-primary)">Import from JSON</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:1px">Paste JSON text or upload a .json file to fill this form instantly</div>
+          </div>
+        </div>
+        <i class="fa-solid fa-chevron-down pf-json-chevron" :class="{ open: jsonPanelOpen }"></i>
+      </div>
+
+      <Transition name="json-panel">
+        <div v-if="jsonPanelOpen" class="pf-json-body">
+
+          <!-- Two-column: paste | upload -->
+          <div class="pf-json-cols">
+            <!-- LEFT: paste text -->
+            <div class="pf-json-col">
+              <div class="pf-json-col-label"><i class="fa-solid fa-paste"></i> Paste JSON</div>
+              <textarea
+                class="pf-json-textarea"
+                v-model="jsonText"
+                placeholder='{ "name": "…", "brand": "…", … }'
+                spellcheck="false"
+                @input="jsonError = ''"
+              ></textarea>
+            </div>
+
+            <!-- divider -->
+            <div class="pf-json-divider"><span>or</span></div>
+
+            <!-- RIGHT: upload file -->
+            <div class="pf-json-col">
+              <div class="pf-json-col-label"><i class="fa-solid fa-folder-open"></i> Upload .json file</div>
+              <div
+                class="pf-json-dropzone"
+                :class="{ 'drag-over': jsonDragOver }"
+                @click="jsonFileInput?.click()"
+                @dragover.prevent="jsonDragOver = true"
+                @dragleave="jsonDragOver = false"
+                @drop.prevent="onJsonDrop"
+              >
+                <input ref="jsonFileInput" type="file" accept=".json,application/json" style="display:none" @change="onJsonFileChange" />
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:22px;color:var(--brand);margin-bottom:6px"></i>
+                <div style="font-size:12px;font-weight:600">{{ jsonFileName || 'Click or drop a .json file' }}</div>
+                <div v-if="jsonFileName" style="font-size:11px;color:var(--text-secondary);margin-top:2px">File loaded — click Import to apply</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Error / preview strip -->
+          <div v-if="jsonError" class="pf-json-error">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ jsonError }}
+          </div>
+          <div v-if="jsonPreviewName" class="pf-json-preview">
+            <i class="fa-solid fa-circle-check"></i>
+            Ready to import: <strong>{{ jsonPreviewName }}</strong>
+            <span v-if="jsonPreviewFields" class="pf-json-preview-fields">{{ jsonPreviewFields }}</span>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="pf-json-actions">
+            <button class="admin-btn secondary" style="font-size:12px;padding:7px 14px" @click="clearJson">
+              <i class="fa-solid fa-xmark"></i> Clear
+            </button>
+            <button class="admin-btn primary" style="font-size:12px;padding:7px 16px" @click="applyJson" :disabled="!jsonText.trim()">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Import & Fill Form
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </div>
+
     <div class="pf-grid">
       <!-- LEFT: main fields -->
       <div class="pf-main">
@@ -246,6 +321,146 @@ const tagsInput = ref('')
 const customCategory = ref('')
 const quillContainer = ref<HTMLElement | null>(null)
 let quillInstance: any = null
+
+// ── JSON Import state ─────────────────────────────────────────────────────────
+const jsonPanelOpen   = ref(false)
+const jsonText        = ref('')
+const jsonFileName    = ref('')
+const jsonError       = ref('')
+const jsonPreviewName = ref('')
+const jsonPreviewFields = ref('')
+const jsonDragOver    = ref(false)
+const jsonFileInput   = ref<HTMLInputElement | null>(null)
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload  = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Could not read file'))
+    reader.readAsText(file)
+  })
+}
+
+async function onJsonFileChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  try {
+    jsonText.value     = await readFileAsText(file)
+    jsonFileName.value = file.name
+    jsonError.value    = ''
+    previewJson()
+  } catch {
+    jsonError.value = 'Could not read the file.'
+  }
+}
+
+async function onJsonDrop(e: DragEvent) {
+  jsonDragOver.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  if (!file.name.endsWith('.json') && file.type !== 'application/json') {
+    jsonError.value = 'Please drop a .json file.'; return
+  }
+  try {
+    jsonText.value     = await readFileAsText(file)
+    jsonFileName.value = file.name
+    jsonError.value    = ''
+    previewJson()
+  } catch {
+    jsonError.value = 'Could not read the file.'
+  }
+}
+
+function previewJson() {
+  jsonPreviewName.value   = ''
+  jsonPreviewFields.value = ''
+  if (!jsonText.value.trim()) return
+  try {
+    const p = JSON.parse(jsonText.value)
+    if (typeof p !== 'object' || Array.isArray(p)) {
+      jsonError.value = 'JSON must be a single product object { … }'; return
+    }
+    jsonPreviewName.value = p.name ?? '(no name)'
+    const filled = ['name','brand','category','price','stock','images','description','tags']
+      .filter(k => p[k] !== undefined && p[k] !== '' && !(Array.isArray(p[k]) && !p[k].length))
+    jsonPreviewFields.value = filled.join(', ')
+  } catch (err: any) {
+    jsonError.value = `Invalid JSON: ${err.message}`
+  }
+}
+
+function clearJson() {
+  jsonText.value        = ''
+  jsonFileName.value    = ''
+  jsonError.value       = ''
+  jsonPreviewName.value = ''
+  jsonPreviewFields.value = ''
+  if (jsonFileInput.value) jsonFileInput.value.value = ''
+}
+
+function applyJson() {
+  jsonError.value = ''
+  if (!jsonText.value.trim()) return
+  let p: any
+  try {
+    p = JSON.parse(jsonText.value)
+  } catch (err: any) {
+    jsonError.value = `Invalid JSON: ${err.message}`; return
+  }
+  if (typeof p !== 'object' || Array.isArray(p)) {
+    jsonError.value = 'JSON must be a single product object { … }'; return
+  }
+
+  // ── Map every known field ──────────────────────────────────────────────────
+  if (p.name        !== undefined) form.name        = String(p.name)
+  if (p.nameBn      !== undefined) form.nameBn      = String(p.nameBn)
+  if (p.brand       !== undefined) form.brand       = String(p.brand)
+  if (p.seller      !== undefined) form.seller      = String(p.seller)
+  if (p.location    !== undefined) form.location    = String(p.location)
+  if (p.price       !== undefined) form.price       = Number(p.price)  || 0
+  if (p.salePrice   !== undefined) form.salePrice   = Number(p.salePrice) || 0
+  if (p.stock       !== undefined) form.stock       = Number(p.stock)  || 0
+  if (p.deliveryDays !== undefined) form.deliveryDays = Number(p.deliveryDays) || 3
+  if (p.rating      !== undefined) form.rating      = Math.min(5, Math.max(0, Number(p.rating) || 4.5))
+  if (p.isFeatured  !== undefined) form.isFeatured  = Boolean(p.isFeatured)
+  if (p.isNew       !== undefined) form.isNew       = Boolean(p.isNew)
+
+  // Category — set only if it's a non-empty string
+  if (p.category && typeof p.category === 'string') {
+    form.category    = p.category
+    form.subcategory = ''   // reset subcategory first
+  }
+  if (p.subcategory !== undefined) form.subcategory = String(p.subcategory)
+
+  // Images — accept array of strings
+  if (Array.isArray(p.images)) {
+    form.images = p.images
+      .map((u: any) => String(u).trim())
+      .filter((u: string) => u.startsWith('http') || u.startsWith('data:'))
+  }
+
+  // Tags — accept array or comma-separated string
+  if (Array.isArray(p.tags)) {
+    tagsInput.value = p.tags.map((t: any) => String(t).trim()).filter(Boolean).join(', ')
+  } else if (typeof p.tags === 'string' && p.tags.trim()) {
+    tagsInput.value = p.tags.trim()
+  }
+
+  // Description — push into Quill if available, otherwise store raw
+  if (p.description !== undefined) {
+    const desc = String(p.description)
+    form.description = desc
+    if (quillInstance) {
+      // nextTick so Quill has mounted if this is the very first open
+      nextTick(() => quillInstance.clipboard.dangerouslyPasteHTML(desc))
+    }
+  }
+
+  // ── Success feedback ───────────────────────────────────────────────────────
+  showToast(`Imported "${form.name}" — review the form and save`, 'success')
+  jsonPanelOpen.value = false
+  clearJson()
+}
 
 // ── Live categories from API ──────────────────────────────────────────────────
 interface ApiSubcat { id: string; slug: string; name: string; nameBn: string; icon: string }
@@ -575,4 +790,108 @@ select.form-input {
   box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 }
 .quill-editor-wrap :deep(.ql-picker-item) { color: var(--text-primary); }
-</style>
+
+/* ── JSON Import card ────────────────────────────────────────────────────── */
+.pf-json-card {
+  margin-bottom: 4px;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.pf-json-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; cursor: pointer; user-select: none;
+  transition: background 0.15s;
+}
+.pf-json-header:hover { background: var(--brand-dim); }
+.pf-json-icon {
+  width: 34px; height: 34px; border-radius: 9px;
+  background: var(--brand-dim); color: var(--brand);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.pf-json-chevron {
+  color: var(--text-secondary); font-size: 12px;
+  transition: transform 0.22s ease;
+}
+.pf-json-chevron.open { transform: rotate(180deg); }
+
+.pf-json-body {
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--sidebar-border);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pf-json-cols {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  align-items: stretch;
+  margin-top: 14px;
+}
+.pf-json-col { display: flex; flex-direction: column; gap: 8px; }
+.pf-json-col-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 6px;
+}
+.pf-json-textarea {
+  flex: 1; min-height: 160px; resize: vertical;
+  padding: 10px 12px; background: var(--admin-bg);
+  border: 1px solid var(--sidebar-border); border-radius: 9px;
+  color: var(--text-primary); font-size: 11.5px; font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+  line-height: 1.6; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pf-json-textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.12);
+}
+.pf-json-divider {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; flex-shrink: 0;
+}
+.pf-json-divider span {
+  font-size: 11px; font-weight: 700; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  background: var(--sidebar-bg); padding: 4px 0;
+}
+.pf-json-dropzone {
+  flex: 1; min-height: 160px;
+  border: 2px dashed var(--sidebar-border); border-radius: 9px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; padding: 20px 12px; text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+}
+.pf-json-dropzone:hover,
+.pf-json-dropzone.drag-over {
+  border-color: var(--brand); background: var(--brand-dim);
+}
+.pf-json-error {
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.22);
+  color: #ef4444; border-radius: 8px; padding: 9px 13px;
+  font-size: 12px; display: flex; align-items: center; gap: 8px;
+}
+.pf-json-preview {
+  background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.22);
+  color: #16a34a; border-radius: 8px; padding: 9px 13px;
+  font-size: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.pf-json-preview-fields {
+  color: var(--text-secondary); font-size: 11px;
+  background: var(--admin-bg); border-radius: 5px;
+  padding: 2px 7px; border: 1px solid var(--sidebar-border);
+}
+.pf-json-actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+/* Collapse animation */
+.json-panel-enter-active { transition: all 0.22s ease; overflow: hidden; }
+.json-panel-leave-active { transition: all 0.18s ease; overflow: hidden; }
+.json-panel-enter-from, .json-panel-leave-to { opacity: 0; max-height: 0; }
+.json-panel-enter-to, .json-panel-leave-from { opacity: 1; max-height: 600px; }
+
+@media (max-width: 640px) {
+  .pf-json-cols { grid-template-columns: 1fr; }
+  .pf-json-divider { width: auto; height: 28px; }
+  .pf-json-divider span { padding: 0 8px; }
+}</style>
