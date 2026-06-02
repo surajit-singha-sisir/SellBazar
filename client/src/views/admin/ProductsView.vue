@@ -295,7 +295,11 @@ const paginated  = computed(() => filtered.value.slice((page.value-1)*perPage.va
 
 function resolveImg(url: string) {
   if (!url) return 'https://placehold.co/38x38/f97316/fff?text=?'
-  return url.startsWith('/') ? `http://localhost:4000${url}` : url
+  if (url.startsWith('/')) {
+    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
+    return `${base}${url}`
+  }
+  return url
 }
 
 // Export

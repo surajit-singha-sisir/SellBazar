@@ -298,7 +298,11 @@ function showToast(msg: string, type: 'success' | 'error' = 'success') {
 }
 
 function resolveImg(url: string) {
-  return url.startsWith('/') ? `http://localhost:4000${url}` : url
+  if (url.startsWith('/')) {
+    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
+    return `${base}${url}`
+  }
+  return url
 }
 
 onMounted(async () => {
