@@ -21,6 +21,142 @@ app.use(cors({
 }))
 app.use(express.json())
 
+// ── Vercel KV persistence layer ───────────────────────────────────────────────
+// When KV_REST_API_URL + KV_REST_API_TOKEN env vars are present (Vercel KV is
+// connected) we persist dynamic product changes there so they survive across
+// serverless lambda invocations.  Without those vars (local dev) we fall back
+// to module-level in-memory state — behaviour is identical to before.
+//
+// KV key schema:
+//   "sb:product:<slug>"  → single product JSON object
+//   "sb:product_ids"     → JSON array of slugs for dynamic (admin-created) products
+//   "sb:deleted_slugs"   → JSON array of seed-product slugs that were deleted
+//
+const KV_URL   = process.env.KV_REST_API_URL
+const KV_TOKEN = process.env.KV_REST_API_TOKEN
+const KV_ENABLED = !!(KV_URL && KV_TOKEN)
+
+async function kvGet(key) {
+  if (!KV_ENABLED) return null
+  try {
+    const res = await fetch(`${KV_URL}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${KV_TOKEN}` },
+    })
+    const json = await res.json()
+    // Vercel KV REST returns { result: <value> }
+    // Values are stored as JSON strings, so parse if string
+    if (json.result === null || json.result === undefined) return null
+    if (typeof json.result === 'string') {
+      try { return JSON.parse(json.result) } catch { return json.result }
+    }
+    return json.result
+  } catch { return null }
+}
+
+async function kvSet(key, value) {
+  if (!KV_ENABLED) return
+  try {
+    await fetch(`${KV_URL}/set/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: JSON.stringify(value) }),
+    })
+  } catch (e) { console.error('[KV set]', key, e.message) }
+}
+
+// ── In-memory fallback (local dev / KV not connected) ────────────────────────
+// _dynamicProducts holds admin-created/updated products when KV is disabled.
+// _deletedSlugs holds seed slugs deleted in-session.
+const _dynamicProducts = []   // { slug, ...product }
+const _deletedSlugs    = new Set()
+
+// ── Helper: get all products (seed + dynamic, minus deleted) ─────────────────
+// Returns a merged, deduplicated array.  Dynamic products override seed products
+// with the same slug (handles in-session edits of seed products).
+async function getAllProducts() {
+  // 1. Start with seed products, filtering out any that were deleted
+  const deleted = KV_ENABLED
+    ? (await kvGet('sb:deleted_slugs') ?? [])
+    : [..._deletedSlugs]
+
+  const deletedSet = new Set(deleted)
+  let merged = products.filter(p => !deletedSet.has(p.slug))
+
+  // 2. Load dynamic product slugs
+  const dynamicSlugs = KV_ENABLED
+    ? (await kvGet('sb:product_ids') ?? [])
+    : _dynamicProducts.map(p => p.slug)
+
+  // 3. For each dynamic slug, load the product and merge (override or append)
+  const dynamics = await Promise.all(
+    dynamicSlugs.map(slug =>
+      KV_ENABLED ? kvGet(`sb:product:${slug}`) : _dynamicProducts.find(p => p.slug === slug)
+    )
+  )
+
+  for (const dp of dynamics) {
+    if (!dp) continue
+    const existingIdx = merged.findIndex(p => p.slug === dp.slug || p.id === dp.id)
+    if (existingIdx !== -1) {
+      merged[existingIdx] = dp   // override seed entry with edited version
+    } else {
+      merged.unshift(dp)         // brand-new product → put first
+    }
+  }
+
+  return merged
+}
+
+// ── Helper: save a dynamic product (create or update) ────────────────────────
+async function saveDynamicProduct(p) {
+  if (KV_ENABLED) {
+    // Persist the product itself
+    await kvSet(`sb:product:${p.slug}`, p)
+    // Add slug to the dynamic ID list (deduplicated)
+    const ids = (await kvGet('sb:product_ids')) ?? []
+    if (!ids.includes(p.slug)) {
+      ids.unshift(p.slug)
+      await kvSet('sb:product_ids', ids)
+    }
+  } else {
+    const idx = _dynamicProducts.findIndex(x => x.slug === p.slug || x.id === p.id)
+    if (idx !== -1) _dynamicProducts[idx] = p
+    else _dynamicProducts.unshift(p)
+  }
+}
+
+// ── Helper: mark a product as deleted ────────────────────────────────────────
+async function markDeleted(slug) {
+  if (KV_ENABLED) {
+    // Remove from dynamic IDs list
+    const ids = (await kvGet('sb:product_ids')) ?? []
+    const newIds = ids.filter(s => s !== slug)
+    await kvSet('sb:product_ids', newIds)
+    // Also delete the KV entry for this product
+    try {
+      await fetch(`${KV_URL}/del/${encodeURIComponent(`sb:product:${slug}`)}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${KV_TOKEN}` },
+      })
+    } catch {}
+    // If it's a seed product, record it in deleted_slugs so it's filtered out
+    const isSeed = products.find(p => p.slug === slug)
+    if (isSeed) {
+      const deleted = (await kvGet('sb:deleted_slugs')) ?? []
+      if (!deleted.includes(slug)) {
+        deleted.push(slug)
+        await kvSet('sb:deleted_slugs', deleted)
+      }
+    }
+  } else {
+    _deletedSlugs.add(slug)
+    const idx = _dynamicProducts.findIndex(p => p.slug === slug)
+    if (idx !== -1) _dynamicProducts.splice(idx, 1)
+  }
+}
+
+
+
 function requireAdmin(req, res, next) {
   const h = req.headers.authorization
   if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' })
@@ -147,9 +283,9 @@ app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ admin:req.admin 
 app.post('/api/admin/logout', requireAdmin, (_, res) => res.json({ message:'Logged out' }))
 
 // ── PRODUCTS
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
   const { category, subcategory, q, limit, featured, sortBy, order } = req.query
-  let r = [...products]
+  let r = await getAllProducts()
   if (category && category!=='All') r = r.filter(p=>p.category===category)
   if (subcategory && subcategory!=='All') r = r.filter(p=>p.subcategory===subcategory)
   if (q) r = r.filter(p=>p.name.toLowerCase().includes(q.toLowerCase())||p.brand.toLowerCase().includes(q.toLowerCase()))
@@ -158,49 +294,55 @@ app.get('/api/products', (req, res) => {
   if (limit) r = r.slice(0, parseInt(limit))
   res.json({ data:r, total:r.length })
 })
-app.get('/api/products/:slug', (req, res) => {
+app.get('/api/products/:slug', async (req, res) => {
+  // 1. Check KV / in-memory dynamic store first (fastest for admin-created products)
+  if (KV_ENABLED) {
+    const kp = await kvGet(`sb:product:${req.params.slug}`)
+    if (kp) return res.json(kp)
+  } else {
+    const mp = _dynamicProducts.find(p=>p.slug===req.params.slug||p.id===req.params.slug)
+    if (mp) return res.json(mp)
+  }
+  // 2. Fall back to seed data
   const p = products.find(p=>p.slug===req.params.slug||p.id===req.params.slug)
   if (!p) return res.status(404).json({ error:'Product not found' })
   res.json(p)
 })
-app.post('/api/products', requireAdmin, (req, res) => {
-  // Generate a slug from the product name if not provided
+app.post('/api/products', requireAdmin, async (req, res) => {
   function makeSlug(name) {
-    return name
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')   // strip special chars
-      .trim()
-      .replace(/\s+/g, '-')       // spaces → hyphens
-      .replace(/-+/g, '-')        // collapse multiple hyphens
-      .substring(0, 80)           // max length
+    return name.toLowerCase().replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').replace(/-+/g,'-').substring(0,80)
   }
   const id = Date.now().toString()
+  const allNow = await getAllProducts()
   const baseSlug = req.body.slug || makeSlug(req.body.name || id)
-  // Ensure slug is unique within the products array
-  let slug = baseSlug
-  let suffix = 1
-  while (products.find(p => p.slug === slug)) {
-    slug = `${baseSlug}-${suffix++}`
-  }
+  let slug = baseSlug, suffix = 1
+  while (allNow.find(p=>p.slug===slug)) { slug = `${baseSlug}-${suffix++}` }
   const p = { id, ...req.body, slug, createdAt:new Date().toISOString() }
-  products.unshift(p); res.status(201).json(p)
+  await saveDynamicProduct(p)
+  res.status(201).json(p)
 })
-app.put('/api/products/:id', requireAdmin, (req, res) => {
-  const i = products.findIndex(p=>p.id===req.params.id||p.slug===req.params.id)
-  if (i===-1) return res.status(404).json({ error:'Product not found' })
-  products[i] = { ...products[i], ...req.body, id:products[i].id }; res.json(products[i])
+app.put('/api/products/:id', requireAdmin, async (req, res) => {
+  const allNow = await getAllProducts()
+  const existing = allNow.find(p=>p.id===req.params.id||p.slug===req.params.id)
+  if (!existing) return res.status(404).json({ error:'Product not found' })
+  const updated = { ...existing, ...req.body, id:existing.id, slug:existing.slug }
+  await saveDynamicProduct(updated)
+  res.json(updated)
 })
-app.delete('/api/products/:id', requireAdmin, (req, res) => {
-  const i = products.findIndex(p=>p.id===req.params.id||p.slug===req.params.id)
-  if (i===-1) return res.status(404).json({ error:'Product not found' })
-  const [d] = products.splice(i,1); res.json({ message:'Deleted', id:d.id })
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
+  const allNow = await getAllProducts()
+  const existing = allNow.find(p=>p.id===req.params.id||p.slug===req.params.id)
+  if (!existing) return res.status(404).json({ error:'Product not found' })
+  await markDeleted(existing.slug)
+  res.json({ message:'Deleted', id:existing.id })
 })
 
 // ── CATEGORIES
-app.get('/api/categories', (_, res) => {
+app.get('/api/categories', async (_, res) => {
+  const allProducts = await getAllProducts()
   const data = CATEGORIES.map(c=>({ ...c,
-    productCount: products.filter(p=>p.category===c.name).length,
-    subcategories: c.subcategories.map(s=>({ ...s, productCount:products.filter(p=>p.subcategory===s.slug).length }))
+    productCount: allProducts.filter(p=>p.category===c.name).length,
+    subcategories: c.subcategories.map(s=>({ ...s, productCount:allProducts.filter(p=>p.subcategory===s.slug).length }))
   }))
   res.json({ data, total:data.length })
 })
@@ -294,14 +436,15 @@ app.get('/api/user/wishlist',  (req,res)=>{ const u=uid(req); if(!u) return res.
 app.post('/api/user/wishlist', (req,res)=>{ const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); userWishlists[u]=req.body.wishlist||[]; res.json({ok:true}) })
 
 // ── ADMIN DASHBOARD
-app.get('/api/admin/dashboard', requireAdmin, (req, res) => {
+app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
+  const allProducts = await getAllProducts()
   const paid = orders.filter(o=>o.paymentStatus==='paid')
   const totalRevenue = paid.reduce((s,o)=>s+o.total, 0)
   const statusCounts = orders.reduce((a,o)=>{ a[o.status]=(a[o.status]||0)+1; return a }, {})
   const catMap = {}
-  products.forEach(p=>{ catMap[p.category]=(catMap[p.category]||0)+1 })
-  res.json({ totalRevenue, totalOrders:orders.length, totalProducts:products.length,
-    lowStockCount:products.filter(p=>p.stock<25).length, statusCounts,
+  allProducts.forEach(p=>{ catMap[p.category]=(catMap[p.category]||0)+1 })
+  res.json({ totalRevenue, totalOrders:orders.length, totalProducts:allProducts.length,
+    lowStockCount:allProducts.filter(p=>p.stock<25).length, statusCounts,
     pendingOrders:(statusCounts.pending||0)+(statusCounts.processing||0),
     categoryBreakdown:Object.entries(catMap).map(([name,count])=>({name,count})),
     recentOrders:[...orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5) })
