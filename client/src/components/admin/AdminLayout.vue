@@ -66,10 +66,7 @@
           <button class="topbar-btn" @click="adminStore.loadAll()" title="Refresh data">
             <i class="fa-sharp fa-solid fa-arrows-rotate" :class="{ 'fa-spin': isLoading }"></i>
           </button>
-          <button class="topbar-btn notif-btn" title="Notifications" style="position:relative">
-            <i class="fa-sharp fa-solid fa-bell"></i>
-            <span v-if="adminStore.pendingOrders > 0" class="notif-dot">{{ adminStore.pendingOrders }}</span>
-          </button>
+          <NotificationPanel />
           <div class="theme-toggle-wrap" :title="themeStore.isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
             <ThemeToggle />
           </div>
@@ -112,6 +109,9 @@
         </RouterView>
       </main>
     </div>
+
+    <!-- Global toast notifications -->
+    <ToastNotifications />
   </div>
 </template>
 
@@ -121,6 +121,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useThemeStore } from '@/stores/useThemeStore'
 import ThemeToggle from '@/components/admin/ThemeToggle.vue'
+import NotificationPanel from '@/components/admin/NotificationPanel.vue'
+import ToastNotifications from '@/components/admin/ToastNotifications.vue'
 
 const route      = useRoute()
 const router     = useRouter()
@@ -167,17 +169,21 @@ const mainNav = computed(() => [
 ])
 
 const manageNav = [
-  { to: '/admin/customers', label: 'Customers', icon: 'fa-sharp-duotone fa-solid fa-users'           },
-  { to: '/admin/settings',  label: 'Settings',  icon: 'fa-sharp-duotone fa-solid fa-gear'            },
+  { to: '/admin/categories', label: 'Categories', icon: 'fa-sharp-duotone fa-solid fa-layer-group'    },
+  { to: '/admin/customers',  label: 'Customers',  icon: 'fa-sharp-duotone fa-solid fa-users'          },
+  { to: '/admin/reports',    label: 'Reports',    icon: 'fa-sharp-duotone fa-solid fa-chart-bar'      },
+  { to: '/admin/settings',   label: 'Settings',   icon: 'fa-sharp-duotone fa-solid fa-gear'           },
 ]
 
 const pageLabels: Record<string, string> = {
-  'admin':          'Dashboard',
-  'admin-products': 'Products',
-  'admin-orders':   'Orders',
-  'admin-analytics':'Analytics',
-  'admin-customers':'Customers',
-  'admin-settings': 'Settings',
+  'admin':             'Dashboard',
+  'admin-products':    'Products',
+  'admin-orders':      'Orders',
+  'admin-analytics':   'Analytics',
+  'admin-categories':  'Categories',
+  'admin-customers':   'Customers',
+  'admin-reports':     'Reports',
+  'admin-settings':    'Settings',
 }
 const currentPageLabel = computed(() => pageLabels[String(route.name)] ?? 'Admin')
 
@@ -507,22 +513,6 @@ const serverStatus = computed(() =>
 .topbar-btn:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
-}
-
-.notif-dot {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: var(--brand);
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .theme-toggle-wrap {

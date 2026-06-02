@@ -44,15 +44,14 @@
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
-            <textarea class="form-input form-textarea" v-model="form.description" rows="4"
-              placeholder="Detailed product description…"></textarea>
+            <div ref="quillContainer" class="quill-editor-wrap"></div>
           </div>
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Category <span class="req">*</span></label>
-              <select class="form-input" v-model="form.category">
+              <select class="form-input" v-model="form.category" @change="form.subcategory = ''">
                 <option value="" disabled>Select category</option>
-                <option v-for="cat in allCategories" :key="cat" :value="cat">{{ cat }}</option>
+                <option v-for="cat in categoryList" :key="cat.slug" :value="cat.name">{{ cat.name }}</option>
                 <option value="__custom__">+ Custom category</option>
               </select>
             </div>
@@ -63,6 +62,35 @@
             <div class="form-group" v-else>
               <label class="form-label">Seller</label>
               <input class="form-input" v-model="form.seller" placeholder="e.g. TechWorld BD" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Subcategory</label>
+              <!-- Show a select when the chosen category has subcategories, otherwise a free-text input -->
+              <select
+                v-if="subcategoryOptions.length"
+                class="form-input"
+                v-model="form.subcategory"
+              >
+                <option value="">— None —</option>
+                <option v-for="sub in subcategoryOptions" :key="sub.slug" :value="sub.slug">
+                  {{ sub.name }}
+                </option>
+              </select>
+              <input
+                v-else
+                class="form-input"
+                v-model="form.subcategory"
+                placeholder="e.g. mobile-phones"
+              />
+              <span v-if="subcategoryOptions.length" class="form-hint">
+                {{ subcategoryOptions.length }} subcategories in {{ form.category }}
+              </span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Bangla Name (optional)</label>
+              <input class="form-input" v-model="form.nameBn" placeholder="e.g. স্যামসাং গ্যালাক্সি" />
             </div>
           </div>
           <div class="form-row">
@@ -196,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useAdminApi } from '@/composables/useAdminApi'
@@ -216,11 +244,33 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const urlInput  = ref('')
 const tagsInput = ref('')
 const customCategory = ref('')
+const quillContainer = ref<HTMLElement | null>(null)
+let quillInstance: any = null
 
-const allCategories = ['Electronics','Fashion','Grocery','Home & Living','Beauty','Business','Sports','Toys']
+// ── Live categories from API ──────────────────────────────────────────────────
+interface ApiSubcat { id: string; slug: string; name: string; nameBn: string; icon: string }
+interface ApiCat    { id: string; slug: string; name: string; nameBn: string; icon: string; color: string; subcategories: ApiSubcat[] }
+
+const categoryList = ref<ApiCat[]>([])
+
+async function loadCategoryList() {
+  try {
+    categoryList.value = await api.fetchCategories()
+  } catch {
+    // fallback hardcoded names if API fails
+    categoryList.value = ['Electronics','Fashion','Grocery','Home & Living','Beauty','Business','Sports','Toys','Books']
+      .map((name, i) => ({ id: String(i), slug: name.toLowerCase().replace(/\s+/g, '-'), name, nameBn: '', icon: '', color: '', subcategories: [] }))
+  }
+}
+
+// Subcategory options derived from the currently-selected category
+const subcategoryOptions = computed<ApiSubcat[]>(() => {
+  if (!form.category || form.category === '__custom__') return []
+  return categoryList.value.find(c => c.name === form.category)?.subcategories ?? []
+})
 
 const form = reactive({
-  name: '', brand: '', category: '', seller: '', description: '',
+  name: '', nameBn: '', brand: '', category: '', subcategory: '', seller: '', description: '',
   price: 0, salePrice: 0, stock: 0, deliveryDays: 3, rating: 4.5,
   location: 'Dhaka', isFeatured: false, isNew: true,
   images: [] as string[],
@@ -252,19 +302,49 @@ function resolveImg(url: string) {
 }
 
 onMounted(async () => {
+  // Load categories (for subcategory dropdown) and quill in parallel
+  await Promise.all([loadCategoryList(), nextTick()])
+  const Quill = (window as any).Quill
+  if (Quill && quillContainer.value) {
+    quillInstance = new Quill(quillContainer.value, {
+      theme: 'snow',
+      placeholder: 'Detailed product description…',
+      modules: {
+        toolbar: [
+          [{ header: [2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ color: [] }, { background: [] }],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['blockquote', 'code-block'],
+          ['link'],
+          ['clean'],
+        ],
+      },
+    })
+    quillInstance.on('text-change', () => {
+      form.description = quillInstance.getSemanticHTML()
+    })
+  }
+
   if (!adminStore.products.length) await adminStore.loadProducts()
   if (isEdit.value) {
     const p = adminStore.products.find(x => x.id === route.params.id)
     if (p) {
       Object.assign(form, {
-        name: p.name, brand: p.brand, category: p.category, seller: p.seller,
-        description: p.description, price: p.price, salePrice: p.salePrice,
+        name: p.name, nameBn: p.nameBn ?? '', brand: p.brand,
+        category: p.category, subcategory: p.subcategory ?? '',
+        seller: p.seller, description: p.description,
+        price: p.price, salePrice: p.salePrice,
         stock: p.stock, deliveryDays: p.deliveryDays, rating: p.rating,
         location: p.location, isFeatured: p.isFeatured ?? false,
         isNew: p.isNew ?? false, images: [...(p.images ?? [])],
       })
       tagsInput.value = (p.tags ?? []).join(', ')
       currentSlug.value = p.slug
+      // Populate Quill with existing description
+      if (quillInstance && p.description) {
+        quillInstance.clipboard.dangerouslyPasteHTML(p.description)
+      }
     }
   }
 })
@@ -319,8 +399,10 @@ async function submitForm() {
     formError.value = 'Please fill all required fields.'; return
   }
   const payload = {
-    name: form.name.trim(), brand: form.brand.trim(),
-    category: resolvedCategory, categoryBn: resolvedCategory,
+    name: form.name.trim(), nameBn: form.nameBn.trim() || form.name.trim(),
+    brand: form.brand.trim(),
+    category: resolvedCategory, subcategory: form.subcategory.trim() || undefined,
+    categoryBn: resolvedCategory,
     seller: form.seller.trim() || form.brand.trim(),
     description: form.description.trim(),
     price: form.price, salePrice: form.salePrice || 0,
@@ -364,10 +446,11 @@ async function submitForm() {
 .pf-card {
   background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
   border-radius: 14px; padding: 20px;
+  display: flex; flex-direction: column; gap: 16px;
 }
 .pf-card-title {
   font-size: 13px; font-weight: 700; color: var(--text-primary);
-  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;
+  text-transform: uppercase; letter-spacing: 0.05em;
   padding-bottom: 10px; border-bottom: 1px solid var(--sidebar-border);
 }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -375,6 +458,7 @@ async function submitForm() {
 @media (max-width:600px) { .form-row,.form-row-3 { grid-template-columns: 1fr; } }
 .form-group { display: flex; flex-direction: column; gap: 6px; position: relative; }
 .form-label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+.form-hint  { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
 .req { color: var(--brand); }
 .form-input {
   padding: 9px 12px; background: var(--admin-bg); border: 1px solid var(--sidebar-border);
@@ -440,4 +524,49 @@ select.form-input {
 .toast-slide-enter-active { animation: toast-in 0.25s ease; }
 .toast-slide-leave-active { animation: toast-in 0.2s ease reverse; }
 @keyframes toast-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* ── Quill editor theme overrides ───────────────────────────────────────── */
+.quill-editor-wrap { border-radius: 9px; overflow: hidden; border: 1px solid var(--sidebar-border); }
+.quill-editor-wrap :deep(.ql-toolbar) {
+  background: var(--admin-bg);
+  border: none;
+  border-bottom: 1px solid var(--sidebar-border);
+  padding: 8px 10px;
+  flex-wrap: wrap;
+}
+.quill-editor-wrap :deep(.ql-toolbar button),
+.quill-editor-wrap :deep(.ql-toolbar .ql-picker-label) {
+  color: var(--text-primary) !important;
+}
+.quill-editor-wrap :deep(.ql-toolbar button:hover),
+.quill-editor-wrap :deep(.ql-toolbar button.ql-active) {
+  color: var(--brand) !important;
+}
+.quill-editor-wrap :deep(.ql-toolbar .ql-stroke) { stroke: var(--text-secondary); }
+.quill-editor-wrap :deep(.ql-toolbar button:hover .ql-stroke),
+.quill-editor-wrap :deep(.ql-toolbar button.ql-active .ql-stroke) { stroke: var(--brand); }
+.quill-editor-wrap :deep(.ql-toolbar .ql-fill) { fill: var(--text-secondary); }
+.quill-editor-wrap :deep(.ql-toolbar button:hover .ql-fill),
+.quill-editor-wrap :deep(.ql-toolbar button.ql-active .ql-fill) { fill: var(--brand); }
+.quill-editor-wrap :deep(.ql-container) {
+  background: var(--admin-bg);
+  border: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  min-height: 160px;
+}
+.quill-editor-wrap :deep(.ql-editor) { min-height: 160px; padding: 12px 14px; line-height: 1.65; }
+.quill-editor-wrap :deep(.ql-editor.ql-blank::before) {
+  color: var(--text-secondary);
+  font-style: normal;
+  font-size: 13px;
+}
+.quill-editor-wrap :deep(.ql-picker-options) {
+  background: var(--sidebar-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.quill-editor-wrap :deep(.ql-picker-item) { color: var(--text-primary); }
 </style>

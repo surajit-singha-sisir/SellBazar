@@ -123,7 +123,7 @@
             <span v-if="product.salePrice" class="badge badge-red text-sm">{{ discountPct }}% OFF</span>
           </div>
 
-          <p class="text-[var(--color-text-2)] leading-relaxed">{{ product.description }}</p>
+          <div class="product-description text-[var(--color-text-2)] leading-relaxed" v-html="product.description"></div>
 
           <div class="card p-4 space-y-3 bg-[var(--color-surface-2)]">
             <div class="flex items-center gap-3 text-sm">
@@ -249,6 +249,7 @@ import 'swiper/css/autoplay'
 import { useProductStore }  from '@/stores/useProductStore'
 import { useCartStore }     from '@/stores/useCartStore'
 import { useWishlistStore } from '@/stores/useWishlistStore'
+import type { Product }     from '@/types'
 import ProductCard          from '@/components/product/ProductCard.vue'
 
 const route         = useRoute()
@@ -257,6 +258,7 @@ const cartStore     = useCartStore()
 const wishlistStore = useWishlistStore()
 
 const loading = ref(true)
+const product = ref<Product | null>(null)
 const qty     = ref(1)
 const added   = ref(false)
 
@@ -267,29 +269,21 @@ const lbModules    = [Navigation, Pagination]
 
 const mainSwiper   = ref<SwiperType | null>(null)
 const thumbsSwiper = ref<SwiperType | null>(null)
-
-const activeIdx = ref(0)
+const activeIdx    = ref(0)
 
 function onMainSwiper(sw: SwiperType)   { mainSwiper.value   = sw }
 function onThumbsSwiper(sw: SwiperType) { thumbsSwiper.value = sw }
 function onLbSwiper(_sw: SwiperType)    { /* lightbox swiper ready */ }
-
-function onSlideChange(sw: SwiperType) {
-  activeIdx.value = sw.realIndex
-}
+function onSlideChange(sw: SwiperType)  { activeIdx.value = sw.realIndex }
 
 // ── Lightbox ─────────────────────────────────────────────────
 const lightboxOpen = ref(false)
-
 function openLightbox() { lightboxOpen.value = true }
-
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') lightboxOpen.value = false
 }
 
-// ── Product ───────────────────────────────────────────────────
-const product = computed(() => productStore.getBySlug(route.params.slug as string))
-
+// ── Computed ──────────────────────────────────────────────────
 const discountPct = computed(() => {
   if (!product.value?.salePrice) return 0
   return Math.round((1 - product.value.salePrice / product.value.price) * 100)
@@ -302,11 +296,6 @@ const related = computed(() => {
     .slice(0, 4)
 })
 
-watch(() => product.value, () => {
-  activeIdx.value = 0
-  mainSwiper.value?.slideTo(0)
-})
-
 function addToCart() {
   if (!product.value) return
   cartStore.add(product.value, qty.value)
@@ -314,18 +303,33 @@ function addToCart() {
   setTimeout(() => { added.value = false }, 1500)
 }
 
-async function load() {
+// ── Load ──────────────────────────────────────────────────────
+async function load(slug: string) {
   loading.value = true
-  await productStore.fetchProducts()
+  activeIdx.value = 0
+  mainSwiper.value?.slideTo(0)
+
+  // Try store cache first (fast), then fall back to dedicated API call
+  let found: Product | null | undefined = productStore.getBySlug(slug)
+  if (!found) {
+    found = await productStore.fetchProductBySlug(slug)
+  }
+  product.value = found ?? null
+
+  // Also make sure list products are loaded for Related section
+  if (productStore.products.length === 0) {
+    productStore.fetchProducts()
+  }
+
   loading.value = false
 }
 
 onMounted(() => {
-  load()
+  load(route.params.slug as string)
   window.addEventListener('keydown', onKeyDown)
 })
 onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
-watch(() => route.params.slug, load)
+watch(() => route.params.slug, (slug) => { if (slug) load(slug as string) })
 </script>
 
 <style scoped lang="scss">
@@ -360,4 +364,27 @@ watch(() => route.params.slug, load)
 .lb-leave-active { transition: opacity 0.2s ease; }
 .lb-enter-from,
 .lb-leave-to     { opacity: 0; }
+
+/* ── Quill HTML description rendering ── */
+.product-description :deep(h2) { font-size: 1.15rem; font-weight: 700; margin: 12px 0 6px; }
+.product-description :deep(h3) { font-size: 1rem;    font-weight: 600; margin: 10px 0 4px; }
+.product-description :deep(p)  { margin: 0 0 8px; line-height: 1.7; }
+.product-description :deep(strong) { font-weight: 700; }
+.product-description :deep(em)     { font-style: italic; }
+.product-description :deep(s)      { text-decoration: line-through; }
+.product-description :deep(ul),
+.product-description :deep(ol)     { padding-left: 20px; margin: 6px 0 10px; }
+.product-description :deep(ul)     { list-style: disc; }
+.product-description :deep(ol)     { list-style: decimal; }
+.product-description :deep(li)     { margin-bottom: 4px; line-height: 1.65; }
+.product-description :deep(blockquote) {
+  border-left: 3px solid rgb(249 115 22);
+  padding-left: 12px; margin: 10px 0;
+  color: var(--color-text-muted); font-style: italic;
+}
+.product-description :deep(pre) {
+  background: var(--color-surface-2); border-radius: 8px;
+  padding: 10px 14px; font-size: 12px; overflow-x: auto; margin: 8px 0;
+}
+.product-description :deep(a) { color: rgb(249 115 22); text-decoration: underline; }
 </style>

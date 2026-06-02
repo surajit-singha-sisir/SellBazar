@@ -1,9 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAdminApi, type ApiProduct, type ApiOrder, type ApiCustomer, type DashboardStats, type AdminUser } from '@/composables/useAdminApi'
+import { useNotificationStore } from '@/stores/useNotificationStore'
 
 export const useAdminStore = defineStore('admin', () => {
   const api = useAdminApi()
+  const notifStore = useNotificationStore()
+
+  // Track known order IDs to detect truly new orders
+  const knownOrderIds = ref<Set<string>>(new Set())
+  let initialLoadDone = false
 
   // ── Auth state ────────────────────────────────────────────────────────────
   const adminUser = ref<AdminUser | null>(
@@ -96,7 +102,25 @@ export const useAdminStore = defineStore('admin', () => {
     loading.value.orders = true
     try {
       const res = await api.fetchOrders()
-      orders.value = res.data
+      const fetched: ApiOrder[] = res.data
+
+      if (initialLoadDone) {
+        // Detect brand-new orders (IDs we haven't seen before)
+        const newOrders = fetched.filter(o => !knownOrderIds.value.has(o.id))
+        newOrders.forEach(o => {
+          notifStore.push({
+            type: 'new_order',
+            title: 'New Order Received!',
+            message: `Order #${o.id} — ৳${o.total.toLocaleString()} from ${o.customer?.name ?? 'Customer'}`,
+            orderId: o.id,
+          })
+        })
+      }
+
+      // Update known IDs
+      fetched.forEach(o => knownOrderIds.value.add(o.id))
+      initialLoadDone = true
+      orders.value = fetched
     } catch { orders.value = [] }
     finally { loading.value.orders = false }
   }

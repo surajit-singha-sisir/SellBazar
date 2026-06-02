@@ -1,4 +1,4 @@
-// composables/useExport.ts — Reusable export to Excel / PDF / JSON / CSV
+// composables/useExport.ts — Reusable export to Excel / PDF / JSON / CSV / Image
 import * as XLSX from 'xlsx'
 
 export function useExport() {
@@ -51,6 +51,68 @@ export function useExport() {
     doc.save(filename + '.pdf')
   }
 
+  /**
+   * Capture a DOM element as a PNG image and trigger download.
+   * Falls back to a styled canvas table if html2canvas is unavailable.
+   */
+  async function exportImage(
+    el: HTMLElement | null,
+    filename: string,
+    title = ''
+  ) {
+    if (!el) return
+
+    try {
+      const { default: html2canvas } = await import('html2canvas')
+
+      // Temporarily force light background so the screenshot is clean
+      const prevBg = el.style.background
+      el.style.background = getComputedStyle(document.documentElement)
+        .getPropertyValue('--page-bg') || '#ffffff'
+
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: null,
+        logging: false,
+      })
+
+      el.style.background = prevBg
+
+      // Stamp a title bar on top
+      if (title) {
+        const out = document.createElement('canvas')
+        const headerH = 48
+        out.width  = canvas.width
+        out.height = canvas.height + headerH * 2
+        const ctx = out.getContext('2d')!
+        ctx.fillStyle = '#f97316'
+        ctx.fillRect(0, 0, out.width, headerH * 2)
+        ctx.fillStyle = '#ffffff'
+        ctx.font = `bold ${headerH * 0.65}px sans-serif`
+        ctx.textBaseline = 'middle'
+        ctx.fillText(title, 24 * 2, headerH)
+        ctx.font = `${headerH * 0.35}px sans-serif`
+        ctx.fillStyle = 'rgba(255,255,255,0.75)'
+        ctx.fillText(`Exported ${new Date().toLocaleString()}`, 24 * 2, headerH * 1.6)
+        ctx.drawImage(canvas, 0, headerH * 2)
+        triggerDownload(await canvasToBlob(out), filename + '.png')
+      } else {
+        triggerDownload(await canvasToBlob(canvas), filename + '.png')
+      }
+    } catch (err) {
+      console.error('html2canvas failed:', err)
+      alert('Image export failed. Make sure html2canvas is installed:\nnpm install html2canvas')
+    }
+  }
+
+  function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png')
+    })
+  }
+
   function triggerDownload(blob: Blob, name: string) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -58,5 +120,5 @@ export function useExport() {
     URL.revokeObjectURL(url)
   }
 
-  return { exportJSON, exportCSV, exportExcel, exportPDF }
+  return { exportJSON, exportCSV, exportExcel, exportPDF, exportImage }
 }

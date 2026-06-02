@@ -4,7 +4,7 @@
 export interface ApiProduct {
   id: string; slug: string; name: string; nameBn: string
   description: string; price: number; salePrice: number
-  images: string[]; category: string; categoryBn: string
+  images: string[]; category: string; subcategory?: string; categoryBn: string
   brand: string; stock: number; rating: number; reviewCount: number
   tags: string[]; isNew?: boolean; isFeatured?: boolean
   deliveryDays: number; seller: string; location: string
@@ -120,6 +120,15 @@ export function useAdminApi() {
     return request<DashboardStats>('/admin/dashboard')
   }
 
+  // ── Categories ─────────────────────────────────────────────────────────────
+  async function fetchCategories() {
+    const res = await request<{ data?: any[]; [key: string]: any }>('/categories')
+    return (res.data ?? res) as Array<{
+      id: string; slug: string; name: string; nameBn: string; icon: string; color: string
+      subcategories: Array<{ id: string; slug: string; name: string; nameBn: string; icon: string }>
+    }>
+  }
+
   // ── Products ────────────────────────────────────────────────────────────────
   async function fetchProducts(params?: { category?: string; q?: string; limit?: number }) {
     const qs = new URLSearchParams()
@@ -184,6 +193,7 @@ export function useAdminApi() {
   return {
     adminLogin, adminMe,
     fetchDashboard,
+    fetchCategories,
     fetchProducts, createProduct, updateProduct, deleteProduct,
     uploadImage,
     fetchOrders, updateOrder, deleteOrder,

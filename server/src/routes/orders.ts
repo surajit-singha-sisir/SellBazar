@@ -3,6 +3,14 @@ import { requireAdmin } from '../middleware/auth.js'
 
 const router = Router()
 
+// Helper: ISO date string N days ago from now
+function daysAgo(n: number) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  d.setHours(Math.floor(Math.random() * 14) + 6, Math.floor(Math.random() * 59), 0, 0)
+  return d.toISOString()
+}
+
 // ── Realistic seed orders ─────────────────────────────────────────────────────
 let orders = [
   {
@@ -14,7 +22,7 @@ let orders = [
     subtotal: 39999, shipping: 80, total: 40079,
     status: 'delivered', paymentMethod: 'bkash', paymentStatus: 'paid',
     notes: '', trackingNumber: 'SA-TRK-78234',
-    createdAt: '2027-01-05T08:30:00Z', updatedAt: '2027-01-07T14:00:00Z'
+    createdAt: daysAgo(5), updatedAt: daysAgo(3)
   },
   {
     id: 'SB-240002',
@@ -25,7 +33,7 @@ let orders = [
     subtotal: 14400, shipping: 120, total: 14520,
     status: 'shipped', paymentMethod: 'cod', paymentStatus: 'pending',
     notes: 'Please wrap carefully', trackingNumber: 'SA-TRK-78299',
-    createdAt: '2027-01-10T11:15:00Z', updatedAt: '2027-01-11T09:00:00Z'
+    createdAt: daysAgo(3), updatedAt: daysAgo(2)
   },
   {
     id: 'SB-240003',
@@ -37,7 +45,7 @@ let orders = [
     subtotal: 2987, shipping: 150, total: 3137,
     status: 'processing', paymentMethod: 'nagad', paymentStatus: 'paid',
     notes: '', trackingNumber: '',
-    createdAt: '2027-01-15T06:45:00Z', updatedAt: '2027-01-15T08:00:00Z'
+    createdAt: daysAgo(1), updatedAt: daysAgo(1)
   },
   {
     id: 'SB-240004',
@@ -48,7 +56,7 @@ let orders = [
     subtotal: 84999, shipping: 200, total: 85199,
     status: 'pending', paymentMethod: 'bkash', paymentStatus: 'paid',
     notes: 'Call before delivery', trackingNumber: '',
-    createdAt: '2027-01-18T13:20:00Z', updatedAt: '2027-01-18T13:20:00Z'
+    createdAt: daysAgo(0), updatedAt: daysAgo(0)
   },
   {
     id: 'SB-240005',
@@ -60,7 +68,7 @@ let orders = [
     subtotal: 17899, shipping: 80, total: 17979,
     status: 'delivered', paymentMethod: 'rocket', paymentStatus: 'paid',
     notes: '', trackingNumber: 'SA-TRK-77891',
-    createdAt: '2027-01-08T09:10:00Z', updatedAt: '2027-01-10T16:30:00Z'
+    createdAt: daysAgo(4), updatedAt: daysAgo(2)
   },
   {
     id: 'SB-240006',
@@ -71,7 +79,7 @@ let orders = [
     subtotal: 1196, shipping: 80, total: 1276,
     status: 'cancelled', paymentMethod: 'cod', paymentStatus: 'refunded',
     notes: 'Customer requested cancellation', trackingNumber: '',
-    createdAt: '2027-01-12T17:00:00Z', updatedAt: '2027-01-13T10:00:00Z'
+    createdAt: daysAgo(6), updatedAt: daysAgo(5)
   },
   {
     id: 'SB-240007',
@@ -82,7 +90,7 @@ let orders = [
     subtotal: 29999, shipping: 80, total: 30079,
     status: 'pending', paymentMethod: 'bkash', paymentStatus: 'paid',
     notes: '', trackingNumber: '',
-    createdAt: '2027-01-19T10:55:00Z', updatedAt: '2027-01-19T10:55:00Z'
+    createdAt: daysAgo(0), updatedAt: daysAgo(0)
   },
   {
     id: 'SB-240008',
@@ -92,9 +100,9 @@ let orders = [
       { productId: '6', name: 'Smart QR POS Terminal', quantity: 1, price: 3800, image: 'https://placehold.co/60x60/8b5cf6/fff?text=POS' }
     ],
     subtotal: 28799, shipping: 150, total: 28949,
-    status: 'processing', paymentMethod: 'bank_transfer', paymentStatus: 'paid',
-    notes: 'Business address, contact Mr. Das', trackingNumber: '',
-    createdAt: '2027-01-17T15:30:00Z', updatedAt: '2027-01-17T18:00:00Z'
+    status: 'delivered', paymentMethod: 'bank_transfer', paymentStatus: 'paid',
+    notes: 'Business address, contact Mr. Das', trackingNumber: 'SA-TRK-78998',
+    createdAt: daysAgo(2), updatedAt: daysAgo(1)
   },
   {
     id: 'SB-240009',
@@ -105,7 +113,7 @@ let orders = [
     subtotal: 30998, shipping: 120, total: 31118,
     status: 'shipped', paymentMethod: 'nagad', paymentStatus: 'paid',
     notes: '', trackingNumber: 'SA-TRK-78401',
-    createdAt: '2027-01-14T12:00:00Z', updatedAt: '2027-01-16T09:00:00Z'
+    createdAt: daysAgo(3), updatedAt: daysAgo(1)
   },
   {
     id: 'SB-240010',
@@ -117,13 +125,78 @@ let orders = [
     subtotal: 6198, shipping: 100, total: 6298,
     status: 'delivered', paymentMethod: 'bkash', paymentStatus: 'paid',
     notes: '', trackingNumber: 'SA-TRK-78102',
-    createdAt: '2027-01-03T07:00:00Z', updatedAt: '2027-01-05T11:00:00Z'
+    createdAt: daysAgo(20), updatedAt: daysAgo(18)
+  },
+  {
+    id: 'SB-240011',
+    customer: { name: 'Tanvir Islam', email: 'tanvir.islam@gmail.com', phone: '01799-111222', address: 'Gulshan 2, Dhaka' },
+    items: [
+      { productId: '1', name: 'Samsung Galaxy A55 5G', quantity: 2, price: 39999, image: 'https://placehold.co/60x60/f97316/fff?text=A55' }
+    ],
+    subtotal: 79998, shipping: 100, total: 80098,
+    status: 'delivered', paymentMethod: 'bkash', paymentStatus: 'paid',
+    notes: '', trackingNumber: 'SA-TRK-79001',
+    createdAt: daysAgo(25), updatedAt: daysAgo(23)
+  },
+  {
+    id: 'SB-240012',
+    customer: { name: 'Sharmin Akter', email: 'sharmin.a@gmail.com', phone: '01655-333444', address: 'Uttara Sector 7, Dhaka' },
+    items: [
+      { productId: '8', name: 'Lenovo IdeaPad Slim 5', quantity: 1, price: 84999, image: 'https://placehold.co/60x60/0ea5e9/fff?text=Lenovo' }
+    ],
+    subtotal: 84999, shipping: 200, total: 85199,
+    status: 'delivered', paymentMethod: 'card', paymentStatus: 'paid',
+    notes: '', trackingNumber: 'SA-TRK-79011',
+    createdAt: daysAgo(15), updatedAt: daysAgo(12)
+  },
+  {
+    id: 'SB-240013',
+    customer: { name: 'Mahbub Rahman', email: 'mahbub.r@yahoo.com', phone: '01533-555666', address: 'Agrabad, Chittagong' },
+    items: [
+      { productId: '5', name: 'Xiaomi Redmi Note 13 Pro', quantity: 1, price: 29999, image: 'https://placehold.co/60x60/f97316/fff?text=Redmi' },
+      { productId: '6', name: 'Smart QR POS Terminal', quantity: 2, price: 3800, image: 'https://placehold.co/60x60/8b5cf6/fff?text=POS' }
+    ],
+    subtotal: 37599, shipping: 120, total: 37719,
+    status: 'processing', paymentMethod: 'nagad', paymentStatus: 'paid',
+    notes: 'Office delivery', trackingNumber: '',
+    createdAt: daysAgo(2), updatedAt: daysAgo(2)
+  },
+  {
+    id: 'SB-240014',
+    customer: { name: 'Parvin Sultana', email: 'parvin.s@proton.me', phone: '01877-777888', address: 'Sylhet City, Sylhet' },
+    items: [
+      { productId: '4', name: 'Jamdani Muslin Saree', quantity: 3, price: 7200, image: 'https://placehold.co/60x60/ec4899/fff?text=Saree' }
+    ],
+    subtotal: 21600, shipping: 150, total: 21750,
+    status: 'delivered', paymentMethod: 'bkash', paymentStatus: 'paid',
+    notes: '', trackingNumber: 'SA-TRK-79021',
+    createdAt: daysAgo(10), updatedAt: daysAgo(7)
+  },
+  {
+    id: 'SB-240015',
+    customer: { name: 'Rahim Uddin', email: 'rahim.uddin@gmail.com', phone: '01711-234567', address: 'House 12, Road 5, Dhanmondi, Dhaka' },
+    items: [
+      { productId: '7', name: 'PRAN Mango Juice 1L', quantity: 24, price: 99, image: 'https://placehold.co/60x60/fbbf24/fff?text=Juice' }
+    ],
+    subtotal: 2376, shipping: 80, total: 2456,
+    status: 'delivered', paymentMethod: 'bkash', paymentStatus: 'paid',
+    notes: 'Monthly restock', trackingNumber: 'SA-TRK-79031',
+    createdAt: daysAgo(8), updatedAt: daysAgo(6)
   },
 ]
 
 export { orders }
 
 // ── ADMIN routes (all protected) ──────────────────────────────────────────────
+
+// GET /api/orders/by-id/:id  — public route for order owner to track their order
+router.get('/by-id/:id', (req, res) => {
+  const order = orders.find(o => o.id === req.params.id)
+  if (!order) return res.status(404).json({ error: 'Order not found' })
+  // Return a safe subset (no need to expose all customer details publicly)
+  const { id, items, subtotal, shipping, total, status, paymentMethod, paymentStatus, trackingNumber, createdAt, updatedAt, customer } = order
+  res.json({ id, items, subtotal, shipping, total, status, paymentMethod, paymentStatus, trackingNumber, createdAt, updatedAt, customer })
+})
 
 // GET /api/orders  — list all orders with optional filters
 router.get('/', requireAdmin, (req, res) => {
@@ -192,7 +265,9 @@ router.post('/', (req, res) => {
     customer,
     items,
     subtotal: Number(subtotal ?? total),
-    shipping: Number(shipping ?? 80),
+    shipping: Number(shipping ?? 0),
+    discount: Number(req.body.discount ?? 0),
+    couponCode: req.body.couponCode ?? null,
     total: Number(total),
     status: 'pending' as const,
     paymentMethod: paymentMethod ?? 'cod',

@@ -1,0 +1,116 @@
+// ── Category & Subcategory master data ───────────────────────────────────────
+export interface Subcategory {
+  id: string
+  slug: string
+  name: string
+  nameBn: string
+  icon: string
+  productCount?: number
+}
+
+export interface Category {
+  id: string
+  slug: string
+  name: string
+  nameBn: string
+  icon: string
+  color: string
+  subcategories: Subcategory[]
+}
+
+export let CATEGORIES: Category[] = [
+  {
+    id: 'c1', slug: 'electronics', name: 'Electronics', nameBn: 'ইলেকট্রনিক্স',
+    icon: 'fa-microchip', color: '#3b82f6',
+    subcategories: [
+      { id: 's1-1', slug: 'mobile-phones',    name: 'Mobile Phones',    nameBn: 'মোবাইল ফোন',      icon: 'fa-mobile-screen' },
+      { id: 's1-2', slug: 'laptops',           name: 'Laptops',          nameBn: 'ল্যাপটপ',          icon: 'fa-laptop' },
+      { id: 's1-3', slug: 'tablets',           name: 'Tablets',          nameBn: 'ট্যাবলেট',         icon: 'fa-tablet-screen-button' },
+      { id: 's1-4', slug: 'headphones',        name: 'Headphones',       nameBn: 'হেডফোন',           icon: 'fa-headphones' },
+      { id: 's1-5', slug: 'smart-watches',     name: 'Smart Watches',    nameBn: 'স্মার্টওয়াচ',     icon: 'fa-watch-smart' },
+      { id: 's1-6', slug: 'cameras',           name: 'Cameras',          nameBn: 'ক্যামেরা',         icon: 'fa-camera' },
+      { id: 's1-7', slug: 'televisions',       name: 'Televisions',      nameBn: 'টেলিভিশন',         icon: 'fa-tv' },
+      { id: 's1-8', slug: 'accessories',       name: 'Accessories',      nameBn: 'আনুষাঙ্গিক',       icon: 'fa-plug' },
+    ],
+  },
+  {
+    id: 'c2', slug: 'fashion', name: 'Fashion', nameBn: 'ফ্যাশন',
+    icon: 'fa-shirt', color: '#ec4899',
+    subcategories: [
+      { id: 's2-1', slug: 'mens-clothing',     name: "Men's Clothing",   nameBn: 'পুরুষ পোশাক',     icon: 'fa-person' },
+      { id: 's2-2', slug: 'womens-clothing',   name: "Women's Clothing", nameBn: 'মহিলা পোশাক',     icon: 'fa-person-dress' },
+      { id: 's2-3', slug: 'kids-clothing',     name: "Kids' Clothing",   nameBn: 'শিশু পোশাক',      icon: 'fa-child' },
+      { id: 's2-4', slug: 'footwear',          name: 'Footwear',         nameBn: 'জুতা',              icon: 'fa-shoe-prints' },
+      { id: 's2-5', slug: 'sarees',            name: 'Sarees',           nameBn: 'শাড়ি',              icon: 'fa-scarf' },
+      { id: 's2-6', slug: 'bags-wallets',      name: 'Bags & Wallets',   nameBn: 'ব্যাগ ও মানিব্যাগ', icon: 'fa-bag-shopping' },
+      { id: 's2-7', slug: 'ethnic-wear',       name: 'Ethnic Wear',      nameBn: 'ঐতিহ্যবাহী পোশাক', icon: 'fa-vest' },
+    ],
+  },
+  {
+    id: 'c3', slug: 'grocery', name: 'Grocery', nameBn: 'মুদিখানা',
+    icon: 'fa-basket-shopping', color: '#22c55e',
+    subcategories: [
+      { id: 's3-1', slug: 'rice-grains',       name: 'Rice & Grains',    nameBn: 'চাল ও শস্য',      icon: 'fa-wheat-awn' },
+      { id: 's3-2', slug: 'oil-spices',        name: 'Oil & Spices',     nameBn: 'তেল ও মশলা',      icon: 'fa-jar' },
+      { id: 's3-3', slug: 'beverages',         name: 'Beverages',        nameBn: 'পানীয়',            icon: 'fa-bottle-water' },
+      { id: 's3-4', slug: 'snacks',            name: 'Snacks',           nameBn: 'স্ন্যাকস',          icon: 'fa-cookie-bite' },
+      { id: 's3-5', slug: 'dairy',             name: 'Dairy',            nameBn: 'দুগ্ধজাত পণ্য',    icon: 'fa-cow' },
+      { id: 's3-6', slug: 'fresh-produce',     name: 'Fresh Produce',    nameBn: 'তাজা শাকসবজি',    icon: 'fa-carrot' },
+    ],
+  },
+  {
+    id: 'c4', slug: 'beauty', name: 'Beauty', nameBn: 'বিউটি',
+    icon: 'fa-pump-soap', color: '#a78bfa',
+    subcategories: [
+      { id: 's4-1', slug: 'skincare',          name: 'Skincare',         nameBn: 'স্কিনকেয়ার',       icon: 'fa-spa' },
+      { id: 's4-2', slug: 'haircare',          name: 'Haircare',         nameBn: 'হেয়ারকেয়ার',      icon: 'fa-scissors' },
+      { id: 's4-3', slug: 'makeup',            name: 'Makeup',           nameBn: 'মেকআপ',             icon: 'fa-wand-magic-sparkles' },
+      { id: 's4-4', slug: 'fragrances',        name: 'Fragrances',       nameBn: 'সুগন্ধি',           icon: 'fa-bottle-droplet' },
+      { id: 's4-5', slug: 'mens-grooming',     name: "Men's Grooming",   nameBn: 'পুরুষ গ্রুমিং',    icon: 'fa-razor' },
+    ],
+  },
+  {
+    id: 'c5', slug: 'home', name: 'Home & Living', nameBn: 'হোম',
+    icon: 'fa-couch', color: '#f97316',
+    subcategories: [
+      { id: 's5-1', slug: 'furniture',         name: 'Furniture',        nameBn: 'আসবাবপত্র',         icon: 'fa-couch' },
+      { id: 's5-2', slug: 'kitchen',           name: 'Kitchen',          nameBn: 'রান্নাঘর',           icon: 'fa-kitchen-set' },
+      { id: 's5-3', slug: 'air-conditioners',  name: 'Air Conditioners', nameBn: 'এয়ার কন্ডিশনার',   icon: 'fa-snowflake' },
+      { id: 's5-4', slug: 'bedding',           name: 'Bedding',          nameBn: 'বিছানার চাদর',      icon: 'fa-bed' },
+      { id: 's5-5', slug: 'decor',             name: 'Décor',            nameBn: 'সাজসজ্জা',          icon: 'fa-lamp-desk' },
+      { id: 's5-6', slug: 'cleaning',          name: 'Cleaning',         nameBn: 'পরিষ্কার',           icon: 'fa-broom' },
+    ],
+  },
+  {
+    id: 'c6', slug: 'sports', name: 'Sports', nameBn: 'স্পোর্টস',
+    icon: 'fa-dumbbell', color: '#0ea5e9',
+    subcategories: [
+      { id: 's6-1', slug: 'cricket',           name: 'Cricket',          nameBn: 'ক্রিকেট',           icon: 'fa-baseball-bat-ball' },
+      { id: 's6-2', slug: 'football',          name: 'Football',         nameBn: 'ফুটবল',              icon: 'fa-futbol' },
+      { id: 's6-3', slug: 'fitness',           name: 'Fitness',          nameBn: 'ফিটনেস',            icon: 'fa-dumbbell' },
+      { id: 's6-4', slug: 'outdoor',           name: 'Outdoor',          nameBn: 'আউটডোর',            icon: 'fa-person-hiking' },
+      { id: 's6-5', slug: 'cycling',           name: 'Cycling',          nameBn: 'সাইক্লিং',          icon: 'fa-bicycle' },
+    ],
+  },
+  {
+    id: 'c7', slug: 'business', name: 'Business', nameBn: 'ব্যবসা',
+    icon: 'fa-briefcase', color: '#8b5cf6',
+    subcategories: [
+      { id: 's7-1', slug: 'office-supplies',   name: 'Office Supplies',  nameBn: 'অফিস সামগ্রী',     icon: 'fa-paperclip' },
+      { id: 's7-2', slug: 'pos-systems',       name: 'POS Systems',      nameBn: 'POS সিস্টেম',      icon: 'fa-cash-register' },
+      { id: 's7-3', slug: 'printing',          name: 'Printing',         nameBn: 'প্রিন্টিং',         icon: 'fa-print' },
+      { id: 's7-4', slug: 'storage',           name: 'Storage',          nameBn: 'স্টোরেজ',           icon: 'fa-boxes-stacked' },
+    ],
+  },
+  {
+    id: 'c8', slug: 'books', name: 'Books', nameBn: 'বই',
+    icon: 'fa-book-open', color: '#fbbf24',
+    subcategories: [
+      { id: 's8-1', slug: 'bangla-literature', name: 'Bangla Literature', nameBn: 'বাংলা সাহিত্য', icon: 'fa-book' },
+      { id: 's8-2', slug: 'academic',          name: 'Academic',         nameBn: 'শিক্ষামূলক',        icon: 'fa-graduation-cap' },
+      { id: 's8-3', slug: 'self-help',         name: 'Self Help',        nameBn: 'সেলফ হেল্প',       icon: 'fa-brain' },
+      { id: 's8-4', slug: 'religious',         name: 'Religious',        nameBn: 'ধর্মীয়',            icon: 'fa-star-and-crescent' },
+      { id: 's8-5', slug: 'children',          name: "Children's",       nameBn: 'শিশু',               icon: 'fa-child-reaching' },
+    ],
+  },
+]

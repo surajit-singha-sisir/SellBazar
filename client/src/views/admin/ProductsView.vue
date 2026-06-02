@@ -18,6 +18,10 @@
             <button @click="doExport('pdf')"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> PDF</button>
             <button @click="doExport('csv')"><i class="fa-solid fa-file-csv" style="color:#3b82f6"></i> CSV</button>
             <button @click="doExport('json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
+            <button @click="doExport('image')" :disabled="exportingImage">
+              <i class="fa-solid fa-image" style="color:#f97316" :class="{'fa-spin fa-spinner-third': exportingImage}"></i>
+              {{ exportingImage ? 'Capturing…' : 'Image (.png)' }}
+            </button>
           </div>
         </div>
         <RouterLink to="/admin/products/add" class="admin-btn primary">
@@ -32,9 +36,13 @@
         <i class="fa-sharp fa-solid fa-magnifying-glass search-icon"></i>
         <input class="filter-input" v-model="search" placeholder="Search products…" />
       </div>
-      <select class="filter-select" v-model="catFilter">
+      <select class="filter-select" v-model="catFilter" @change="subFilter = ''">
         <option value="">All Categories</option>
         <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+      </select>
+      <select class="filter-select" v-model="subFilter" :disabled="!catFilter || !subcategoriesForCat.length">
+        <option value="">All Subcategories</option>
+        <option v-for="s in subcategoriesForCat" :key="s" :value="s">{{ s }}</option>
       </select>
       <select class="filter-select" v-model="stockFilter">
         <option value="">All Stock</option>
@@ -50,7 +58,7 @@
     </div>
 
     <!-- ── Table ──────────────────────────────────────────────────────── -->
-    <div class="admin-table-wrap">
+    <div class="admin-table-wrap" ref="tableWrapRef">
       <div v-if="adminStore.loading.products" style="padding:32px;text-align:center;color:var(--text-secondary)">
         <i class="fa-solid fa-spinner-third fa-spin fa-2x"></i><br><br>Loading products…
       </div>
@@ -66,6 +74,7 @@
           <th class="sortable" @click="setSort('category')">
             Category <SortIcon field="category" :sort="sort" />
           </th>
+          <th>Subcategory</th>
           <th class="sortable" @click="setSort('price')">
             Price <SortIcon field="price" :sort="sort" />
           </th>
@@ -93,6 +102,10 @@
               </div>
             </td>
             <td><span class="status-badge processing">{{ p.category }}</span></td>
+            <td>
+              <span v-if="p.subcategory" class="status-badge inactive" style="font-size:11px">{{ p.subcategory }}</span>
+              <span v-else style="color:var(--text-secondary);font-size:12px">—</span>
+            </td>
             <td>
               <div style="font-weight:700;color:var(--brand)">৳{{ (p.salePrice || p.price).toLocaleString() }}</div>
               <div v-if="p.salePrice" style="font-size:11px;text-decoration:line-through;color:var(--text-secondary)">৳{{ p.price.toLocaleString() }}</div>
@@ -223,6 +236,7 @@ const exporter = useExport()
 // Filters
 const search        = ref('')
 const catFilter     = ref('')
+const subFilter     = ref('')
 const stockFilter   = ref('')
 const featuredFilter= ref('')
 const page          = ref(1)
@@ -240,7 +254,17 @@ const categories = computed(() =>
   [...new Set(adminStore.products.map(p => p.category))].sort()
 )
 
-watch([search, catFilter, stockFilter, featuredFilter, perPage], () => { page.value = 1 })
+// Subcategory slugs present in products for the selected category
+const subcategoriesForCat = computed(() => {
+  if (!catFilter.value) return []
+  return [...new Set(
+    adminStore.products
+      .filter(p => p.category === catFilter.value && p.subcategory)
+      .map(p => p.subcategory as string)
+  )].sort()
+})
+
+watch([search, catFilter, subFilter, stockFilter, featuredFilter, perPage], () => { page.value = 1 })
 
 const filtered = computed(() => {
   let list = [...adminStore.products]
@@ -249,6 +273,7 @@ const filtered = computed(() => {
     list = list.filter(p => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))
   }
   if (catFilter.value) list = list.filter(p => p.category === catFilter.value)
+  if (subFilter.value) list = list.filter(p => p.subcategory === subFilter.value)
   if (stockFilter.value === 'low') list = list.filter(p => p.stock > 0 && p.stock < 25)
   if (stockFilter.value === 'ok')  list = list.filter(p => p.stock >= 25)
   if (stockFilter.value === 'out') list = list.filter(p => p.stock === 0)

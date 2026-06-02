@@ -84,17 +84,35 @@
         <RouterLink to="/products" class="btn-ghost text-sm">See all <i class="fa-sharp fa-regular fa-arrow-right"></i></RouterLink>
       </div>
       <div class="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-        <RouterLink
-          v-for="cat in categories" :key="cat.id"
-          :to="`/products?cat=${cat.name}`"
-          class="card flex flex-col items-center gap-2 py-4 px-2 hover:shadow-md hover:-translate-y-1 transition-all duration-200 text-center group"
+        <div
+          v-for="cat in displayCategories" :key="cat.id"
+          class="relative group"
         >
-          <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" :style="`background: ${cat.color}18`">
-            <i :class="cat.icon + ' text-lg'" :style="`color: ${cat.color}`"></i>
+          <RouterLink
+            :to="`/products?cat=${encodeURIComponent(cat.name)}`"
+            class="card flex flex-col items-center gap-2 py-4 px-2 hover:shadow-md hover:-translate-y-1 transition-all duration-200 text-center"
+          >
+            <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" :style="`background: ${cat.color}18`">
+              <i :class="'fa-sharp fa-solid fa-' + cat.icon + ' text-lg'" :style="`color: ${cat.color}`"></i>
+            </div>
+            <span class="text-xs font-medium leading-tight text-[var(--color-text-2)] group-hover:text-[var(--color-text)]">{{ cat.name }}</span>
+            <span class="text-[10px] text-[var(--color-text-muted)]">{{ (cat.productCount ?? cat.count ?? 0).toLocaleString() }}+</span>
+          </RouterLink>
+          <!-- Subcategory flyout on hover -->
+          <div
+            v-if="cat.subcategories && cat.subcategories.length"
+            class="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-30 hidden group-hover:block w-44 card shadow-xl p-2 rounded-xl"
+          >
+            <RouterLink
+              v-for="sub in cat.subcategories.slice(0, 6)" :key="sub.slug"
+              :to="`/products?cat=${encodeURIComponent(cat.name)}&sub=${sub.slug}`"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-[var(--color-surface-2)] text-[var(--color-text-2)] hover:text-[var(--color-text)] transition"
+            >
+              <i :class="'fa-sharp fa-solid fa-' + sub.icon + ' w-4 text-center opacity-60'"></i>
+              {{ sub.name }}
+            </RouterLink>
           </div>
-          <span class="text-xs font-medium leading-tight text-[var(--color-text-2)] group-hover:text-[var(--color-text)]">{{ cat.name }}</span>
-          <span class="text-[10px] text-[var(--color-text-muted)]">{{ cat.count }}+</span>
-        </RouterLink>
+        </div>
       </div>
     </section>
 
@@ -185,46 +203,56 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useProductStore } from '@/stores/useProductStore'
 import ProductCard from '@/components/product/ProductCard.vue'
 
 const productStore = useProductStore()
-onMounted(() => productStore.fetchProducts())
+
+onMounted(async () => {
+  await Promise.all([
+    productStore.fetchProducts(),
+    productStore.fetchCategories(),
+  ])
+})
+
+// Static fallback — icons are bare names (no fa- prefix); the template prepends "fa-sharp fa-solid fa-"
+const staticCategories = [
+  { id: '1', slug: 'electronics', name: 'Electronics', icon: 'microchip',       color: '#3b82f6', count: 45000, subcategories: [] },
+  { id: '2', slug: 'fashion',     name: 'Fashion',     icon: 'shirt',           color: '#ec4899', count: 80000, subcategories: [] },
+  { id: '3', slug: 'grocery',     name: 'Grocery',     icon: 'basket-shopping', color: '#22c55e', count: 12000, subcategories: [] },
+  { id: '4', slug: 'beauty',      name: 'Beauty',      icon: 'pump-soap',       color: '#a78bfa', count: 8000,  subcategories: [] },
+  { id: '5', slug: 'home',        name: 'Home',        icon: 'couch',           color: '#f97316', count: 25000, subcategories: [] },
+  { id: '6', slug: 'sports',      name: 'Sports',      icon: 'dumbbell',        color: '#0ea5e9', count: 15000, subcategories: [] },
+  { id: '7', slug: 'business',    name: 'Business',    icon: 'briefcase',       color: '#8b5cf6', count: 5000,  subcategories: [] },
+  { id: '8', slug: 'books',       name: 'Books',       icon: 'book-open',       color: '#fbbf24', count: 30000, subcategories: [] },
+]
+const displayCategories = computed(() =>
+  productStore.categories.length ? productStore.categories : staticCategories
+)
 
 const stats = [
-  { label: 'Products',    value: '2M+',  icon: 'fa-sharp fa-solid fa-boxes-stacked',   color: '#f97316' },
-  { label: 'Sellers',     value: '50K+', icon: 'fa-sharp fa-solid fa-store',            color: '#d946ef' },
-  { label: 'Deliveries',  value: '10M+', icon: 'fa-sharp fa-solid fa-truck-fast',       color: '#3b82f6' },
-  { label: 'Happy Users', value: '5M+',  icon: 'fa-sharp fa-solid fa-face-smile-beam',  color: '#22c55e' },
-]
-
-const categories = [
-  { id: '1', name: 'Electronics', icon: 'fa-sharp fa-solid fa-microchip',       color: '#3b82f6', count: 45000 },
-  { id: '2', name: 'Fashion',     icon: 'fa-sharp fa-solid fa-shirt',            color: '#ec4899', count: 80000 },
-  { id: '3', name: 'Grocery',     icon: 'fa-sharp fa-solid fa-basket-shopping',  color: '#22c55e', count: 12000 },
-  { id: '4', name: 'Beauty',      icon: 'fa-sharp fa-solid fa-pump-soap',        color: '#a78bfa', count: 8000  },
-  { id: '5', name: 'Home',        icon: 'fa-sharp fa-solid fa-couch',            color: '#f97316', count: 25000 },
-  { id: '6', name: 'Sports',      icon: 'fa-sharp fa-solid fa-dumbbell',         color: '#0ea5e9', count: 15000 },
-  { id: '7', name: 'Business',    icon: 'fa-sharp fa-solid fa-briefcase',        color: '#8b5cf6', count: 5000  },
-  { id: '8', name: 'Books',       icon: 'fa-sharp fa-solid fa-book-open',        color: '#fbbf24', count: 30000 },
+  { label: 'Products',    value: '2M+',  icon: 'fa-sharp fa-solid fa-boxes-stacked',  color: '#f97316' },
+  { label: 'Sellers',     value: '50K+', icon: 'fa-sharp fa-solid fa-store',           color: '#d946ef' },
+  { label: 'Deliveries',  value: '10M+', icon: 'fa-sharp fa-solid fa-truck-fast',      color: '#3b82f6' },
+  { label: 'Happy Users', value: '5M+',  icon: 'fa-sharp fa-solid fa-face-smile-beam', color: '#22c55e' },
 ]
 
 const features = [
-  { title: 'Free Delivery',    desc: 'On orders above ৳599',       icon: 'fa-sharp fa-solid fa-truck',            color: '#3b82f6' },
-  { title: 'Easy Returns',     desc: '7-day hassle-free returns',   icon: 'fa-sharp fa-solid fa-rotate-left',      color: '#f97316' },
-  { title: 'Secure Payments',  desc: 'bKash, Nagad & more',        icon: 'fa-sharp fa-solid fa-shield-halved',    color: '#22c55e' },
-  { title: '24/7 Support',     desc: 'Always here to help',        icon: 'fa-sharp fa-solid fa-headset',          color: '#d946ef' },
+  { title: 'Free Delivery',   desc: 'On orders above ৳599',      icon: 'fa-sharp fa-solid fa-truck',         color: '#3b82f6' },
+  { title: 'Easy Returns',    desc: '7-day hassle-free returns',  icon: 'fa-sharp fa-solid fa-rotate-left',   color: '#f97316' },
+  { title: 'Secure Payments', desc: 'bKash, Nagad & more',       icon: 'fa-sharp fa-solid fa-shield-halved', color: '#22c55e' },
+  { title: '24/7 Support',    desc: 'Always here to help',       icon: 'fa-sharp fa-solid fa-headset',       color: '#d946ef' },
 ]
 
 const paymentMethods = [
-  { name: 'bKash',           icon: 'fa-sharp fa-solid fa-mobile-screen-button', color: '#e2136e' },
-  { name: 'Nagad',           icon: 'fa-sharp fa-solid fa-wallet',               color: '#f7931e' },
-  { name: 'Rocket',          icon: 'fa-sharp fa-solid fa-rocket',               color: '#8b3fcd' },
-  { name: 'VISA',            icon: 'fa-brands fa-cc-visa',             color: '#1a1f71' },
-  { name: 'Mastercard',      icon: 'fa-brands fa-cc-mastercard',       color: '#eb001b' },
-  { name: 'Cash on Delivery',icon: 'fa-sharp fa-solid fa-money-bill-wave',      color: '#22c55e' },
-  { name: 'Upay',            icon: 'fa-sharp fa-solid fa-building-columns',     color: '#005baa' },
+  { name: 'bKash',            icon: 'fa-sharp fa-solid fa-mobile-screen-button', color: '#e2136e' },
+  { name: 'Nagad',            icon: 'fa-sharp fa-solid fa-wallet',               color: '#f7931e' },
+  { name: 'Rocket',           icon: 'fa-sharp fa-solid fa-rocket',               color: '#8b3fcd' },
+  { name: 'VISA',             icon: 'fa-brands fa-cc-visa',                      color: '#1a1f71' },
+  { name: 'Mastercard',       icon: 'fa-brands fa-cc-mastercard',                color: '#eb001b' },
+  { name: 'Cash on Delivery', icon: 'fa-sharp fa-solid fa-money-bill-wave',      color: '#22c55e' },
+  { name: 'Upay',             icon: 'fa-sharp fa-solid fa-building-columns',     color: '#005baa' },
 ]
 
 // Countdown timer

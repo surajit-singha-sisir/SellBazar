@@ -42,7 +42,7 @@
                 class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-2 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
               >
                 <option value="">All</option>
-                <option v-for="cat in productStore.categories" :key="cat" :value="cat">{{ cat }}</option>
+                <option v-for="cat in productStore.categoryNames.filter(c => c !== 'All')" :key="cat" :value="cat">{{ cat }}</option>
               </select>
               <i class="fa-sharp fa-regular fa-magnifying-glass text-[var(--color-text-muted)] text-sm"></i>
             </div>
@@ -67,19 +67,36 @@
           <Transition name="fade">
             <div
               v-if="showSuggestions && searchQ.length > 1"
-              class="absolute top-full mt-2 w-full card shadow-lg z-50 py-2 animate-slide-in-up"
+              class="absolute top-full mt-2 w-full card shadow-lg z-50 py-2 animate-slide-in-up max-h-80 overflow-y-auto"
             >
               <div
                 v-for="s in suggestions"
-                :key="s"
-                class="px-4 py-2.5 hover:bg-[var(--color-surface-2)] cursor-pointer text-sm flex items-center gap-3 transition"
-                @mousedown="selectSuggestion(s)"
+                :key="s.id"
+                class="px-3 py-2 hover:bg-[var(--color-surface-2)] cursor-pointer flex items-center gap-3 transition"
+                @mousedown="selectSuggestion(s.name)"
               >
-                <i class="fa-sharp fa-regular fa-clock-rotate-left text-[var(--color-text-muted)] text-xs"></i>
-                {{ s }}
+                <img :src="s.image" :alt="s.name"
+                  class="w-9 h-9 rounded-lg object-cover shrink-0 bg-[var(--color-surface-2)]"
+                  onerror="this.src='https://placehold.co/36x36/f97316/fff?text=?'" />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium leading-snug truncate">{{ s.name }}</p>
+                  <p class="text-xs text-[var(--color-text-muted)] truncate">{{ s.category }} · {{ s.brand }}</p>
+                </div>
+                <span class="text-xs font-bold text-orange-500 shrink-0">৳{{ (s.salePrice ?? s.price).toLocaleString() }}</span>
               </div>
-              <div v-if="!suggestions.length" class="px-4 py-3 text-sm text-[var(--color-text-muted)]">
-                No suggestions found
+              <div v-if="!suggestions.length" class="px-4 py-3 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
+                <i class="fa-sharp fa-regular fa-magnifying-glass opacity-50"></i>
+                No results for "{{ searchQ }}"
+              </div>
+              <!-- View all results footer -->
+              <div v-if="suggestions.length" class="border-t border-[var(--color-border)] mt-1 pt-1">
+                <button
+                  @mousedown="doSearch"
+                  class="w-full px-4 py-2 text-xs text-orange-500 font-semibold hover:bg-[var(--color-surface-2)] transition flex items-center justify-center gap-2"
+                >
+                  <i class="fa-sharp fa-regular fa-magnifying-glass"></i>
+                  View all results for "{{ searchQ }}"
+                </button>
               </div>
             </div>
           </Transition>
@@ -98,7 +115,7 @@
           </button>
 
           <!-- Wishlist -->
-          <RouterLink to="/account/wishlist" class="btn-icon hidden sm:flex relative">
+          <RouterLink to="/wishlist" class="btn-icon hidden sm:flex relative">
             <i class="fa-sharp fa-regular fa-heart"></i>
             <span v-if="wishlistStore.ids.length" class="absolute -top-1 -right-1 w-4 h-4 bg-pink-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
               {{ wishlistStore.ids.length }}
@@ -137,7 +154,7 @@
                   <RouterLink to="/account/orders"  class="menu-item" @click="showUserMenu = false"><i class="fa-sharp fa-regular fa-box"></i> My Orders</RouterLink>
                   <RouterLink to="/account/profile" class="menu-item" @click="showUserMenu = false"><i class="fa-sharp fa-regular fa-user-gear"></i> Profile</RouterLink>
                   <div class="divider my-1"></div>
-                  <button @click="authStore.logout(); showUserMenu = false" class="menu-item text-red-500 w-full">
+                  <button @click="handleLogout" class="menu-item text-red-500 w-full">
                     <i class="fa-sharp fa-regular fa-arrow-right-from-bracket"></i> Logout
                   </button>
                 </template>
@@ -224,7 +241,7 @@ const navCategories = [
   { label: 'Fashion',       to: '/products?cat=Fashion',      icon: 'fa-sharp fa-solid fa-shirt' },
   { label: 'Grocery',       to: '/products?cat=Grocery',      icon: 'fa-sharp fa-solid fa-basket-shopping' },
   { label: 'Beauty',        to: '/products?cat=Beauty',       icon: 'fa-sharp fa-solid fa-pump-soap' },
-  { label: 'Home & Living', to: '/products?cat=Home',         icon: 'fa-sharp fa-solid fa-couch' },
+  { label: 'Home & Living', to: '/products?cat=Home%20%26%20Living', icon: 'fa-sharp fa-solid fa-couch' },
   { label: 'Sports',        to: '/products?cat=Sports',       icon: 'fa-sharp fa-solid fa-dumbbell' },
   { label: 'Business',      to: '/products?cat=Business',     icon: 'fa-sharp fa-solid fa-briefcase' },
   { label: 'Books',         to: '/products?cat=Books',        icon: 'fa-sharp fa-solid fa-book-open' },
@@ -232,24 +249,41 @@ const navCategories = [
 ]
 
 const suggestions = computed(() => {
-  if (!searchQ.value) return []
+  if (!searchQ.value.trim()) return []
   const q = searchQ.value.toLowerCase()
   return productStore.products
-    .filter(p => p.name.toLowerCase().includes(q))
-    .slice(0, 5)
-    .map(p => p.name)
+    .filter(p => {
+      const catMatch = !searchCategory.value || p.category === searchCategory.value
+      const textMatch =
+        p.name.toLowerCase().includes(q) ||
+        p.brand.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.tags.some(t => t.toLowerCase().includes(q))
+      return catMatch && textMatch
+    })
+    .slice(0, 6)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      brand: p.brand,
+      category: p.category,
+      price: p.price,
+      salePrice: p.salePrice,
+      image: p.images?.[0] ?? '',
+      slug: p.slug,
+    }))
 })
 
 function doSearch() {
   if (searchQ.value.trim()) {
-    router.push({ path: '/products', query: { q: searchQ.value, cat: searchCategory.value || undefined } })
+    router.push({ path: '/products', query: { q: searchQ.value.trim(), cat: searchCategory.value || undefined } })
     showSuggestions.value = false
     showMobileMenu.value = false
   }
 }
 
-function selectSuggestion(s: string) {
-  searchQ.value = s
+function selectSuggestion(name: string) {
+  searchQ.value = name
   doSearch()
 }
 
@@ -265,6 +299,11 @@ function onClickOutside(e: MouseEvent) {
   if (userMenu.value && !userMenu.value.contains(e.target as Node)) {
     showUserMenu.value = false
   }
+}
+
+async function handleLogout() {
+  showUserMenu.value = false
+  await authStore.logout()  // clears stores + redirects to home
 }
 
 // Cart bounce animation on add

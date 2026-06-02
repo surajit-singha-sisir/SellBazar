@@ -89,9 +89,22 @@ const showPw   = ref(false)
 async function login() {
   if (!phone.value || !password.value) { error.value = 'Please enter phone and password'; return }
   loading.value = true; error.value = ''
-  await new Promise(r => setTimeout(r, 1000))
-  authStore.login({ id: '1', name: 'Demo User', phone: '+880' + phone.value, division: 'Dhaka' })
-  loading.value = false
-  router.push('/')
+  try {
+    const res = await fetch('http://localhost:4000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: '+880' + phone.value, password: password.value }),
+    })
+    const data = await res.json()
+    if (!res.ok) { error.value = data.error ?? 'Login failed'; return }
+    await authStore.login(data.user)
+    // Redirect to intended page or home
+    const redirect = (router.currentRoute.value.query.redirect as string) || '/'
+    router.push(redirect)
+  } catch {
+    error.value = 'Network error — please try again'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
