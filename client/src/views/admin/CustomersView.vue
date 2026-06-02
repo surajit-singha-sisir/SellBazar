@@ -223,8 +223,8 @@ const filtered = computed(() => {
   if (loyaltyFilter.value === 'loyal') list = list.filter(c=>c.orderCount>1)
   if (loyaltyFilter.value === 'new')   list = list.filter(c=>c.orderCount===1)
   list.sort((a:any,b:any) => {
-    if (sortBy.value === 'name') return a.name.localeCompare(b.name)
-    if (sortBy.value === 'lastOrder') return b.lastOrder.localeCompare(a.lastOrder)
+    if (sortBy.value === 'name') return (a.name||'').localeCompare(b.name||'')
+    if (sortBy.value === 'lastOrder') return (b.lastOrder||'').localeCompare(a.lastOrder||'')
     return (b[sortBy.value]??0) - (a[sortBy.value]??0)
   })
   return list
@@ -298,7 +298,10 @@ watch(mapPins, () => {
 }, { deep: true })
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})
 }
 function fmtNum(n: number) { return n>=1000?(n/1000).toFixed(1)+'K':n.toLocaleString() }
 

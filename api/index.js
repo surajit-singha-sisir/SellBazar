@@ -278,9 +278,31 @@ app.get('/api/admin/dashboard', requireAdmin, (req, res) => {
 })
 app.get('/api/admin/customers', requireAdmin, (req, res) => {
   const map = {}
-  orders.forEach(o=>{ const e=o.customer&&o.customer.email||o.id; if(!map[e]) map[e]={...o.customer,orderCount:0,totalSpent:0,orders:[]}; map[e].orderCount++; map[e].totalSpent+=o.total; map[e].orders.push(o.id) })
-  const data = Object.values(map).sort((a,b)=>b.totalSpent-a.totalSpent)
-  res.json({ data, total:data.length })
+  orders.forEach(o => {
+    const e = (o.customer && o.customer.email) || o.id
+    if (!map[e]) {
+      map[e] = {
+        id: e,
+        ...o.customer,
+        orderCount: 0,
+        totalSpent: 0,
+        orders: [],
+        firstOrder: o.createdAt,
+        lastOrder: o.createdAt,
+        paymentMethod: o.paymentMethod || 'cod',
+      }
+    }
+    map[e].orderCount++
+    map[e].totalSpent += o.total
+    map[e].orders.push(o.id)
+    // track earliest and latest order dates
+    if (o.createdAt < map[e].firstOrder) map[e].firstOrder = o.createdAt
+    if (o.createdAt > map[e].lastOrder)  map[e].lastOrder  = o.createdAt
+    // use most recent payment method
+    if (o.createdAt >= map[e].lastOrder) map[e].paymentMethod = o.paymentMethod || map[e].paymentMethod
+  })
+  const data = Object.values(map).sort((a, b) => b.totalSpent - a.totalSpent)
+  res.json({ data, total: data.length })
 })
 
 // ── IMAGE UPLOAD (returns a placeholder URL since Vercel is stateless)
