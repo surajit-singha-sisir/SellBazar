@@ -163,9 +163,9 @@
             <input ref="fileInput" type="file" accept="image/*" multiple style="display:none" @change="onFileChange" />
             <i class="fa-solid fa-cloud-arrow-up" style="font-size:28px;color:var(--brand);margin-bottom:8px"></i>
             <div style="font-weight:600;font-size:13px">Drop images here or click to upload</div>
-            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">PNG, JPG, WEBP — uploaded to Cloudinary CDN</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">PNG, JPG, WEBP up to 25 MB — hosted on ImgBB CDN</div>
             <div v-if="uploading" style="margin-top:8px;color:var(--brand);font-size:12px">
-              <i class="fa-solid fa-spinner-third fa-spin"></i> Uploading to Cloudinary…
+              <i class="fa-solid fa-spinner-third fa-spin"></i> Uploading to ImgBB…
             </div>
           </div>
 

@@ -139,8 +139,42 @@ export function useAdminApi() {
     return request<{ data: ApiProduct[]; total: number }>(`/products${query}`)
   }
 
-  // ── Canvas compress helper (used only for legacy base64 cleanup on edit load) ─
-  // Resizes to ≤ 1200px and re-encodes as JPEG 0.78 quality.
+  // ── ImgBB Image Upload ────────────────────────────────────────────────────
+  // Uploads a File directly to ImgBB via multipart/form-data POST.
+  // Returns the display_url (i.ibb.co CDN link) — a real https:// URL that
+  // is stored in the product's images array, keeping the JSON payload tiny.
+  // ImgBB limit: 25 MB per image.
+  const IMGBB_API_KEY = 'f3c12080238055cf04e5a657a47ee058'
+
+  async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
+    if (!file.type.startsWith('image/')) throw new Error('Only image files are supported')
+    if (file.size > 25 * 1024 * 1024)   throw new Error('Image must be smaller than 25 MB')
+
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('name', file.name.replace(/\.[^.]+$/, ''))  // filename without extension
+
+    const res = await fetch(
+      `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+      { method: 'POST', body: formData }
+    )
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err?.error?.message ?? `ImgBB upload failed (HTTP ${res.status})`)
+    }
+
+    const json = await res.json()
+    if (!json.success) throw new Error('ImgBB upload was not successful')
+
+    // display_url is the full-size CDN image URL (i.ibb.co/…)
+    return { url: json.data.display_url as string, filename: file.name }
+  }
+
+  // ── Compress legacy base64 data URLs on edit-product load ─────────────────
+  // Any product saved before the ImgBB migration might have base64 in images[].
+  // This recompresses them so the next save doesn't 413.
+  // Real https:// URLs are passed through untouched.
   function compressImageSrc(src: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const img = new Image()
@@ -162,50 +196,6 @@ export function useAdminApi() {
     })
   }
 
-  // ── Image Upload → Cloudinary CDN (returns a real https:// URL) ──────────
-  // Requires two Vite env vars (set in .env.local / Vercel dashboard):
-  //   VITE_CLOUDINARY_CLOUD_NAME   – your Cloudinary cloud name
-  //   VITE_CLOUDINARY_UPLOAD_PRESET – an *unsigned* upload preset
-  async function uploadImage(file: File): Promise<{ url: string; filename: string }> {
-    if (!file.type.startsWith('image/')) throw new Error('Only image files are supported')
-    if (file.size > 20 * 1024 * 1024)   throw new Error('Image must be smaller than 20 MB')
-
-    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined
-    const preset    = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined
-
-    if (!cloudName || !preset || cloudName === 'your_cloud_name') {
-      throw new Error(
-        'Cloudinary is not configured.\n' +
-        'Add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET to your .env.local file ' +
-        '(or Vercel Environment Variables) then restart the dev server.\n' +
-        'See client/.env.example for instructions.'
-      )
-    }
-
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('upload_preset', preset)
-    formData.append('folder', 'sellbazar/products')
-
-    const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-      { method: 'POST', body: formData }
-    )
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err?.error?.message ?? `Cloudinary upload failed (HTTP ${res.status})`)
-    }
-
-    const data = await res.json()
-    // Use the secure_url (https) returned by Cloudinary
-    return { url: data.secure_url as string, filename: file.name }
-  }
-
-  // ── Compress legacy base64 data URLs in an images array ──────────────────
-  // Called on edit-product load so any oversized base64 images stored before
-  // the Cloudinary migration are recompressed before a re-save.
-  // Real https:// URLs (Cloudinary, Unsplash, etc.) are passed through as-is.
   async function compressImages(images: string[]): Promise<string[]> {
     return Promise.all(
       images.map(async url => {
@@ -219,9 +209,8 @@ export function useAdminApi() {
   }
 
   // ── Payload guard before every save ──────────────────────────────────────
-  // Safety net: drop any base64 blob that is still > 500 KB after compression.
-  // With Cloudinary configured this should never trigger; it only fires when
-  // someone pastes an old base64 URL that couldn't be recompressed.
+  // Safety net: drop any base64 still > 500 KB (shouldn't happen with ImgBB,
+  // but protects against legacy data that couldn't be recompressed above).
   const LIMIT_BYTES = 500 * 1024
   function sanitiseImages(images: string[]): string[] {
     if (!images?.length) return images
@@ -229,7 +218,7 @@ export function useAdminApi() {
       if (!url.startsWith('data:')) return true          // real URL — always keep
       const bytes = Math.ceil(url.length * 0.75)
       if (bytes > LIMIT_BYTES) {
-        console.warn(`[SellBazar] Dropped oversized base64 image (${Math.round(bytes / 1024)} KB) — configure Cloudinary to avoid this`)
+        console.warn(`[SellBazar] Dropped oversized base64 image (${Math.round(bytes / 1024)} KB)`)
         return false
       }
       return true
