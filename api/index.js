@@ -32,6 +32,17 @@ function requireAdmin(req, res, next) {
   } catch { return res.status(401).json({ error: 'Invalid or expired token' }) }
 }
 
+function requireSuperAdmin(req, res, next) {
+  const h = req.headers.authorization
+  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' })
+  try {
+    const p = jwt.verify(h.slice(7), JWT_SECRET)
+    if (p.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required' })
+    req.admin = p
+    next()
+  } catch { return res.status(401).json({ error: 'Invalid or expired token' }) }
+}
+
 const CATEGORIES = [
   { id:'c1',slug:'electronics',  name:'Electronics',  nameBn:'ইলেকট্রনিক্স', icon:'fa-microchip',      color:'#3b82f6', subcategories:[{id:'s1-1',slug:'mobile-phones',name:'Mobile Phones',nameBn:'মোবাইল ফোন',icon:'fa-mobile-screen'},{id:'s1-2',slug:'laptops',name:'Laptops',nameBn:'ল্যাপটপ',icon:'fa-laptop'},{id:'s1-3',slug:'tablets',name:'Tablets',nameBn:'ট্যাবলেট',icon:'fa-tablet-screen-button'},{id:'s1-4',slug:'headphones',name:'Headphones',nameBn:'হেডফোন',icon:'fa-headphones'},{id:'s1-5',slug:'smart-watches',name:'Smart Watches',nameBn:'স্মার্টওয়াচ',icon:'fa-watch-smart'},{id:'s1-6',slug:'cameras',name:'Cameras',nameBn:'ক্যামেরা',icon:'fa-camera'},{id:'s1-7',slug:'televisions',name:'Televisions',nameBn:'টেলিভিশন',icon:'fa-tv'},{id:'s1-8',slug:'accessories',name:'Accessories',nameBn:'আনুষাঙ্গিক',icon:'fa-plug'}]},
   { id:'c2',slug:'fashion',      name:'Fashion',      nameBn:'ফ্যাশন',         icon:'fa-shirt',           color:'#ec4899', subcategories:[{id:'s2-1',slug:'mens-clothing',name:"Men's Clothing",nameBn:'পুরুষ পোশাক',icon:'fa-person'},{id:'s2-2',slug:'womens-clothing',name:"Women's Clothing",nameBn:'মহিলা পোশাক',icon:'fa-person-dress'},{id:'s2-3',slug:'kids-clothing',name:"Kids' Clothing",nameBn:'শিশু পোশাক',icon:'fa-child'},{id:'s2-4',slug:'footwear',name:'Footwear',nameBn:'জুতা',icon:'fa-shoe-prints'},{id:'s2-5',slug:'sarees',name:'Sarees',nameBn:'শাড়ি',icon:'fa-scarf'},{id:'s2-6',slug:'bags-wallets',name:'Bags & Wallets',nameBn:'ব্যাগ ও মানিব্যাগ',icon:'fa-bag-shopping'},{id:'s2-7',slug:'ethnic-wear',name:'Ethnic Wear',nameBn:'ঐতিহ্যবাহী পোশাক',icon:'fa-vest'}]},
@@ -126,10 +137,11 @@ app.post('/api/auth/check', (req, res) => {
 // ── ADMIN AUTH
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body
-  const admin = ADMIN_ACCOUNTS.find(a => a.email===email && a.password===password)
-  if (!admin) return res.status(401).json({ error:'Invalid credentials' })
-  const token = jwt.sign({ id:admin.id, email:admin.email, role:admin.role }, JWT_SECRET, { expiresIn:'24h' })
-  res.json({ token, admin:{ id:admin.id, email:admin.email, role:admin.role, name:admin.name } })
+  const admin = ADMIN_ACCOUNTS.find(a => a.email === email && a.password === password)
+  if (!admin) return res.status(401).json({ error: 'Invalid credentials' })
+  if (admin.active === false) return res.status(403).json({ error: 'Account is disabled. Contact your superadmin.' })
+  const token = jwt.sign({ id: admin.id, email: admin.email, role: admin.role }, JWT_SECRET, { expiresIn: '24h' })
+  res.json({ token, admin: { id: admin.id, email: admin.email, role: admin.role, name: admin.name } })
 })
 app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ admin:req.admin }))
 app.post('/api/admin/logout', requireAdmin, (_, res) => res.json({ message:'Logged out' }))
@@ -303,6 +315,70 @@ app.get('/api/admin/customers', requireAdmin, (req, res) => {
   })
   const data = Object.values(map).sort((a, b) => b.totalSpent - a.totalSpent)
   res.json({ data, total: data.length })
+})
+
+// ── ADMIN MANAGEMENT (superadmin only) ───────────────────────────────────────
+// List all admins (passwords stripped)
+app.get('/api/admin/admins', requireSuperAdmin, (req, res) => {
+  const data = ADMIN_ACCOUNTS.map(({ password: _, ...a }) => a)
+  res.json({ data, total: data.length })
+})
+
+// Create new admin
+app.post('/api/admin/admins', requireSuperAdmin, (req, res) => {
+  const { name, email, password, role } = req.body
+  if (!name || !email || !password) return res.status(400).json({ error: 'name, email and password are required' })
+  const validRoles = ['admin', 'manager', 'editor', 'viewer']
+  if (role && !validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role. Use: admin, manager, editor, viewer' })
+  if (ADMIN_ACCOUNTS.find(a => a.email === email)) return res.status(409).json({ error: 'Email already in use' })
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
+  const a = { id: 'admin-' + Date.now(), name, email, password, role: role || 'admin', active: true, createdAt: new Date().toISOString() }
+  ADMIN_ACCOUNTS.push(a)
+  const { password: _, ...safe } = a
+  res.status(201).json(safe)
+})
+
+// Update admin (role, name, active — NOT password for now)
+app.put('/api/admin/admins/:id', requireSuperAdmin, (req, res) => {
+  const idx = ADMIN_ACCOUNTS.findIndex(a => a.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Admin not found' })
+  const target = ADMIN_ACCOUNTS[idx]
+  // Cannot demote or edit the primary superadmin (admin-1)
+  if (target.id === 'admin-1' && req.body.role && req.body.role !== 'superadmin')
+    return res.status(403).json({ error: 'Cannot change the primary superadmin role' })
+  const allowed = ['name', 'role', 'active']
+  const validRoles = ['superadmin', 'admin', 'manager', 'editor', 'viewer']
+  if (req.body.role && !validRoles.includes(req.body.role))
+    return res.status(400).json({ error: 'Invalid role' })
+  allowed.forEach(k => { if (req.body[k] !== undefined) target[k] = req.body[k] })
+  // If password change requested
+  if (req.body.password) {
+    if (req.body.password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    target.password = req.body.password
+  }
+  const { password: _, ...safe } = target
+  res.json(safe)
+})
+
+// Delete admin
+app.delete('/api/admin/admins/:id', requireSuperAdmin, (req, res) => {
+  if (req.params.id === 'admin-1') return res.status(403).json({ error: 'Cannot delete the primary superadmin' })
+  // Cannot delete yourself
+  if (req.params.id === req.admin.id) return res.status(403).json({ error: 'Cannot delete your own account' })
+  const idx = ADMIN_ACCOUNTS.findIndex(a => a.id === req.params.id)
+  if (idx === -1) return res.status(404).json({ error: 'Admin not found' })
+  const [d] = ADMIN_ACCOUNTS.splice(idx, 1)
+  res.json({ message: 'Admin deleted', id: d.id })
+})
+
+// Reset password (superadmin only)
+app.post('/api/admin/admins/:id/reset-password', requireSuperAdmin, (req, res) => {
+  const { newPassword } = req.body
+  if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' })
+  const a = ADMIN_ACCOUNTS.find(a => a.id === req.params.id)
+  if (!a) return res.status(404).json({ error: 'Admin not found' })
+  a.password = newPassword
+  res.json({ message: 'Password updated successfully' })
 })
 
 // ── IMAGE UPLOAD (returns a placeholder URL since Vercel is stateless)
