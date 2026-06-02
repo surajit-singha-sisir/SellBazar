@@ -1,16 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "npm install --prefix client && npm install --prefix server && cd client && npx --yes vite build && cd ../server && npx --yes tsc",
+  "buildCommand": "cd client && npx vite build",
   "outputDirectory": "client/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/((?!api).*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/index.ts": {
-      "runtime": "nodejs20.x",
-      "memory": 512,
-      "maxDuration": 10
-    }
-  }
+  ]
 }
