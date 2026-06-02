@@ -613,15 +613,29 @@ function moveImage(idx: number, dir: -1 | 1) {
   const tmp = form.images[idx]; form.images[idx] = form.images[to]; form.images[to] = tmp
 }
 
+// Generate a URL-safe slug from a product name
+function makeSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .substring(0, 80)
+}
+
 async function submitForm() {
   formError.value = ''
   const resolvedCategory = form.category === '__custom__' ? customCategory.value.trim() : form.category
   if (!form.name.trim() || !form.brand.trim() || !resolvedCategory || form.price <= 0) {
     formError.value = 'Please fill all required fields.'; return
   }
+  // Always include a slug so the store link and public URL work immediately
+  const slug = isEdit.value ? currentSlug.value : makeSlug(form.name.trim())
   const payload = {
     name: form.name.trim(), nameBn: form.nameBn.trim() || form.name.trim(),
     brand: form.brand.trim(),
+    slug,
     category: resolvedCategory, subcategory: form.subcategory.trim() || undefined,
     categoryBn: resolvedCategory,
     seller: form.seller.trim() || form.brand.trim(),
@@ -639,7 +653,10 @@ async function submitForm() {
       await adminStore.updateProduct(String(route.params.id), payload)
       showToast(`"${form.name}" updated`)
     } else {
-      await adminStore.createProduct(payload)
+      const created = await adminStore.createProduct(payload)
+      // Update currentSlug with the server-confirmed slug so the store link
+      // on this page reflects the real URL immediately.
+      if (created?.slug) currentSlug.value = created.slug
       showToast(`"${form.name}" created`)
     }
     setTimeout(() => router.push('/admin/products'), 1200)

@@ -164,7 +164,25 @@ app.get('/api/products/:slug', (req, res) => {
   res.json(p)
 })
 app.post('/api/products', requireAdmin, (req, res) => {
-  const p = { id:Date.now().toString(), ...req.body, createdAt:new Date().toISOString() }
+  // Generate a slug from the product name if not provided
+  function makeSlug(name) {
+    return name
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')   // strip special chars
+      .trim()
+      .replace(/\s+/g, '-')       // spaces → hyphens
+      .replace(/-+/g, '-')        // collapse multiple hyphens
+      .substring(0, 80)           // max length
+  }
+  const id = Date.now().toString()
+  const baseSlug = req.body.slug || makeSlug(req.body.name || id)
+  // Ensure slug is unique within the products array
+  let slug = baseSlug
+  let suffix = 1
+  while (products.find(p => p.slug === slug)) {
+    slug = `${baseSlug}-${suffix++}`
+  }
+  const p = { id, ...req.body, slug, createdAt:new Date().toISOString() }
   products.unshift(p); res.status(201).json(p)
 })
 app.put('/api/products/:id', requireAdmin, (req, res) => {

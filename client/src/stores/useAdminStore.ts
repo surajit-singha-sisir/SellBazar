@@ -152,9 +152,11 @@ export const useAdminStore = defineStore('admin', () => {
     loading.value.saving = true
     try {
       const created = await api.createProduct(data)
-      // Update admin store
+      // Update admin store list
       products.value.unshift(created)
-      // ── Sync public product store so client views update immediately ──────
+      // ── Sync public product store with the server-returned object ─────────
+      // Use the created object (which has the server-assigned id + slug) so
+      // the store link and ProductDetailView resolve correctly.
       const productStore = useProductStore()
       productStore.products.unshift(created as any)
       return created

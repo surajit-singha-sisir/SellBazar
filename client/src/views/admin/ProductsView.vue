@@ -138,10 +138,11 @@
               </div>
             </td>
             <td>
-              <RouterLink :to="`/products/${p.slug}`" target="_blank"
+              <RouterLink v-if="p.slug" :to="`/products/${p.slug}`" target="_blank"
                 class="admin-btn ghost" style="padding:5px 8px;font-size:11px" title="View store page">
                 <i class="fa-solid fa-arrow-up-right-from-square"></i>
               </RouterLink>
+              <span v-else style="font-size:11px;color:var(--text-secondary)" title="No slug — resave to fix">—</span>
             </td>
             <td>
               <div style="display:flex;gap:6px">
