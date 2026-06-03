@@ -547,25 +547,33 @@ onMounted(async () => {
 
   if (!adminStore.products.length) await adminStore.loadProducts()
   if (isEdit.value) {
-    const p = adminStore.products.find(x => x.id === route.params.id)
+    // 1. Try the in-memory store first (fast path)
+    let p: any = adminStore.products.find(x => x.id === route.params.id || x.slug === route.params.id)
+    // 2. If not found locally, fetch directly from API by id (handles direct URL navigation + page refresh)
+    if (!p) {
+      try {
+        const res = await fetch(`/api/products/${encodeURIComponent(String(route.params.id))}`, { cache: 'no-store' })
+        if (res.ok) p = await res.json()
+      } catch { /* handled below */ }
+    }
     if (p) {
       Object.assign(form, {
         name: p.name, nameBn: p.nameBn ?? '', brand: p.brand,
         category: p.category, subcategory: p.subcategory ?? '',
-        seller: p.seller, description: p.description,
-        price: p.price, salePrice: p.salePrice,
-        stock: p.stock, deliveryDays: p.deliveryDays, rating: p.rating,
-        location: p.location, isFeatured: p.isFeatured ?? false,
+        seller: p.seller ?? '', description: p.description ?? '',
+        price: p.price, salePrice: p.salePrice ?? 0,
+        stock: p.stock, deliveryDays: p.deliveryDays ?? 3, rating: p.rating ?? 4.5,
+        location: p.location ?? 'Dhaka', isFeatured: p.isFeatured ?? false,
         isNew: p.isNew ?? false, images: [...(p.images ?? [])],
       })
       tagsInput.value = (p.tags ?? []).join(', ')
-      currentSlug.value = p.slug
-      // Populate Quill with existing description
+      currentSlug.value = p.slug ?? ''
       if (quillInstance && p.description) {
         quillInstance.clipboard.dangerouslyPasteHTML(p.description)
       }
-      // Recompress any oversized legacy data URLs so the next save never 413s
       form.images = await api.compressImages(form.images)
+    } else {
+      formError.value = `Product not found (id: ${route.params.id})`
     }
   }
 })

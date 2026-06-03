@@ -1006,6 +1006,50 @@ app.post('/api/admin/admins/:id/reset-password', requireSuperAdmin, async (req, 
   res.json({ message: 'Password updated successfully' })
 })
 
+// ──────────────────────────────────────────────────────────────────────────────
+// SERVER-SENT EVENTS — live data stream
+// ──────────────────────────────────────────────────────────────────────────────
+// Vercel serverless functions don't support persistent SSE connections, so we
+// send ONE snapshot event and close. The client reconnects every 30s naturally
+// via the browser's built-in EventSource reconnect behaviour.
+// In a real Node server (local dev with the server/ package) this stays open.
+
+app.get('/api/events', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders()
+
+  try {
+    const [allProducts, allOrders] = await Promise.all([getAllProducts(), getAllOrders()])
+    const snapshot = JSON.stringify({ products: allProducts, orders: allOrders })
+    res.write(`event: snapshot\ndata: ${snapshot}\n\n`)
+    // Also send as orders_updated + products_updated so both SSE handlers fire
+    res.write(`event: orders_updated\ndata: ${JSON.stringify(allOrders)}\n\n`)
+    res.write(`event: products_updated\ndata: ${JSON.stringify(allProducts)}\n\n`)
+  } catch (e) {
+    res.write(`event: error\ndata: ${JSON.stringify({ message: e.message })}\n\n`)
+  }
+
+  // Keep alive for 25s then close (Vercel has a 30s function timeout)
+  // The client's EventSource will auto-reconnect with a 3s delay
+  const heartbeat = setInterval(() => {
+    try { res.write(': heartbeat\n\n') } catch { clearInterval(heartbeat) }
+  }, 5000)
+
+  req.on('close', () => {
+    clearInterval(heartbeat)
+    res.end()
+  })
+
+  // Serverless safety: close after 25s
+  setTimeout(() => {
+    clearInterval(heartbeat)
+    try { res.write(': end\n\n'); res.end() } catch {}
+  }, 25000)
+})
+
 // Public: upload review image via ImgBB (no auth required)
 app.post('/api/upload/imgbb', async (req, res) => {
   const { base64, name } = req.body

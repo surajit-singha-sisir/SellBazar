@@ -4,17 +4,25 @@
   "outputDirectory": "client/dist",
   "functions": {
     "api/index.js": {
-      "maxDuration": 10,
+      "maxDuration": 30,
       "memory": 256
     }
   },
   "headers": [
     {
+      "source": "/api/events",
+      "headers": [
+        { "key": "Cache-Control",     "value": "no-store, no-cache" },
+        { "key": "X-Accel-Buffering", "value": "no" },
+        { "key": "Connection",        "value": "keep-alive" }
+      ]
+    },
+    {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
-        { "key": "Pragma",        "value": "no-cache" },
-        { "key": "Surrogate-Control", "value": "no-store" }
+        { "key": "Cache-Control",       "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma",              "value": "no-cache" },
+        { "key": "Surrogate-Control",   "value": "no-store" }
       ]
     }
   ],

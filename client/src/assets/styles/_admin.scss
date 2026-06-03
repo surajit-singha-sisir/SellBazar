@@ -339,6 +339,174 @@
   &:active { transform: scale(0.97); }
 }
 
+// ── Admin Page Wrap ──────────────────────────────────────────────────────────
+.admin-page-wrap {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+// ── Admin Card ───────────────────────────────────────────────────────────────
+.admin-card {
+  background: var(--surface);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+// ── Admin Input & Select ─────────────────────────────────────────────────────
+.admin-input {
+  padding: 9px 14px;
+  background: var(--admin-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+
+  &::placeholder { color: var(--text-secondary); }
+  &:focus { border-color: var(--brand); }
+
+  &[type="number"] { -moz-appearance: textfield; }
+  &[type="number"]::-webkit-inner-spin-button,
+  &[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+}
+
+select.admin-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+// ── Misc quick-stat helpers ──────────────────────────────────────────────────
+.quick-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sidebar-border);
+  font-size: 13px;
+  &:last-child { border-bottom: none; }
+}
+.quick-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  i { font-size: 15px; flex-shrink: 0; }
+}
+.quick-stat-val {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+// ── Top product row ──────────────────────────────────────────────────────────
+.top-product-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--sidebar-border);
+  &:last-child { border-bottom: none; }
+}
+.top-product-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface-hover);
+}
+.top-product-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ── Period filter bar ────────────────────────────────────────────────────────
+.period-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.period-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--sidebar-border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  &:hover { background: var(--surface-hover); color: var(--text-primary); }
+  &.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: white;
+  }
+}
+.period-info {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 6px;
+}
+
+// ── Sub category select (dashboard) ─────────────────────────────────────────
+.sub-cat-select {
+  padding: 5px 28px 5px 10px;
+  background: var(--admin-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  &:focus { border-color: var(--brand); }
+}
+.sub-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(249,115,22,0.12);
+  color: var(--brand);
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 4px;
+  button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    &:hover { opacity: 0.7; }
+  }
+}
+
 // ── Mini progress bar ────────────────────────────────────────────────────────
 .admin-progress {
   height: 5px;

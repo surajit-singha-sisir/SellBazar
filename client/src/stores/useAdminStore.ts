@@ -142,7 +142,7 @@ export const useAdminStore = defineStore('admin', () => {
 
   // ── Load actions ──────────────────────────────────────────────────────────
   async function loadAll() {
-    await Promise.all([loadProducts(), loadOrders(), checkHealth(), loadDashboard()])
+    await Promise.all([loadProducts(), loadOrders(), loadCustomers(), checkHealth(), loadDashboard()])
   }
 
   async function loadDashboard() {

@@ -367,6 +367,25 @@ const sseStatus = computed(() =>
 .topbar-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .theme-toggle-wrap { display: flex; align-items: center; }
 
+/* ── SSE live pill ──────────────────────────────────────────────────────── */
+.sse-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 20px; font-size: 10px; font-weight: 700;
+  border: 1px solid; white-space: nowrap; transition: all 0.3s;
+}
+.sse-pill.live {
+  background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: #22c55e;
+}
+.sse-pill.reconnecting {
+  background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.3); color: #f97316;
+}
+.sse-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  animation: sse-pulse 2s infinite;
+}
+@keyframes sse-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+.sse-label { letter-spacing: 0.03em; }
+
 /* ── Admin user menu ────────────────────────────────────────────────────── */
 .admin-user-menu { position: relative; }
 .admin-user-btn {
