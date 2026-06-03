@@ -194,6 +194,20 @@
           <span class="quick-stat-label"><i class="fa-sharp-duotone fa-solid fa-bag-shopping" style="color:#f97316"></i> Period Orders</span>
           <span class="quick-stat-val">{{ filteredOrders.length }}</span>
         </div>
+        <div class="quick-stat-row">
+          <span class="quick-stat-label"><i class="fa-sharp-duotone fa-solid fa-message-star" style="color:#fbbf24"></i> Total Reviews</span>
+          <span class="quick-stat-val">{{ adminStore.dashboard?.totalReviews ?? '—' }}</span>
+        </div>
+        <div class="quick-stat-row" v-if="(adminStore.dashboard?.pendingReviews ?? 0) > 0">
+          <span class="quick-stat-label"><i class="fa-sharp-duotone fa-solid fa-clock" style="color:#f97316"></i> Pending Reviews</span>
+          <RouterLink to="/admin/reviews" class="quick-stat-val" style="color:#f97316;text-decoration:none">
+            {{ adminStore.dashboard?.pendingReviews }} <i class="fa-solid fa-arrow-right" style="font-size:10px"></i>
+          </RouterLink>
+        </div>
+        <div class="quick-stat-row">
+          <span class="quick-stat-label"><i class="fa-sharp-duotone fa-solid fa-star-half-stroke" style="color:#fbbf24"></i> Review Avg Rating</span>
+          <span class="quick-stat-val">{{ adminStore.dashboard?.reviewAvgRating ?? '—' }}</span>
+        </div>
       </div>
     </div>
 
@@ -266,7 +280,7 @@
     </div>
 
     <!-- Customer Map -->
-    <div class="admin-chart-card" style="padding:0;margin-top:0">
+    <div class="admin-chart-card" style="padding:0;margin-top:0;margin-bottom:20px">
       <div class="chart-header" style="padding:16px 20px 0">
         <div>
           <div class="chart-title">Customer Locations</div>
@@ -277,6 +291,72 @@
         </RouterLink>
       </div>
       <div ref="dashMapEl" style="height:320px;border-radius:0 0 14px 14px;z-index:1"></div>
+    </div>
+
+    <!-- Recent Reviews -->
+    <div class="admin-chart-card" style="padding:0">
+      <div class="chart-header" style="padding:16px 20px 0">
+        <div>
+          <div class="chart-title">Recent Reviews</div>
+          <div class="chart-subtitle">
+            Latest customer feedback
+            <span v-if="(adminStore.dashboard?.pendingReviews ?? 0) > 0"
+              style="margin-left:8px;background:rgba(249,115,22,.15);color:#f97316;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">
+              {{ adminStore.dashboard?.pendingReviews }} pending
+            </span>
+          </div>
+        </div>
+        <RouterLink to="/admin/reviews" class="admin-btn ghost" style="padding:6px 10px;font-size:12px">
+          Manage <i class="fa-solid fa-arrow-right"></i>
+        </RouterLink>
+      </div>
+      <div v-if="isLoading" style="padding:20px;text-align:center;color:var(--text-secondary);font-size:13px">
+        <i class="fa-solid fa-spinner-third fa-spin"></i> Loading reviews…
+      </div>
+      <div v-else-if="!adminStore.dashboard?.recentReviews?.length" style="padding:24px;text-align:center;color:var(--text-secondary);font-size:13px">
+        <i class="fa-sharp-duotone fa-solid fa-star" style="font-size:24px;opacity:.2;display:block;margin-bottom:8px"></i>
+        No reviews yet — they'll appear here once customers start reviewing products.
+      </div>
+      <div v-else class="admin-table-wrap" style="border:none;border-radius:0">
+        <table class="admin-table">
+          <thead><tr>
+            <th>Reviewer</th><th>Product</th><th>Rating</th><th>Review</th><th>Date</th><th>Status</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="r in adminStore.dashboard.recentReviews" :key="r.id">
+              <td>
+                <div style="font-size:13px;font-weight:600;color:var(--text-primary)">{{ r.userName }}</div>
+                <div style="font-size:11px;color:var(--text-secondary)">{{ r.userEmail }}</div>
+              </td>
+              <td>
+                <RouterLink :to="`/products/${r.productSlug}`" target="_blank"
+                  style="font-size:12px;color:var(--brand);text-decoration:none;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block"
+                  :title="r.productName ?? r.productSlug">
+                  {{ r.productName ?? r.productSlug }}
+                  <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:9px;opacity:.6"></i>
+                </RouterLink>
+              </td>
+              <td>
+                <div style="display:flex;gap:2px">
+                  <i v-for="n in 5" :key="n"
+                    :class="n <= r.rating ? 'fa-sharp fa-solid fa-star' : 'fa-sharp fa-regular fa-star'"
+                    style="font-size:11px;color:#fbbf24"></i>
+                </div>
+              </td>
+              <td style="max-width:200px">
+                <p v-if="r.title" style="font-size:12px;font-weight:600;margin:0 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</p>
+                <p style="font-size:12px;color:var(--text-secondary);margin:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">{{ r.body }}</p>
+              </td>
+              <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">{{ fmtDate(r.createdAt) }}</td>
+              <td>
+                <span class="status-badge" :class="r.status === 'approved' ? 'delivered' : r.status === 'rejected' ? 'cancelled' : 'processing'">
+                  {{ r.status }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>

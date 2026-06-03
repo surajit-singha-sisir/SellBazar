@@ -73,6 +73,17 @@ export interface DashboardStats {
   revenueByStatus: { status: string; total: number; count: number }[]
   categoryBreakdown: { name: string; count: number }[]
   recentOrders: ApiOrder[]
+  // Reviews
+  totalReviews: number
+  pendingReviews: number
+  approvedReviews: number
+  reviewAvgRating: number
+  recentReviews: Array<{
+    id: string; productSlug: string; productName?: string
+    userName: string; userEmail: string; rating: number
+    title: string; body: string; status: string
+    helpful: number; createdAt: string
+  }>
 }
 
 export interface AdminUser {

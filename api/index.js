@@ -839,21 +839,80 @@ app.post('/api/user/wishlist', (req,res) => { const u=uid(req); if(!u) return re
 // ──────────────────────────────────────────────────────────────────────────────
 
 app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
-  const [allProducts, allOrders] = await Promise.all([getAllProducts(), getAllOrders()])
+  const [allProducts, allOrders, allReviews] = await Promise.all([
+    getAllProducts(), getAllOrders(), getAllReviews()
+  ])
   const paid = allOrders.filter(o => o.paymentStatus === 'paid')
   const totalRevenue = paid.reduce((s, o) => s + o.total, 0)
   const statusCounts = allOrders.reduce((a, o) => { a[o.status] = (a[o.status] || 0) + 1; return a }, {})
   const catMap = {}
   allProducts.forEach(p => { catMap[p.category] = (catMap[p.category] || 0) + 1 })
+
+  // Revenue over last 7 days
+  const now = Date.now()
+  const last7Days = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now - i * 86400000)
+    const dateStr = d.toISOString().slice(0, 10)
+    const dayOrders = allOrders.filter(o => o.createdAt && o.createdAt.slice(0, 10) === dateStr)
+    last7Days.push({
+      date: dateStr,
+      revenue: dayOrders.filter(o => o.paymentStatus === 'paid').reduce((s, o) => s + o.total, 0),
+      orders: dayOrders.length,
+    })
+  }
+
+  // Revenue by status
+  const revenueByStatus = ['pending','processing','shipped','delivered','cancelled'].map(status => ({
+    status,
+    total: allOrders.filter(o => o.status === status).reduce((s, o) => s + o.total, 0),
+    count: allOrders.filter(o => o.status === status).length,
+  }))
+
+  // This/last month
+  const now2 = new Date()
+  const thisMonth = now2.getMonth(), thisYear = now2.getFullYear()
+  const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1
+  const lastYear  = thisMonth === 0 ? thisYear - 1 : thisYear
+  const inMonth = (iso, m, y) => { const d = new Date(iso); return d.getMonth() === m && d.getFullYear() === y }
+  const thisMonthRevenue = paid.filter(o => inMonth(o.createdAt, thisMonth, thisYear)).reduce((s,o)=>s+o.total,0)
+  const lastMonthRevenue = paid.filter(o => inMonth(o.createdAt, lastMonth, lastYear)).reduce((s,o)=>s+o.total,0)
+  const revenueGrowth = lastMonthRevenue > 0
+    ? Number(((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1))
+    : 0
+  const uniqueCustomers = [...new Set(allOrders.map(o => o.customer?.email).filter(Boolean))].length
+  const outOfStock = allProducts.filter(p => p.stock === 0).length
+  const avgRating = allProducts.length
+    ? Math.round(allProducts.reduce((s, p) => s + (p.rating || 0), 0) / allProducts.length * 10) / 10
+    : 0
+
+  // Review stats
+  const approvedReviews = allReviews.filter(r => r.status === 'approved')
+  const pendingReviews  = allReviews.filter(r => r.status === 'pending')
+  const reviewAvgRating = approvedReviews.length
+    ? Math.round(approvedReviews.reduce((s, r) => s + r.rating, 0) / approvedReviews.length * 10) / 10
+    : 0
+  const recentReviews = [...allReviews]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5)
+
   res.json({
-    totalRevenue,
+    totalRevenue, thisMonthRevenue, lastMonthRevenue, revenueGrowth,
     totalOrders: allOrders.length,
     totalProducts: allProducts.length,
     lowStockCount: allProducts.filter(p => p.stock < 25).length,
+    outOfStock, avgRating, uniqueCustomers,
     statusCounts,
     pendingOrders: (statusCounts.pending || 0) + (statusCounts.processing || 0),
     categoryBreakdown: Object.entries(catMap).map(([name, count]) => ({ name, count })),
     recentOrders: [...allOrders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5),
+    last7Days, revenueByStatus,
+    // Reviews
+    totalReviews: allReviews.length,
+    pendingReviews: pendingReviews.length,
+    approvedReviews: approvedReviews.length,
+    reviewAvgRating,
+    recentReviews,
   })
 })
 
