@@ -21,31 +21,44 @@ app.use(cors({
 }))
 app.use(express.json())
 
-// ── Vercel KV persistence layer ───────────────────────────────────────────────
-// When KV_REST_API_URL + KV_REST_API_TOKEN env vars are present (Vercel KV is
-// connected) we persist dynamic product changes there so they survive across
-// serverless lambda invocations.  Without those vars (local dev) we fall back
-// to module-level in-memory state — behaviour is identical to before.
+// ── Upstash Redis persistence layer ──────────────────────────────────────────
+// Vercel KV was sunset Dec 2024 and migrated to Upstash Redis.
+// New projects: install "Upstash for Redis" from Vercel Marketplace →
+//   vercel.com/marketplace/upstash/upstash-kv
+// This auto-injects UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.
+//
+// Also supports the legacy Vercel KV env var names for backwards compat:
+//   KV_REST_API_URL / KV_REST_API_TOKEN
+//
+// Without either set (local dev), falls back to in-memory — same as before.
 //
 // KV key schema:
 //   "sb:product:<slug>"  → single product JSON object
-//   "sb:product_ids"     → JSON array of slugs for dynamic (admin-created) products
-//   "sb:deleted_slugs"   → JSON array of seed-product slugs that were deleted
+//   "sb:product_ids"     → JSON array of slugs for admin-created products
+//   "sb:deleted_slugs"   → JSON array of seed slugs that were deleted
 //
-const KV_URL   = process.env.KV_REST_API_URL
-const KV_TOKEN = process.env.KV_REST_API_TOKEN
+const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || process.env.KV_REST_API_URL
+const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN  || process.env.KV_REST_API_TOKEN
 const KV_ENABLED = !!(KV_URL && KV_TOKEN)
+
+// Upstash REST API uses path-style commands:
+//   GET  <base>/get/<key>           → { result: value | null }
+//   POST <base>/set/<key>/<value>   → { result: "OK" }
+//   POST <base>/del/<key>           → { result: 0|1 }
+// Values are always strings; we JSON-encode objects ourselves.
+const KV_HEADERS = () => ({
+  Authorization: `Bearer ${KV_TOKEN}`,
+  'Content-Type': 'application/json',
+})
 
 async function kvGet(key) {
   if (!KV_ENABLED) return null
   try {
-    const res = await fetch(`${KV_URL}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${KV_TOKEN}` },
-    })
+    const res  = await fetch(`${KV_URL}/get/${encodeURIComponent(key)}`, { headers: KV_HEADERS() })
+    if (!res.ok) return null
     const json = await res.json()
-    // Vercel KV REST returns { result: <value> }
-    // Values are stored as JSON strings, so parse if string
     if (json.result === null || json.result === undefined) return null
+    // Upstash returns strings; we stored JSON so parse it back
     if (typeof json.result === 'string') {
       try { return JSON.parse(json.result) } catch { return json.result }
     }
@@ -56,97 +69,75 @@ async function kvGet(key) {
 async function kvSet(key, value) {
   if (!KV_ENABLED) return
   try {
-    await fetch(`${KV_URL}/set/${encodeURIComponent(key)}`, {
+    // Upstash: POST /set/<key>/<value>  — value must be a string
+    const encoded = encodeURIComponent(JSON.stringify(value))
+    await fetch(`${KV_URL}/set/${encodeURIComponent(key)}/${encoded}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: JSON.stringify(value) }),
+      headers: KV_HEADERS(),
     })
   } catch (e) { console.error('[KV set]', key, e.message) }
 }
 
-// ── In-memory fallback (local dev / KV not connected) ────────────────────────
-// _dynamicProducts holds admin-created/updated products when KV is disabled.
-// _deletedSlugs holds seed slugs deleted in-session.
-const _dynamicProducts = []   // { slug, ...product }
+async function kvDel(key) {
+  if (!KV_ENABLED) return
+  try {
+    await fetch(`${KV_URL}/del/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: KV_HEADERS(),
+    })
+  } catch (e) { console.error('[KV del]', key, e.message) }
+}
+
+// ── In-memory fallback (local dev / Redis not connected) ─────────────────────
+const _dynamicProducts = []
 const _deletedSlugs    = new Set()
 
-// ── Helper: get all products (seed + dynamic, minus deleted) ─────────────────
-// Returns a merged, deduplicated array.  Dynamic products override seed products
-// with the same slug (handles in-session edits of seed products).
+// ── getAllProducts: seed + KV dynamic, minus deleted ─────────────────────────
 async function getAllProducts() {
-  // 1. Start with seed products, filtering out any that were deleted
-  const deleted = KV_ENABLED
-    ? (await kvGet('sb:deleted_slugs') ?? [])
-    : [..._deletedSlugs]
-
+  const deleted    = KV_ENABLED ? (await kvGet('sb:deleted_slugs') ?? []) : [..._deletedSlugs]
   const deletedSet = new Set(deleted)
-  let merged = products.filter(p => !deletedSet.has(p.slug))
+  let merged       = products.filter(p => !deletedSet.has(p.slug))
 
-  // 2. Load dynamic product slugs
   const dynamicSlugs = KV_ENABLED
     ? (await kvGet('sb:product_ids') ?? [])
     : _dynamicProducts.map(p => p.slug)
 
-  // 3. For each dynamic slug, load the product and merge (override or append)
   const dynamics = await Promise.all(
     dynamicSlugs.map(slug =>
-      KV_ENABLED ? kvGet(`sb:product:${slug}`) : _dynamicProducts.find(p => p.slug === slug)
+      KV_ENABLED ? kvGet(`sb:product:${slug}`) : Promise.resolve(_dynamicProducts.find(p => p.slug === slug))
     )
   )
 
   for (const dp of dynamics) {
     if (!dp) continue
-    const existingIdx = merged.findIndex(p => p.slug === dp.slug || p.id === dp.id)
-    if (existingIdx !== -1) {
-      merged[existingIdx] = dp   // override seed entry with edited version
-    } else {
-      merged.unshift(dp)         // brand-new product → put first
-    }
+    const idx = merged.findIndex(p => p.slug === dp.slug || p.id === dp.id)
+    if (idx !== -1) merged[idx] = dp          // override seed entry (edit)
+    else merged.unshift(dp)                    // brand-new product → front
   }
-
   return merged
 }
 
-// ── Helper: save a dynamic product (create or update) ────────────────────────
+// ── saveDynamicProduct: persist create/update ─────────────────────────────────
 async function saveDynamicProduct(p) {
   if (KV_ENABLED) {
-    // Persist the product itself
     await kvSet(`sb:product:${p.slug}`, p)
-    // Add slug to the dynamic ID list (deduplicated)
     const ids = (await kvGet('sb:product_ids')) ?? []
-    if (!ids.includes(p.slug)) {
-      ids.unshift(p.slug)
-      await kvSet('sb:product_ids', ids)
-    }
+    if (!ids.includes(p.slug)) { ids.unshift(p.slug); await kvSet('sb:product_ids', ids) }
   } else {
     const idx = _dynamicProducts.findIndex(x => x.slug === p.slug || x.id === p.id)
-    if (idx !== -1) _dynamicProducts[idx] = p
-    else _dynamicProducts.unshift(p)
+    if (idx !== -1) _dynamicProducts[idx] = p; else _dynamicProducts.unshift(p)
   }
 }
 
-// ── Helper: mark a product as deleted ────────────────────────────────────────
+// ── markDeleted: remove from KV and hide seed entries ─────────────────────────
 async function markDeleted(slug) {
   if (KV_ENABLED) {
-    // Remove from dynamic IDs list
     const ids = (await kvGet('sb:product_ids')) ?? []
-    const newIds = ids.filter(s => s !== slug)
-    await kvSet('sb:product_ids', newIds)
-    // Also delete the KV entry for this product
-    try {
-      await fetch(`${KV_URL}/del/${encodeURIComponent(`sb:product:${slug}`)}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${KV_TOKEN}` },
-      })
-    } catch {}
-    // If it's a seed product, record it in deleted_slugs so it's filtered out
-    const isSeed = products.find(p => p.slug === slug)
-    if (isSeed) {
-      const deleted = (await kvGet('sb:deleted_slugs')) ?? []
-      if (!deleted.includes(slug)) {
-        deleted.push(slug)
-        await kvSet('sb:deleted_slugs', deleted)
-      }
+    await kvSet('sb:product_ids', ids.filter(s => s !== slug))
+    await kvDel(`sb:product:${slug}`)
+    if (products.find(p => p.slug === slug)) {       // it's a seed product
+      const del = (await kvGet('sb:deleted_slugs')) ?? []
+      if (!del.includes(slug)) { del.push(slug); await kvSet('sb:deleted_slugs', del) }
     }
   } else {
     _deletedSlugs.add(slug)
@@ -241,7 +232,22 @@ const ADMIN_ACCOUNTS = [
 ]
 
 // ── HEALTH
-app.get('/api/health', (_, res) => res.json({ status:'ok', service:'SellBazar API', time:new Date().toISOString() }))
+app.get('/api/health', async (_, res) => {
+  let redisOk = false
+  if (KV_ENABLED) {
+    try {
+      await kvSet('sb:healthcheck', Date.now())
+      const v = await kvGet('sb:healthcheck')
+      redisOk = v !== null
+    } catch { redisOk = false }
+  }
+  res.json({
+    status: 'ok',
+    service: 'SellBazar API',
+    time: new Date().toISOString(),
+    redis: KV_ENABLED ? (redisOk ? 'connected' : 'error') : 'not configured (in-memory mode)',
+  })
+})
 
 // ── AUTH
 app.post('/api/auth/login', (req, res) => {
