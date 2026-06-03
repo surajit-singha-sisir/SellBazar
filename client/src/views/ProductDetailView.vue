@@ -440,7 +440,6 @@ import { useProductStore }  from '@/stores/useProductStore'
 import { useCartStore }     from '@/stores/useCartStore'
 import { useWishlistStore } from '@/stores/useWishlistStore'
 import { useAuthStore }     from '@/stores/useAuthStore'
-import { useAdminApi }      from '@/composables/useAdminApi'
 import type { Product, Review } from '@/types'
 import ProductCard          from '@/components/product/ProductCard.vue'
 
@@ -449,7 +448,6 @@ const productStore  = useProductStore()
 const cartStore     = useCartStore()
 const wishlistStore = useWishlistStore()
 const authStore     = useAuthStore()
-const { uploadImage } = useAdminApi()
 
 const loading = ref(true)
 const product = ref<Product | null>(null)
