@@ -32,77 +32,123 @@
   <div v-else class="bg-mesh min-h-screen">
 
     <!-- ── Hero Section ──────────────────────────────────────────────── -->
-    <section class="relative overflow-hidden py-12 px-4 sm:px-6 max-w-7xl mx-auto">
-      <div class="grid lg:grid-cols-2 gap-8 items-center">
+    <section class="hero-section">
+      <!-- Decorative blobs -->
+      <div class="hero-blob hero-blob--orange"></div>
+      <div class="hero-blob hero-blob--violet"></div>
+      <div class="hero-blob hero-blob--blue"></div>
 
-        <!-- Hero text -->
-        <div class="space-y-6">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-orange-500/30 bg-orange-500/5 text-sm font-medium text-orange-600">
-            <span class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-            বাংলাদেশের সেরা মার্কেটপ্লেস · 2027
-          </div>
-          <h1 class="font-display text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight">
-            <span class="gradient-text">Shop Smart,</span><br/>
-            <span class="text-[var(--color-text)]">Deliver Fast</span>
-          </h1>
-          <p class="text-[var(--color-text-2)] text-lg max-w-md leading-relaxed">
-            From Dhaka to every district — millions of products, instant bKash checkout, and same-day delivery across Bangladesh.
-          </p>
-          <div class="flex flex-wrap gap-3">
-            <RouterLink to="/products" class="btn-primary text-base px-8 py-3.5">
-              <i class="fa-sharp fa-solid fa-bolt"></i> Shop Now
-            </RouterLink>
-            <RouterLink to="/deals" class="btn-secondary text-base px-8 py-3.5">
-              <i class="fa-sharp fa-solid fa-fire text-orange-400"></i> Today's Deals
-            </RouterLink>
-          </div>
-          <!-- Trust badges -->
-          <div class="flex flex-wrap gap-4 pt-2">
-            <div class="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-              <i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i> Secure Payment
-            </div>
-            <div class="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-              <i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i> Fast Delivery
-            </div>
-            <div class="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-              <i class="fa-sharp fa-solid fa-rotate-left text-orange-500"></i> Easy Returns
-            </div>
-          </div>
-        </div>
+      <div class="hero-content max-w-7xl mx-auto">
+        <div class="grid lg:grid-cols-2 gap-10 xl:gap-16 items-center">
 
-        <!-- Hero visual — product mini-cards -->
-        <div class="relative hidden lg:flex items-center justify-center">
-          <div class="relative w-96 h-96">
-            <div class="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500/20 to-fuchsia-500/20 blur-3xl"></div>
-            <div class="relative grid grid-cols-2 gap-4 p-6">
+          <!-- ── Left: Text ──────────────────────────────────────────── -->
+          <div class="flex flex-col gap-5 text-center lg:text-left items-center lg:items-start">
+
+            <!-- Pill badge -->
+            <span class="hero-badge">
+              <span class="pulse-dot"></span>
+              বাংলাদেশের সেরা মার্কেটপ্লেস · 2027
+            </span>
+
+            <!-- Headline -->
+            <h1 class="font-display font-extrabold leading-[1.1] text-[clamp(2.4rem,6vw,4rem)]">
+              <span class="gradient-text block">Shop Smart,</span>
+              <span class="text-[var(--color-text)]">Deliver Fast</span>
+            </h1>
+
+            <!-- Sub-copy -->
+            <p class="text-[var(--color-text-2)] text-base sm:text-lg leading-relaxed max-w-md">
+              From Dhaka to every district — millions of products,
+              instant <strong class="text-[var(--color-text)] font-semibold">bKash checkout</strong>,
+              and same-day delivery across Bangladesh.
+            </p>
+
+            <!-- CTA buttons -->
+            <div class="flex flex-wrap gap-3 justify-center lg:justify-start">
+              <RouterLink to="/products" class="btn-primary text-base px-8 py-3.5">
+                <i class="fa-sharp fa-solid fa-bolt"></i> Shop Now
+              </RouterLink>
+              <RouterLink to="/deals" class="btn-secondary text-base px-8 py-3.5">
+                <i class="fa-sharp fa-solid fa-fire text-orange-400"></i> Today's Deals
+              </RouterLink>
+            </div>
+
+            <!-- Trust strip -->
+            <div class="hero-trust">
+              <span class="trust-item">
+                <i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i> Secure Payment
+              </span>
+              <span class="trust-item">
+                <i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i> Fast Delivery
+              </span>
+              <span class="trust-item">
+                <i class="fa-sharp fa-solid fa-rotate-left text-orange-500"></i> Easy Returns
+              </span>
+              <span class="trust-item">
+                <i class="fa-sharp fa-solid fa-headset text-purple-500"></i> 24/7 Support
+              </span>
+            </div>
+          </div>
+
+          <!-- ── Right: Floating product cards ──────────────────────── -->
+          <div class="hero-visual">
+            <div class="glow-ring"></div>
+
+            <!-- 2×2 grid, visible sm+ (hidden on tiny phones) -->
+            <div class="hidden sm:grid grid-cols-2 gap-3 sm:gap-4 relative">
               <div
-                v-for="p in productStore.featured.slice(0, 4)" :key="p.id"
-                class="card hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden cursor-pointer"
+                v-for="p in productStore.featured.slice(0, 4)"
+                :key="p.id"
+                class="hero-card"
                 @click="$router.push(`/products/${p.slug}`)"
               >
-                <img :src="p.images[0]" :alt="p.name" class="w-full h-24 object-cover" />
-                <div class="p-2">
-                  <p class="text-[10px] font-semibold line-clamp-1">{{ p.name }}</p>
-                  <p class="text-orange-500 font-bold text-xs">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
+                <img
+                  :src="p.images[0]"
+                  :alt="p.name"
+                  onerror="this.src='https://placehold.co/280x210/f97316/fff?text=Product'"
+                />
+                <div class="hero-card-body">
+                  <p class="hero-card-name">{{ p.name }}</p>
+                  <p class="hero-card-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
+                </div>
+              </div>
+
+              <!-- Skeleton placeholders if products not loaded yet -->
+              <template v-if="!productStore.featured.length">
+                <div
+                  v-for="n in 4" :key="'sk-' + n"
+                  class="hero-card animate-pulse"
+                >
+                  <div class="w-full aspect-[4/3] bg-[var(--color-surface-2)]"></div>
+                  <div class="hero-card-body space-y-1.5">
+                    <div class="h-2.5 w-3/4 rounded bg-[var(--color-surface-2)]"></div>
+                    <div class="h-2.5 w-1/2 rounded bg-[var(--color-surface-2)]"></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- Single scrollable row on mobile (< sm) -->
+            <div class="flex sm:hidden gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+              <div
+                v-for="p in productStore.featured.slice(0, 4)"
+                :key="p.id"
+                class="hero-card shrink-0 w-40"
+                @click="$router.push(`/products/${p.slug}`)"
+              >
+                <img
+                  :src="p.images[0]"
+                  :alt="p.name"
+                  onerror="this.src='https://placehold.co/160x120/f97316/fff?text=?'"
+                />
+                <div class="hero-card-body">
+                  <p class="hero-card-name">{{ p.name }}</p>
+                  <p class="hero-card-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- ── Stats Bar ──────────────────────────────────────────────────── -->
-    <section class="border-y border-[var(--color-border)] bg-[var(--color-surface)] py-4 px-4">
-      <div class="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div v-for="stat in stats" :key="stat.label" class="flex items-center gap-3 justify-center">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center" :style="`background: ${stat.color}15`">
-            <i :class="stat.icon" :style="`color: ${stat.color}`"></i>
-          </div>
-          <div>
-            <p class="font-display font-bold text-lg leading-none">{{ stat.value }}</p>
-            <p class="text-xs text-[var(--color-text-muted)]">{{ stat.label }}</p>
-          </div>
         </div>
       </div>
     </section>
@@ -276,13 +322,6 @@ const staticCategories = [
 const displayCategories = computed(() =>
   productStore.categories.length ? productStore.categories : staticCategories
 )
-
-const stats = [
-  { label: 'Products',    value: '2M+',  icon: 'fa-sharp fa-solid fa-boxes-stacked',  color: '#f97316' },
-  { label: 'Sellers',     value: '50K+', icon: 'fa-sharp fa-solid fa-store',           color: '#d946ef' },
-  { label: 'Deliveries',  value: '10M+', icon: 'fa-sharp fa-solid fa-truck-fast',      color: '#3b82f6' },
-  { label: 'Happy Users', value: '5M+',  icon: 'fa-sharp fa-solid fa-face-smile-beam', color: '#22c55e' },
-]
 
 const features = [
   { title: 'Free Delivery',   desc: 'On orders above ৳599',      icon: 'fa-sharp fa-solid fa-truck',         color: '#3b82f6' },
