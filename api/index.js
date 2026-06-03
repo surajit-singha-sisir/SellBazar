@@ -283,6 +283,14 @@ app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ admin:req.admin 
 app.post('/api/admin/logout', requireAdmin, (_, res) => res.json({ message:'Logged out' }))
 
 // ── PRODUCTS
+// Disable Vercel edge caching for all product routes — products change
+// dynamically and must always be served fresh from the lambda.
+app.use('/api/products', (_, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Surrogate-Control', 'no-store')
+  next()
+})
 app.get('/api/products', async (req, res) => {
   const { category, subcategory, q, limit, featured, sortBy, order } = req.query
   let r = await getAllProducts()

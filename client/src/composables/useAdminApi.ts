@@ -95,7 +95,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Content-Type'] = 'application/json'
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  // Always bypass Vercel edge cache for API calls — products/orders change dynamically
+  headers['Cache-Control'] = 'no-cache'
+  const res = await fetch(`${BASE}${path}`, { ...options, headers, cache: 'no-store' })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
     throw new Error(err.error ?? `API error ${res.status}`)

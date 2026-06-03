@@ -50,7 +50,10 @@ export const useProductStore = defineStore('products', () => {
     isLoading.value = true
     try {
       const qs = new URLSearchParams(params).toString()
-      const res = await fetch(`${API}/products${qs ? '?' + qs : ''}`)
+      const res = await fetch(`${API}/products${qs ? '?' + qs : ''}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
       if (!res.ok) throw new Error('Failed to fetch products')
       const json = await res.json()
       products.value = json.data ?? json
@@ -63,7 +66,10 @@ export const useProductStore = defineStore('products', () => {
 
   async function fetchCategories() {
     try {
-      const res = await fetch(`${API}/categories`)
+      const res = await fetch(`${API}/categories`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
       if (!res.ok) throw new Error('Failed to fetch categories')
       const json = await res.json()
       // Normalise: strip "fa-" prefix from icon so templates can safely
@@ -84,7 +90,10 @@ export const useProductStore = defineStore('products', () => {
 
   async function fetchProductBySlug(slug: string): Promise<Product | null> {
     try {
-      const res = await fetch(`${API}/products/${slug}`)
+      const res = await fetch(`${API}/products/${slug}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
       if (!res.ok) return null
       return await res.json()
     } catch {
