@@ -19,7 +19,7 @@
           <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-fuchsia-600 flex items-center justify-center shadow-[0_4px_12px_rgba(249,115,22,0.4)] group-hover:scale-105 transition-transform">
             <i class="fa-sharp fa-solid fa-store text-white text-sm"></i>
           </div>
-          <div class="font-display font-extrabold text-xl leading-none">
+          <div class="font-display font-extrabold text-xl leading-none hidden md:block">
             <span class="gradient-text">Sell</span><span class="text-[var(--color-text)]">Bazar</span>
           </div>
         </RouterLink>
