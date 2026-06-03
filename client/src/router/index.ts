@@ -64,14 +64,19 @@ const router = createRouter({
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function isAdminTokenValid(token: string | null): boolean {
-  if (!token) return false
+function parseJwtExp(token: string | null): number | null {
+  if (!token) return null
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    return payload.exp * 1000 > Date.now()
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof payload.exp === 'number' ? payload.exp : null
   } catch {
-    return false
+    return null
   }
+}
+
+function isTokenValid(token: string | null): boolean {
+  const exp = parseJwtExp(token)
+  return exp !== null && exp * 1000 > Date.now()
 }
 
 function clearAdminSession() {
@@ -79,12 +84,17 @@ function clearAdminSession() {
   localStorage.removeItem('sb-admin-user')
 }
 
+function clearUserSession() {
+  localStorage.removeItem('sb-user')
+  localStorage.removeItem('sb-token')
+}
+
 // ── Navigation guard ──────────────────────────────────────────────────────────
 router.beforeEach((to) => {
   // ── Admin auth ──────────────────────────────────────────────────────────
   const adminToken = localStorage.getItem('sb-admin-token')
   const adminUser  = localStorage.getItem('sb-admin-user')
-  const adminLoggedIn = !!(adminUser && isAdminTokenValid(adminToken))
+  const adminLoggedIn = !!(adminUser && isTokenValid(adminToken))
 
   if (!adminLoggedIn && adminToken) clearAdminSession()
 
@@ -96,18 +106,21 @@ router.beforeEach((to) => {
   }
 
   // ── Storefront user auth ────────────────────────────────────────────────
-  if (to.meta.requiresAuth) {
-    const sbUser = localStorage.getItem('sb-user')
-    if (!sbUser) {
-      // Redirect to login, preserve intended destination
-      return { name: 'login', query: { redirect: to.fullPath } }
-    }
+  const userToken = localStorage.getItem('sb-token')
+  const userStr   = localStorage.getItem('sb-user')
+  // Valid session requires BOTH a stored user AND a non-expired JWT
+  const userLoggedIn = !!(userStr && isTokenValid(userToken))
+
+  // Wipe any stale/tampered session (sb-user without a valid token, or expired token)
+  if (!userLoggedIn && (userStr || userToken)) clearUserSession()
+
+  if (to.meta.requiresAuth && !userLoggedIn) {
+    return { name: 'login', query: { redirect: to.fullPath } }
   }
 
   // Redirect logged-in users away from login/register pages
-  if (to.name === 'login' || to.name === 'register') {
-    const sbUser = localStorage.getItem('sb-user')
-    if (sbUser) return { name: 'home' }
+  if ((to.name === 'login' || to.name === 'register') && userLoggedIn) {
+    return { name: 'home' }
   }
 })
 

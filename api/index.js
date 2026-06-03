@@ -85,6 +85,7 @@ const _mem = {
   dynamicOrders:   [],
   categories:      null,   // null = use SEED_CATEGORIES
   admins:          null,   // null = use SEED_ADMINS
+  users:           [],     // registered users (in-memory fallback)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -289,10 +290,59 @@ async function saveAdmins(admins) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// KV-backed data accessors — Users
+// ──────────────────────────────────────────────────────────────────────────────
+// KV key schema:
+//   "sb:user:<id>"   → single user JSON (password included — never expose)
+//   "sb:user_ids"    → JSON array of user ids
+//   "sb:user_email:<email>" → user id (for fast email lookup)
+//   "sb:user_phone:<phone>" → user id (for fast phone lookup)
+
+async function getAllUsers() {
+  if (KV_ENABLED) {
+    const ids = (await kvGet('sb:user_ids')) ?? []
+    const users = await Promise.all(ids.map(id => kvGet(`sb:user:${id}`)))
+    return users.filter(Boolean)
+  }
+  return _mem.users
+}
+
+async function findUserByEmail(email) {
+  if (KV_ENABLED) {
+    const id = await kvGet(`sb:user_email:${email.toLowerCase()}`)
+    if (!id) return null
+    return kvGet(`sb:user:${id}`)
+  }
+  return _mem.users.find(u => u.email?.toLowerCase() === email.toLowerCase()) ?? null
+}
+
+async function findUserByPhone(phone) {
+  if (KV_ENABLED) {
+    const id = await kvGet(`sb:user_phone:${phone}`)
+    if (!id) return null
+    return kvGet(`sb:user:${id}`)
+  }
+  return _mem.users.find(u => u.phone === phone) ?? null
+}
+
+async function saveUser(user) {
+  if (KV_ENABLED) {
+    await kvSet(`sb:user:${user.id}`, user)
+    const ids = (await kvGet('sb:user_ids')) ?? []
+    if (!ids.includes(user.id)) { ids.push(user.id); await kvSet('sb:user_ids', ids) }
+    if (user.email) await kvSet(`sb:user_email:${user.email.toLowerCase()}`, user.id)
+    if (user.phone) await kvSet(`sb:user_phone:${user.phone}`, user.id)
+  } else {
+    const idx = _mem.users.findIndex(u => u.id === user.id)
+    if (idx !== -1) _mem.users[idx] = user; else _mem.users.push(user)
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Middleware
 // ──────────────────────────────────────────────────────────────────────────────
 
-const users      = []
 const userCarts  = {}
 const userWishlists = {}
 
@@ -352,32 +402,76 @@ app.get('/api/health', async (_, res) => {
 // AUTH (public users)
 // ──────────────────────────────────────────────────────────────────────────────
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { phone, email, password } = req.body
-  if ((!phone && !email) || !password) return res.status(400).json({ error:'Credentials required' })
-  const user = users.find(u => (phone && u.phone===phone) || (email && u.email===email))
-  if (!user || user.password !== password)
-    return res.json({ user:{id:'1',name:'Demo User',email:email||'demo@sellbazar.com',phone:phone||'',division:'Dhaka'}, token:'mock-jwt-token' })
-  const { password:_p, ...safe } = user
-  res.json({ user:safe, token:'mock-jwt-token' })
+  if ((!phone && !email) || !password)
+    return res.status(400).json({ error: 'Phone/email and password are required' })
+
+  // Look up user by phone or email
+  let user = null
+  if (phone)  user = await findUserByPhone(phone)
+  if (!user && email) user = await findUserByEmail(email)
+
+  // Strict check — no pass-through, no guest, no demo user
+  if (!user)
+    return res.status(401).json({ error: 'No account found with that phone number. Please register first.' })
+  if (user.password !== password)
+    return res.status(401).json({ error: 'Incorrect password. Please try again.' })
+
+  // Issue a real signed JWT (same secret as admin, different role)
+  const token = jwt.sign(
+    { id: user.id, email: user.email, phone: user.phone, role: 'user' },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  )
+  const { password: _p, ...safe } = user
+  res.json({ user: safe, token })
 })
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { name, phone, email, division, password } = req.body
-  if (!name||!phone||!email||!password) return res.status(400).json({ error:'All fields required' })
-  if (users.find(u=>u.email===email)) return res.status(409).json({ field:'email', error:'Email already registered' })
-  if (users.find(u=>u.phone===phone)) return res.status(409).json({ field:'phone', error:'Phone already registered' })
-  const u = { id:Date.now().toString(), name, email, phone, division:division||'Dhaka', password }
-  users.push(u)
-  const { password:_p, ...safe } = u
-  res.json({ user:safe, token:'mock-jwt-token' })
+  if (!name || !phone || !email || !password)
+    return res.status(400).json({ error: 'All fields are required' })
+  if (password.length < 6)
+    return res.status(400).json({ error: 'Password must be at least 6 characters' })
+
+  // Check uniqueness
+  const byEmail = await findUserByEmail(email)
+  if (byEmail) return res.status(409).json({ field: 'email', error: 'Email already registered' })
+  const byPhone = await findUserByPhone(phone)
+  if (byPhone) return res.status(409).json({ field: 'phone', error: 'Phone number already registered' })
+
+  const u = {
+    id:        Date.now().toString(),
+    name:      name.trim(),
+    email:     email.toLowerCase().trim(),
+    phone:     phone.trim(),
+    division:  division ?? 'Dhaka',
+    password,                        // plain-text for now (same as admin accounts)
+    createdAt: new Date().toISOString(),
+  }
+  await saveUser(u)
+
+  const token = jwt.sign(
+    { id: u.id, email: u.email, phone: u.phone, role: 'user' },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  )
+  const { password: _p, ...safe } = u
+  res.json({ user: safe, token })
 })
 
-app.post('/api/auth/check', (req, res) => {
+app.post('/api/auth/check', async (req, res) => {
   const { email, phone } = req.body
-  if (email && users.find(u=>u.email===email)) return res.status(409).json({ field:'email', error:'Email already registered' })
-  if (phone && users.find(u=>u.phone===phone)) return res.status(409).json({ field:'phone', error:'Phone already registered' })
-  res.json({ available:true })
+  if (email) {
+    const found = await findUserByEmail(email)
+    if (found) return res.status(409).json({ field: 'email', error: 'Email already registered' })
+  }
+  if (phone) {
+    const found = await findUserByPhone(phone)
+    if (found) return res.status(409).json({ field: 'phone', error: 'Phone already registered' })
+  }
+  res.json({ available: true })
 })
 
 // ──────────────────────────────────────────────────────────────────────────────

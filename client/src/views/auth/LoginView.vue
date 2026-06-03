@@ -59,7 +59,7 @@
             <img src="https://www.google.com/favicon.ico" class="w-4 h-4" /> Google
           </button>
           <button class="btn-secondary text-sm justify-center py-2.5">
-            ðŸ“± Facebook
+            📱 Facebook
           </button>
         </div>
 
@@ -97,7 +97,8 @@ async function login() {
     })
     const data = await res.json()
     if (!res.ok) { error.value = data.error ?? 'Login failed'; return }
-    await authStore.login(data.user)
+    if (!data.user || !data.token) { error.value = 'Login failed — unexpected server response'; return }
+    await authStore.login(data.user, data.token)
     // Redirect to intended page or home
     const redirect = (router.currentRoute.value.query.redirect as string) || '/'
     router.push(redirect)
