@@ -420,17 +420,26 @@ app.get('/api/products', async (req, res) => {
 })
 
 app.get('/api/products/:slug', async (req, res) => {
+  const { slug } = req.params
+  // 1. Check dynamic/edited products in KV first (they override seeds)
   if (KV_ENABLED) {
-    const kp = await kvGet(`sb:product:${req.params.slug}`)
+    const kp = await kvGet(`sb:product:${slug}`)
     if (kp) return res.json(kp)
+    // Also search all dynamic product IDs in case slug is actually an id
+    const ids = (await kvGet('sb:product_ids')) ?? []
+    const byId = await Promise.all(ids.map(s => kvGet(`sb:product:${s}`)))
+    const found = byId.find(p => p && (p.id === slug || p.slug === slug))
+    if (found) return res.json(found)
   } else {
-    const mp = _mem.dynamicProducts.find(p => p.slug === req.params.slug || p.id === req.params.slug)
+    const mp = _mem.dynamicProducts.find(p => p.slug === slug || p.id === slug)
     if (mp) return res.json(mp)
   }
-  const p = SEED_PRODUCTS.find(p => p.slug === req.params.slug || p.id === req.params.slug)
+  // 2. Check deleted seeds — if deleted, 404
+  const deleted = KV_ENABLED ? (await kvGet('sb:deleted_slugs') ?? []) : [..._mem.deletedSlugs]
+  if (deleted.includes(slug)) return res.status(404).json({ error: 'Product not found' })
+  // 3. Fall back to seed data
+  const p = SEED_PRODUCTS.find(p => p.slug === slug || p.id === slug)
   if (!p) return res.status(404).json({ error: 'Product not found' })
-  // If this seed product was edited and stored as a dynamic product, it would
-  // already have been found above; otherwise return seed as-is
   res.json(p)
 })
 

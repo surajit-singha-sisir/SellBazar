@@ -13,7 +13,7 @@
     </div>
 
     <!-- Product detail -->
-    <template v-else>
+    <template v-else-if="product">
       <!-- Breadcrumb -->
       <nav class="flex items-center gap-2 text-xs text-[var(--color-text-muted)] mb-6">
         <RouterLink to="/" class="hover:text-orange-500">Home</RouterLink>
@@ -114,12 +114,12 @@
                 class="text-sm"></i>
             </div>
             <span class="font-semibold">{{ product.rating }}</span>
-            <span class="text-[var(--color-text-muted)] text-sm">({{ product.reviewCount.toLocaleString() }} reviews)</span>
+            <span class="text-[var(--color-text-muted)] text-sm">({{ (product.reviewCount ?? 0).toLocaleString() }} reviews)</span>
           </div>
 
           <div class="price-row">
-            <span class="price-main">৳{{ (product.salePrice ?? product.price).toLocaleString() }}</span>
-            <span v-if="product.salePrice" class="price-original">৳{{ product.price.toLocaleString() }}</span>
+            <span class="price-main">৳{{ ((product.salePrice ?? product.price) || 0).toLocaleString() }}</span>
+            <span v-if="product.salePrice" class="price-original">৳{{ (product.price || 0).toLocaleString() }}</span>
             <span v-if="product.salePrice" class="badge badge-red text-sm">{{ discountPct }}% OFF</span>
           </div>
 
@@ -305,23 +305,31 @@ function addToCart() {
 
 // ── Load ──────────────────────────────────────────────────────
 async function load(slug: string) {
+  // Reset state before every load — prevents stale product from
+  // flashing while the new one is being fetched (causes the crash on Vercel)
+  product.value = null
   loading.value = true
   activeIdx.value = 0
   mainSwiper.value?.slideTo(0)
 
-  // Try store cache first (fast), then fall back to dedicated API call
-  let found: Product | null | undefined = productStore.getBySlug(slug)
-  if (!found) {
-    found = await productStore.fetchProductBySlug(slug)
+  try {
+    // Try store cache first (instant), then API
+    let found: Product | null | undefined = productStore.getBySlug(slug)
+    if (!found) {
+      found = await productStore.fetchProductBySlug(slug)
+    }
+    product.value = found ?? null
+  } catch (e) {
+    console.error('[ProductDetail] load failed:', e)
+    product.value = null
+  } finally {
+    loading.value = false
   }
-  product.value = found ?? null
 
-  // Also make sure list products are loaded for Related section
+  // Load related products in the background (don't block the page)
   if (productStore.products.length === 0) {
-    productStore.fetchProducts()
+    productStore.fetchProducts().catch(() => {})
   }
-
-  loading.value = false
 }
 
 onMounted(() => {
