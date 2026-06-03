@@ -89,11 +89,6 @@
             </SwiperSlide>
           </Swiper>
 
-          <!-- Hint -->
-          <p class="text-center text-xs text-[var(--color-text-muted)] mt-2">
-            <i class="fa-sharp fa-regular fa-hand-pointer mr-1 text-orange-400"></i>
-            Click image to enlarge · Auto-slides every 3s
-          </p>
         </div>
 
         <!-- Product Info -->
