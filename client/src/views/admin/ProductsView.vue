@@ -242,6 +242,10 @@ const SortIcon = defineComponent({
 const adminStore = useAdminStore()
 const exporter = useExport()
 
+// Image export state (referenced in template)
+const exportingImage = ref(false)
+const tableWrapRef   = ref<HTMLElement | null>(null)
+
 // Filters
 const search        = ref('')
 const catFilter     = ref('')
@@ -314,8 +318,22 @@ function resolveImg(url: string) {
 }
 
 // Export
-function doExport(fmt: 'excel' | 'pdf' | 'csv' | 'json') {
+async function doExport(fmt: 'excel' | 'pdf' | 'csv' | 'json' | 'image') {
   exportOpen.value = false
+  if (fmt === 'image') {
+    if (!tableWrapRef.value) return
+    exportingImage.value = true
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(tableWrapRef.value, { scale: 2, useCORS: true, backgroundColor: '#0f172a' })
+      const link = document.createElement('a')
+      link.download = `products_${new Date().toISOString().slice(0,10)}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } catch (e) { console.error('Image export failed', e) }
+    finally { exportingImage.value = false }
+    return
+  }
   const data = filtered.value.map(p => ({
     Name: p.name, Brand: p.brand, Category: p.category,
     Price: p.price, SalePrice: p.salePrice, Stock: p.stock,

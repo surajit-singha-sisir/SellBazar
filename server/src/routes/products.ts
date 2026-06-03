@@ -3,126 +3,131 @@ import { requireAdmin } from '../middleware/auth.js'
 import { createWriteStream, mkdirSync, existsSync } from 'fs'
 import { join, extname } from 'path'
 import { randomBytes } from 'crypto'
+import { redis, KEYS } from '../lib/redis.js'
+import { broadcast } from './events.js'
 
 const router = Router()
-
-// ── In-memory product store ───────────────────────────────────────────────────
-let products = [
-  { id:'1',  slug:'samsung-galaxy-a55',    name:'Samsung Galaxy A55 5G',              nameBn:'স্যামসাং গ্যালাক্সি A55',    description:'6.6" AMOLED, 50MP camera, 5000mAh',                      price:45000, salePrice:39999, images:['https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1574944985070-8f3ebc6b79d2?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Samsung',      stock:42,  rating:4.6, reviewCount:318,  tags:['phone','5g','samsung'],             isNew:true,  isFeatured:false, deliveryDays:2, seller:'TechWorld BD',    location:'Dhaka',       createdAt:'2025-01-10T10:00:00Z' },
-  { id:'2',  slug:'nike-air-max-2027',     name:'Nike Air Max 2027',                  nameBn:'নাইকি এয়ার ম্যাক্স',          description:'Future-forward cushioning, breathable mesh',               price:12000, salePrice:9499,  images:['https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1491553895911-0055eca6402d?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1600185365926-3a2ce3cdb9eb?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'footwear',          categoryBn:'ফ্যাশন',        brand:'Nike',         stock:80,  rating:4.8, reviewCount:512,  tags:['shoes','sneakers'],                 isNew:false, isFeatured:false, deliveryDays:3, seller:'SportZone',       location:'Chittagong',  createdAt:'2025-01-12T10:00:00Z' },
-  { id:'3',  slug:'walton-primo-x7',       name:'Walton Primo X7 Ultra',              nameBn:'ওয়ালটন প্রিমো X7',            description:'Made in Bangladesh, 108MP, 6000mAh',                      price:28000, salePrice:24999, images:['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1556656793-08538906a9f8?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1580910051074-3eb694886505?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Walton',       stock:65,  rating:4.3, reviewCount:224,  tags:['phone','walton','local'],            isNew:false, isFeatured:true,  deliveryDays:1, seller:'Walton Official', location:'Dhaka',       createdAt:'2025-01-14T10:00:00Z' },
-  { id:'4',  slug:'muslin-saree-jamdani',  name:'Jamdani Muslin Saree',               nameBn:'জামদানি মসলিন শাড়ি',          description:'Authentic Dhaka Muslin, UNESCO heritage craft',            price:8500,  salePrice:7200,  images:['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1583391733981-8498408ee4b6?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1617137968427-85924c800a22?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'sarees',            categoryBn:'ফ্যাশন',        brand:'Dhaka Muslin', stock:20,  rating:4.9, reviewCount:187,  tags:['saree','jamdani','traditional'],     isNew:false, isFeatured:true,  deliveryDays:4, seller:'Muslin House',    location:'Narayanganj', createdAt:'2025-01-15T10:00:00Z' },
-  { id:'5',  slug:'xiaomi-redmi-note-13',  name:'Xiaomi Redmi Note 13 Pro',           nameBn:'শাওমি রেডমি নোট ১৩',          description:'200MP OIS camera, 5100mAh, 67W charging',                 price:35000, salePrice:29999, images:['https://images.unsplash.com/photo-1585060544812-6b45742d762f?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1546054454-aa26e2b734c7?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Xiaomi',       stock:55,  rating:4.5, reviewCount:443,  tags:['phone','xiaomi'],                   isNew:true,  isFeatured:false, deliveryDays:2, seller:'MiStore BD',      location:'Dhaka',       createdAt:'2025-01-16T10:00:00Z' },
-  { id:'6',  slug:'bkash-qr-scanner',      name:'Smart QR POS Terminal',              nameBn:'স্মার্ট QR টার্মিনাল',         description:'bKash/Nagad/Rocket integrated, touchscreen',               price:4500,  salePrice:3800,  images:['https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1598971457999-ca4ef48a9a71?w=400&h=400&fit=crop'], category:'Business',    subcategory:'pos-systems',       categoryBn:'ব্যবসা',        brand:'PayTech BD',   stock:100, rating:4.4, reviewCount:89,   tags:['pos','qr','payment'],               isNew:false, isFeatured:false, deliveryDays:3, seller:'PayTech',         location:'Dhaka',       createdAt:'2025-01-17T10:00:00Z' },
-  { id:'7',  slug:'pran-mango-juice-1l',   name:'PRAN Mango Juice 1L',                nameBn:'প্রাণ আম জুস',                  description:'100% real mango, no preservatives, 1 litre',              price:120,   salePrice:99,    images:['https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1603569283847-aa295f0d016a?w=400&h=400&fit=crop'], category:'Grocery',     subcategory:'beverages',         categoryBn:'মুদিখানা',     brand:'PRAN',         stock:500, rating:4.7, reviewCount:1200, tags:['juice','pran','mango'],             isNew:false, isFeatured:false, deliveryDays:1, seller:'PRAN Foods',      location:'Nationwide',  createdAt:'2025-01-18T10:00:00Z' },
-  { id:'8',  slug:'lenovo-ideapad-slim5',  name:'Lenovo IdeaPad Slim 5',              nameBn:'লেনোভো আইডিয়াপ্যাড',          description:'AMD Ryzen 7, 16GB RAM, 512GB SSD, 14" OLED',              price:95000, salePrice:84999, images:['https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'laptops',          categoryBn:'ইলেকট্রনিক্স', brand:'Lenovo',       stock:18,  rating:4.6, reviewCount:267,  tags:['laptop','lenovo','amd'],            isNew:false, isFeatured:true,  deliveryDays:3, seller:'LaptopHouse BD',  location:'Dhaka',       createdAt:'2025-01-19T10:00:00Z' },
-  { id:'9',  slug:'aarong-kurta-men',      name:'Aarong Cotton Kurta',                nameBn:'আড়ং কটন কুর্তা',              description:'Handloom cotton, block print, exclusive Aarong design',   price:3500,  salePrice:2800,  images:['https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'mens-clothing',    categoryBn:'ফ্যাশন',        brand:'Aarong',       stock:150, rating:4.7, reviewCount:342,  tags:['kurta','aarong','traditional'],      isNew:false, isFeatured:false, deliveryDays:2, seller:'Aarong Official', location:'Dhaka',       createdAt:'2025-01-20T10:00:00Z' },
-  { id:'10', slug:'symphony-z55',          name:'Symphony Z55 Pro',                   nameBn:'সিম্ফনি Z55 প্রো',             description:'Local brand, 6.7" display, 5000mAh, dual camera',         price:18000, salePrice:15499, images:['https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1574944985070-8f3ebc6b79d2?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Symphony',     stock:90,  rating:4.1, reviewCount:156,  tags:['phone','symphony','local'],          isNew:true,  isFeatured:false, deliveryDays:1, seller:'Symphony Official',location:'Dhaka',       createdAt:'2025-01-21T10:00:00Z' },
-  { id:'11', slug:'rfl-pressure-cooker',   name:'RFL Pressure Cooker 5L',             nameBn:'আরএফএল প্রেশার কুকার',        description:'5-litre stainless steel, safety valve, Bangladesh made',  price:2200,  salePrice:1799,  images:['https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1585515320310-259814833e62?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=400&h=400&fit=crop'], category:'Home & Living', subcategory:'kitchen',         categoryBn:'হোম',           brand:'RFL',          stock:200, rating:4.5, reviewCount:890,  tags:['kitchen','rfl','cookware'],          isNew:false, isFeatured:false, deliveryDays:3, seller:'RFL Houseware',   location:'Nationwide',  createdAt:'2025-01-22T10:00:00Z' },
-  { id:'12', slug:'meril-splash-body-wash',name:'Meril Splash Body Wash',             nameBn:'মেরিল স্প্ল্যাশ',              description:'Fresh citrus scent, moisturizing formula, 500ml',          price:350,   salePrice:299,   images:['https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=400&h=400&fit=crop'], category:'Beauty',      subcategory:'skincare',          categoryBn:'বিউটি',         brand:'Meril',        stock:300, rating:4.3, reviewCount:567,  tags:['bodycare','meril','beauty'],         isNew:false, isFeatured:false, deliveryDays:2, seller:'Meril Beauty',    location:'Nationwide',  createdAt:'2025-01-23T10:00:00Z' },
-  { id:'13', slug:'sony-wh1000xm5',        name:'Sony WH-1000XM5',                    nameBn:'সনি হেডফোন XM5',               description:'Industry-leading ANC, 30hr battery, LDAC',                price:32000, salePrice:27500, images:['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1484704849700-f032a568e944?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'headphones',       categoryBn:'ইলেকট্রনিক্স', brand:'Sony',         stock:30,  rating:4.8, reviewCount:532,  tags:['headphones','anc','sony'],           isNew:false, isFeatured:true,  deliveryDays:3, seller:'AudioZone BD',    location:'Dhaka',       createdAt:'2025-01-24T10:00:00Z' },
-  { id:'14', slug:'apple-watch-s9',        name:'Apple Watch Series 9',               nameBn:'অ্যাপল ওয়াচ S9',              description:'S9 chip, Always-On Display, ECG, Blood Oxygen',           price:55000, salePrice:49999, images:['https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1559734840-f9509ee5677f?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'smart-watches',    categoryBn:'ইলেকট্রনিক্স', brand:'Apple',        stock:15,  rating:4.9, reviewCount:189,  tags:['smartwatch','apple','wearable'],     isNew:true,  isFeatured:false, deliveryDays:2, seller:'iZone Bangladesh',location:'Dhaka',       createdAt:'2025-01-25T10:00:00Z' },
-  { id:'15', slug:'basmati-rice-5kg',      name:'Premium Basmati Rice 5kg',           nameBn:'বাসমতি চাল ৫ কেজি',            description:'Long-grain aged basmati, low GI, fragrant',               price:980,   salePrice:849,   images:['https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&h=400&fit=crop'], category:'Grocery',     subcategory:'rice-grains',       categoryBn:'মুদিখানা',     brand:'Gold Coin',    stock:300, rating:4.6, reviewCount:540,  tags:['rice','basmati','grocery'],          isNew:false, isFeatured:false, deliveryDays:1, seller:'Meena Bazaar',    location:'Dhaka',       createdAt:'2025-01-26T10:00:00Z' },
-  { id:'16', slug:'loreal-vitamin-c',      name:"L'Oréal Vitamin C Serum",            nameBn:'লোরিয়াল ভিটামিন C সিরাম',    description:'10% pure Vitamin C, anti-aging, brightening, 30ml',      price:2200,  salePrice:1799,  images:['https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=400&h=400&fit=crop'], category:'Beauty',      subcategory:'skincare',          categoryBn:'বিউটি',         brand:"L'Oréal",     stock:75,  rating:4.6, reviewCount:423,  tags:['serum','skincare','vitamin-c'],      isNew:true,  isFeatured:false, deliveryDays:2, seller:'BeautyWorld BD',  location:'Dhaka',       createdAt:'2025-01-27T10:00:00Z' },
-  { id:'17', slug:'walton-ac-1ton',        name:'Walton Inverter AC 1 Ton',           nameBn:'ওয়ালটন ১ টন এসি',             description:'Inverter, Wi-Fi Control, Auto-Clean, Energy A+++',        price:55000, salePrice:47999, images:['https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1635048424329-a9bfb146d7aa?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=400&fit=crop'], category:'Home & Living', subcategory:'air-conditioners', categoryBn:'হোম',           brand:'Walton',       stock:25,  rating:4.5, reviewCount:178,  tags:['ac','inverter','walton','home'],     isNew:false, isFeatured:true,  deliveryDays:5, seller:'Walton Official', location:'Dhaka',       createdAt:'2025-01-28T10:00:00Z' },
-  { id:'18', slug:'gp-cricket-bat',        name:'GP Pro Cricket Bat (English Willow)', nameBn:'জিপি ক্রিকেট ব্যাট',         description:'Grade 1 English Willow, full size, pre-knocked',          price:9500,  salePrice:7999,  images:['https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?w=400&h=400&fit=crop'], category:'Sports',      subcategory:'cricket',           categoryBn:'স্পোর্টস',    brand:'GP',           stock:35,  rating:4.7, reviewCount:143,  tags:['cricket','bat','willow'],            isNew:true,  isFeatured:false, deliveryDays:3, seller:'Sports Arena BD', location:'Dhaka',       createdAt:'2025-01-29T10:00:00Z' },
-  { id:'19', slug:'humayun-himu',          name:'হুমায়ূন আহমেদ হিমু সমগ্র',          nameBn:'হুমায়ূন আহমেদ হিমু সমগ্র',   description:'Complete Himu series, 5 volumes, hardcover',              price:1800,  salePrice:1499,  images:['https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=400&h=400&fit=crop'], category:'Books',       subcategory:'bangla-literature', categoryBn:'বই',            brand:'Bhasha Prakash',stock:150, rating:5.0, reviewCount:987,  tags:['bangla','novel','humayun','himu'],   isNew:false, isFeatured:true,  deliveryDays:2, seller:'Rokomari',        location:'Dhaka',       createdAt:'2025-01-30T10:00:00Z' },
-  { id:'20', slug:'polo-shirt-men',        name:"Men's Premium Polo Shirt",           nameBn:'পুরুষ পোলো শার্ট',             description:'100% Egyptian Cotton, slim fit, 12 colors',               price:1800,  salePrice:1299,  images:['https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'mens-clothing',    categoryBn:'ফ্যাশন',        brand:'Thread & Co', stock:200, rating:4.5, reviewCount:892,  tags:['shirt','polo','men','cotton'],       isNew:true,  isFeatured:false, deliveryDays:2, seller:'StyleHub BD',     location:'Dhaka',       createdAt:'2025-01-31T10:00:00Z' },
-  { id:'21', slug:'canon-eos-r50',         name:'Canon EOS R50 Mirrorless Camera',    nameBn:'ক্যানন EOS R50 ক্যামেরা',     description:'24.2MP APS-C, 4K Video, Dual Pixel AF',                  price:85000, salePrice:74999, images:['https://images.unsplash.com/photo-1502982720700-bfff97f2ecac?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1542496658-e33a6d0d50f6?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'cameras',          categoryBn:'ইলেকট্রনিক্স', brand:'Canon',        stock:12,  rating:4.7, reviewCount:98,   tags:['camera','canon','mirrorless'],        isNew:false, isFeatured:false, deliveryDays:4, seller:'PixelPro BD',     location:'Dhaka',       createdAt:'2025-02-01T10:00:00Z' },
-  { id:'22', slug:'samsung-65-qled-tv',   name:'Samsung 65" QLED 4K Smart TV',       nameBn:'স্যামসাং QLED ৬৫" টিভি',      description:'Quantum HDR, 120Hz, Dolby Atmos, Gaming Mode',            price:145000,salePrice:129000,images:['https://images.unsplash.com/photo-1593359677879-a4bb92f829e1?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1461151304267-38535e780c79?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1567690187548-f07b1d7bf5a9?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'televisions',      categoryBn:'ইলেকট্রনিক্স', brand:'Samsung',      stock:8,   rating:4.7, reviewCount:143,  tags:['tv','qled','4k','samsung'],          isNew:false, isFeatured:true,  deliveryDays:5, seller:'TechWorld BD',    location:'Dhaka',       createdAt:'2025-02-02T10:00:00Z' },
-  { id:'23', slug:'ladies-kurti-set',      name:'Ladies Embroidered Kurti Set',       nameBn:'লেডিজ এমব্রয়ডারড কুর্তি',   description:'Hand embroidery, cotton-blend, 3-piece set, festive',     price:3500,  salePrice:2799,  images:['https://images.unsplash.com/photo-1594938298603-c8148c4b2ef4?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1614252235316-8c857196f400?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1602293589930-45aad59ba3ab?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'womens-clothing',  categoryBn:'ফ্যাশন',        brand:'Aarong',       stock:45,  rating:4.7, reviewCount:341,  tags:['kurti','ladies','eid','traditional'], isNew:false, isFeatured:true,  deliveryDays:3, seller:'Aarong Official', location:'Dhaka',       createdAt:'2025-02-03T10:00:00Z' },
-  { id:'24', slug:'atomic-habits-bangla',  name:'Atomic Habits (Bangla Translation)', nameBn:'অ্যাটমিক হ্যাবিটস (বাংলা)',  description:'James Clear, Bangla Edition, Paperback, Self-help',      price:450,   salePrice:380,   images:['https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=400&fit=crop'], category:'Books',       subcategory:'self-help',         categoryBn:'বই',            brand:'Ananya',       stock:200, rating:4.8, reviewCount:654,  tags:['self-help','habits','bangla-book'],  isNew:true,  isFeatured:false, deliveryDays:2, seller:'Rokomari',        location:'Dhaka',       createdAt:'2025-02-04T10:00:00Z' },
-  { id:'25', slug:'rasasi-oud-perfume',    name:'Rasasi Oud Al Layl EDP 100ml',       nameBn:'রাসাসি উদ পারফিউম',           description:'Arabian Oud, long lasting 12hr, unisex, woody-floral',   price:4500,  salePrice:3800,  images:['https://images.unsplash.com/photo-1541643600914-78b084683702?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1547887538-047ad8b7fd58?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=400&h=400&fit=crop'], category:'Beauty',      subcategory:'fragrances',        categoryBn:'বিউটি',         brand:'Rasasi',       stock:40,  rating:4.8, reviewCount:267,  tags:['perfume','oud','fragrance'],         isNew:false, isFeatured:false, deliveryDays:3, seller:'Fragrance House BD',location:'Dhaka',    createdAt:'2025-02-05T10:00:00Z' },
-  { id:'26', slug:'miyako-rice-cooker',    name:'Miyako 5L Digital Rice Cooker',      nameBn:'মিয়াকো ডিজিটাল রাইস কুকার', description:'Multi-cook, keep warm, non-stick inner pot',              price:3200,  salePrice:2699,  images:['https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1585515320310-259814833e62?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=400&h=400&fit=crop'], category:'Home & Living', subcategory:'kitchen',         categoryBn:'হোম',           brand:'Miyako',       stock:90,  rating:4.4, reviewCount:562,  tags:['kitchen','rice-cooker','miyako'],    isNew:false, isFeatured:false, deliveryDays:2, seller:'HomePlus BD',     location:'Dhaka',       createdAt:'2025-02-06T10:00:00Z' },
-  { id:'27', slug:'yoga-mat-tpe',          name:'Premium TPE Yoga Mat 6mm',           nameBn:'প্রিমিয়াম যোগা ম্যাট',       description:'Non-slip, eco-friendly TPE, double-layer, carry strap',  price:1800,  salePrice:1399,  images:['https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&h=400&fit=crop','https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=400&fit=crop'], category:'Sports',      subcategory:'fitness',           categoryBn:'স্পোর্টস',    brand:'FitLife',      stock:120, rating:4.5, reviewCount:289,  tags:['yoga','fitness','mat'],             isNew:false, isFeatured:false, deliveryDays:2, seller:'FitZone BD',      location:'Dhaka',       createdAt:'2025-02-07T10:00:00Z' },
-]
-
-export { products }
-export default router
 
 function toSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 }
 
-// ── Upload directory setup (local only) ──────────────────────────────────────
+// ── Upload directory (local only) ─────────────────────────────────────────────
 const UPLOAD_DIR = join(process.env.VERCEL ? '/tmp' : process.cwd(), 'uploads')
 try { if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true }) } catch {}
 
+// ── Seed products (used only on first run when Redis is empty) ────────────────
+const SEED_PRODUCTS = [
+  { id:'1',  slug:'samsung-galaxy-a55',    name:'Samsung Galaxy A55 5G',              nameBn:'স্যামসাং গ্যালাক্সি A55',    description:'6.6" AMOLED, 50MP camera, 5000mAh',                      price:45000, salePrice:39999, images:['https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Samsung',      stock:42,  rating:4.6, reviewCount:318,  tags:['phone','5g','samsung'],             isNew:true,  isFeatured:false, deliveryDays:2, seller:'TechWorld BD',    location:'Dhaka',       createdAt:'2025-01-10T10:00:00Z' },
+  { id:'2',  slug:'nike-air-max-2027',     name:'Nike Air Max 2027',                  nameBn:'নাইকি এয়ার ম্যাক্স',          description:'Future-forward cushioning, breathable mesh',               price:12000, salePrice:9499,  images:['https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'footwear',          categoryBn:'ফ্যাশন',        brand:'Nike',         stock:80,  rating:4.8, reviewCount:512,  tags:['shoes','sneakers'],                 isNew:false, isFeatured:false, deliveryDays:3, seller:'SportZone',       location:'Chittagong',  createdAt:'2025-01-12T10:00:00Z' },
+  { id:'3',  slug:'walton-primo-x7',       name:'Walton Primo X7 Ultra',              nameBn:'ওয়ালটন প্রিমো X7',            description:'Made in Bangladesh, 108MP, 6000mAh',                      price:28000, salePrice:24999, images:['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Walton',       stock:65,  rating:4.3, reviewCount:224,  tags:['phone','walton','local'],            isNew:false, isFeatured:true,  deliveryDays:1, seller:'Walton Official', location:'Dhaka',       createdAt:'2025-01-14T10:00:00Z' },
+  { id:'4',  slug:'muslin-saree-jamdani',  name:'Jamdani Muslin Saree',               nameBn:'জামদানি মসলিন শাড়ি',          description:'Authentic Dhaka Muslin, UNESCO heritage craft',            price:8500,  salePrice:7200,  images:['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'sarees',            categoryBn:'ফ্যাশন',        brand:'Dhaka Muslin', stock:20,  rating:4.9, reviewCount:187,  tags:['saree','jamdani','traditional'],     isNew:false, isFeatured:true,  deliveryDays:4, seller:'Muslin House',    location:'Narayanganj', createdAt:'2025-01-15T10:00:00Z' },
+  { id:'5',  slug:'xiaomi-redmi-note-13',  name:'Xiaomi Redmi Note 13 Pro',           nameBn:'শাওমি রেডমি নোট ১৩',          description:'200MP OIS camera, 5100mAh, 67W charging',                 price:35000, salePrice:29999, images:['https://images.unsplash.com/photo-1585060544812-6b45742d762f?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Xiaomi',       stock:55,  rating:4.5, reviewCount:443,  tags:['phone','xiaomi'],                   isNew:true,  isFeatured:false, deliveryDays:2, seller:'MiStore BD',      location:'Dhaka',       createdAt:'2025-01-16T10:00:00Z' },
+  { id:'6',  slug:'bkash-qr-scanner',      name:'Smart QR POS Terminal',              nameBn:'স্মার্ট QR টার্মিনাল',         description:'bKash/Nagad/Rocket integrated, touchscreen',               price:4500,  salePrice:3800,  images:['https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=400&fit=crop'], category:'Business',    subcategory:'pos-systems',       categoryBn:'ব্যবসা',        brand:'PayTech BD',   stock:100, rating:4.4, reviewCount:89,   tags:['pos','qr','payment'],               isNew:false, isFeatured:false, deliveryDays:3, seller:'PayTech',         location:'Dhaka',       createdAt:'2025-01-17T10:00:00Z' },
+  { id:'7',  slug:'pran-mango-juice-1l',   name:'PRAN Mango Juice 1L',                nameBn:'প্রাণ আম জুস',                  description:'100% real mango, no preservatives, 1 litre',              price:120,   salePrice:99,    images:['https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&h=400&fit=crop'], category:'Grocery',     subcategory:'beverages',         categoryBn:'মুদিখানা',     brand:'PRAN',         stock:500, rating:4.7, reviewCount:1200, tags:['juice','pran','mango'],             isNew:false, isFeatured:false, deliveryDays:1, seller:'PRAN Foods',      location:'Nationwide',  createdAt:'2025-01-18T10:00:00Z' },
+  { id:'8',  slug:'lenovo-ideapad-slim5',  name:'Lenovo IdeaPad Slim 5',              nameBn:'লেনোভো আইডিয়াপ্যাড',          description:'AMD Ryzen 7, 16GB RAM, 512GB SSD, 14" OLED',              price:95000, salePrice:84999, images:['https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'laptops',          categoryBn:'ইলেকট্রনিক্স', brand:'Lenovo',       stock:18,  rating:4.6, reviewCount:267,  tags:['laptop','lenovo','amd'],            isNew:false, isFeatured:true,  deliveryDays:3, seller:'LaptopHouse BD',  location:'Dhaka',       createdAt:'2025-01-19T10:00:00Z' },
+  { id:'9',  slug:'aarong-kurta-men',      name:'Aarong Cotton Kurta',                nameBn:'আড়ং কটন কুর্তা',              description:'Handloom cotton, block print, exclusive Aarong design',   price:3500,  salePrice:2800,  images:['https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'mens-clothing',    categoryBn:'ফ্যাশন',        brand:'Aarong',       stock:150, rating:4.7, reviewCount:342,  tags:['kurta','aarong','traditional'],      isNew:false, isFeatured:false, deliveryDays:2, seller:'Aarong Official', location:'Dhaka',       createdAt:'2025-01-20T10:00:00Z' },
+  { id:'10', slug:'symphony-z55',          name:'Symphony Z55 Pro',                   nameBn:'সিম্ফনি Z55 প্রো',             description:'Local brand, 6.7" display, 5000mAh, dual camera',         price:18000, salePrice:15499, images:['https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'mobile-phones',    categoryBn:'ইলেকট্রনিক্স', brand:'Symphony',     stock:90,  rating:4.1, reviewCount:156,  tags:['phone','symphony','local'],          isNew:true,  isFeatured:false, deliveryDays:1, seller:'Symphony Official',location:'Dhaka',       createdAt:'2025-01-21T10:00:00Z' },
+]
+
+const SEED_PRODUCTS_2 = [
+  { id:'11', slug:'rfl-pressure-cooker',   name:'RFL Pressure Cooker 5L',             nameBn:'আরএফএল প্রেশার কুকার',        description:'5-litre stainless steel, safety valve, Bangladesh made',  price:2200,  salePrice:1799,  images:['https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400&h=400&fit=crop'], category:'Home & Living', subcategory:'kitchen',         categoryBn:'হোম',           brand:'RFL',          stock:200, rating:4.5, reviewCount:890,  tags:['kitchen','rfl','cookware'],          isNew:false, isFeatured:false, deliveryDays:3, seller:'RFL Houseware',   location:'Nationwide',  createdAt:'2025-01-22T10:00:00Z' },
+  { id:'12', slug:'meril-splash-body-wash',name:'Meril Splash Body Wash',             nameBn:'মেরিল স্প্ল্যাশ',              description:'Fresh citrus scent, moisturizing formula, 500ml',          price:350,   salePrice:299,   images:['https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=400&h=400&fit=crop'], category:'Beauty',      subcategory:'skincare',          categoryBn:'বিউটি',         brand:'Meril',        stock:300, rating:4.3, reviewCount:567,  tags:['bodycare','meril','beauty'],         isNew:false, isFeatured:false, deliveryDays:2, seller:'Meril Beauty',    location:'Nationwide',  createdAt:'2025-01-23T10:00:00Z' },
+  { id:'13', slug:'sony-wh1000xm5',        name:'Sony WH-1000XM5',                    nameBn:'সনি হেডফোন XM5',               description:'Industry-leading ANC, 30hr battery, LDAC',                price:32000, salePrice:27500, images:['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'headphones',       categoryBn:'ইলেকট্রনিক্স', brand:'Sony',         stock:30,  rating:4.8, reviewCount:532,  tags:['headphones','anc','sony'],           isNew:false, isFeatured:true,  deliveryDays:3, seller:'AudioZone BD',    location:'Dhaka',       createdAt:'2025-01-24T10:00:00Z' },
+  { id:'14', slug:'apple-watch-s9',        name:'Apple Watch Series 9',               nameBn:'অ্যাপল ওয়াচ S9',              description:'S9 chip, Always-On Display, ECG, Blood Oxygen',           price:55000, salePrice:49999, images:['https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'smart-watches',    categoryBn:'ইলেকট্রনিক্স', brand:'Apple',        stock:15,  rating:4.9, reviewCount:189,  tags:['smartwatch','apple','wearable'],     isNew:true,  isFeatured:false, deliveryDays:2, seller:'iZone Bangladesh',location:'Dhaka',       createdAt:'2025-01-25T10:00:00Z' },
+  { id:'15', slug:'basmati-rice-5kg',      name:'Premium Basmati Rice 5kg',           nameBn:'বাসমতি চাল ৫ কেজি',            description:'Long-grain aged basmati, low GI, fragrant',               price:980,   salePrice:849,   images:['https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=400&fit=crop'], category:'Grocery',     subcategory:'rice-grains',       categoryBn:'মুদিখানা',     brand:'Gold Coin',    stock:300, rating:4.6, reviewCount:540,  tags:['rice','basmati','grocery'],          isNew:false, isFeatured:false, deliveryDays:1, seller:'Meena Bazaar',    location:'Dhaka',       createdAt:'2025-01-26T10:00:00Z' },
+  { id:'16', slug:'loreal-vitamin-c',      name:"L'Oréal Vitamin C Serum",            nameBn:'লোরিয়াল ভিটামিন C সিরাম',    description:'10% pure Vitamin C, anti-aging, brightening, 30ml',      price:2200,  salePrice:1799,  images:['https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&h=400&fit=crop'], category:'Beauty',      subcategory:'skincare',          categoryBn:'বিউটি',         brand:"L'Oréal",     stock:75,  rating:4.6, reviewCount:423,  tags:['serum','skincare','vitamin-c'],      isNew:true,  isFeatured:false, deliveryDays:2, seller:'BeautyWorld BD',  location:'Dhaka',       createdAt:'2025-01-27T10:00:00Z' },
+  { id:'17', slug:'walton-ac-1ton',        name:'Walton Inverter AC 1 Ton',           nameBn:'ওয়ালটন ১ টন এসি',             description:'Inverter, Wi-Fi Control, Auto-Clean, Energy A+++',        price:55000, salePrice:47999, images:['https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=400&h=400&fit=crop'], category:'Home & Living', subcategory:'air-conditioners', categoryBn:'হোম',           brand:'Walton',       stock:25,  rating:4.5, reviewCount:178,  tags:['ac','inverter','walton','home'],     isNew:false, isFeatured:true,  deliveryDays:5, seller:'Walton Official', location:'Dhaka',       createdAt:'2025-01-28T10:00:00Z' },
+  { id:'18', slug:'gp-cricket-bat',        name:'GP Pro Cricket Bat',                 nameBn:'জিপি ক্রিকেট ব্যাট',           description:'Grade 1 English Willow, full size, pre-knocked',          price:9500,  salePrice:7999,  images:['https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=400&h=400&fit=crop'], category:'Sports',      subcategory:'cricket',           categoryBn:'স্পোর্টস',    brand:'GP',           stock:35,  rating:4.7, reviewCount:143,  tags:['cricket','bat','willow'],            isNew:true,  isFeatured:false, deliveryDays:3, seller:'Sports Arena BD', location:'Dhaka',       createdAt:'2025-01-29T10:00:00Z' },
+  { id:'19', slug:'humayun-himu',          name:'হুমায়ূন আহমেদ হিমু সমগ্র',          nameBn:'হুমায়ূন আহমেদ হিমু সমগ্র',   description:'Complete Himu series, 5 volumes, hardcover',              price:1800,  salePrice:1499,  images:['https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=400&fit=crop'], category:'Books',       subcategory:'bangla-literature', categoryBn:'বই',            brand:'Bhasha Prakash',stock:150, rating:5.0, reviewCount:987,  tags:['bangla','novel','humayun','himu'],   isNew:false, isFeatured:true,  deliveryDays:2, seller:'Rokomari',        location:'Dhaka',       createdAt:'2025-01-30T10:00:00Z' },
+  { id:'20', slug:'polo-shirt-men',        name:"Men's Premium Polo Shirt",           nameBn:'পুরুষ পোলো শার্ট',             description:'100% Egyptian Cotton, slim fit, 12 colors',               price:1800,  salePrice:1299,  images:['https://images.unsplash.com/photo-1586790170083-2f9ceadc732d?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'mens-clothing',    categoryBn:'ফ্যাশন',        brand:'Thread & Co', stock:200, rating:4.5, reviewCount:892,  tags:['shirt','polo','men','cotton'],       isNew:true,  isFeatured:false, deliveryDays:2, seller:'StyleHub BD',     location:'Dhaka',       createdAt:'2025-01-31T10:00:00Z' },
+  { id:'21', slug:'canon-eos-r50',         name:'Canon EOS R50 Mirrorless Camera',    nameBn:'ক্যানন EOS R50 ক্যামেরা',     description:'24.2MP APS-C, 4K Video, Dual Pixel AF',                  price:85000, salePrice:74999, images:['https://images.unsplash.com/photo-1502982720700-bfff97f2ecac?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'cameras',          categoryBn:'ইলেকট্রনিক্স', brand:'Canon',        stock:12,  rating:4.7, reviewCount:98,   tags:['camera','canon','mirrorless'],        isNew:false, isFeatured:false, deliveryDays:4, seller:'PixelPro BD',     location:'Dhaka',       createdAt:'2025-02-01T10:00:00Z' },
+  { id:'22', slug:'samsung-65-qled-tv',   name:'Samsung 65" QLED 4K Smart TV',       nameBn:'স্যামসাং QLED ৬৫" টিভি',      description:'Quantum HDR, 120Hz, Dolby Atmos, Gaming Mode',            price:145000,salePrice:129000,images:['https://images.unsplash.com/photo-1593359677879-a4bb92f829e1?w=400&h=400&fit=crop'], category:'Electronics', subcategory:'televisions',      categoryBn:'ইলেকট্রনিক্স', brand:'Samsung',      stock:8,   rating:4.7, reviewCount:143,  tags:['tv','qled','4k','samsung'],          isNew:false, isFeatured:true,  deliveryDays:5, seller:'TechWorld BD',    location:'Dhaka',       createdAt:'2025-02-02T10:00:00Z' },
+  { id:'23', slug:'ladies-kurti-set',      name:'Ladies Embroidered Kurti Set',       nameBn:'লেডিজ এমব্রয়ডারড কুর্তি',   description:'Hand embroidery, cotton-blend, 3-piece set, festive',     price:3500,  salePrice:2799,  images:['https://images.unsplash.com/photo-1594938298603-c8148c4b2ef4?w=400&h=400&fit=crop'], category:'Fashion',     subcategory:'womens-clothing',  categoryBn:'ফ্যাশন',        brand:'Aarong',       stock:45,  rating:4.7, reviewCount:341,  tags:['kurti','ladies','eid','traditional'], isNew:false, isFeatured:true,  deliveryDays:3, seller:'Aarong Official', location:'Dhaka',       createdAt:'2025-02-03T10:00:00Z' },
+  { id:'24', slug:'atomic-habits-bangla',  name:'Atomic Habits (Bangla Translation)', nameBn:'অ্যাটমিক হ্যাবিটস (বাংলা)',  description:'James Clear, Bangla Edition, Paperback, Self-help',      price:450,   salePrice:380,   images:['https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=400&h=400&fit=crop'], category:'Books',       subcategory:'self-help',         categoryBn:'বই',            brand:'Ananya',       stock:200, rating:4.8, reviewCount:654,  tags:['self-help','habits','bangla-book'],  isNew:true,  isFeatured:false, deliveryDays:2, seller:'Rokomari',        location:'Dhaka',       createdAt:'2025-02-04T10:00:00Z' },
+  { id:'25', slug:'rasasi-oud-perfume',    name:'Rasasi Oud Al Layl EDP 100ml',       nameBn:'রাসাসি উদ পারফিউম',           description:'Arabian Oud, long lasting 12hr, unisex, woody-floral',   price:4500,  salePrice:3800,  images:['https://images.unsplash.com/photo-1541643600914-78b084683702?w=400&h=400&fit=crop'], category:'Beauty',      subcategory:'fragrances',        categoryBn:'বিউটি',         brand:'Rasasi',       stock:40,  rating:4.8, reviewCount:267,  tags:['perfume','oud','fragrance'],         isNew:false, isFeatured:false, deliveryDays:3, seller:'Fragrance House BD',location:'Dhaka',    createdAt:'2025-02-05T10:00:00Z' },
+  { id:'26', slug:'miyako-rice-cooker',    name:'Miyako 5L Digital Rice Cooker',      nameBn:'মিয়াকো ডিজিটাল রাইস কুকার', description:'Multi-cook, keep warm, non-stick inner pot',              price:3200,  salePrice:2699,  images:['https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400&h=400&fit=crop'], category:'Home & Living', subcategory:'kitchen',         categoryBn:'হোম',           brand:'Miyako',       stock:90,  rating:4.4, reviewCount:562,  tags:['kitchen','rice-cooker','miyako'],    isNew:false, isFeatured:false, deliveryDays:2, seller:'HomePlus BD',     location:'Dhaka',       createdAt:'2025-02-06T10:00:00Z' },
+  { id:'27', slug:'yoga-mat-tpe',          name:'Premium TPE Yoga Mat 6mm',           nameBn:'প্রিমিয়াম যোগা ম্যাট',       description:'Non-slip, eco-friendly TPE, double-layer, carry strap',  price:1800,  salePrice:1399,  images:['https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=400&fit=crop'], category:'Sports',      subcategory:'fitness',           categoryBn:'স্পোর্টস',    brand:'FitLife',      stock:120, rating:4.5, reviewCount:289,  tags:['yoga','fitness','mat'],             isNew:false, isFeatured:false, deliveryDays:2, seller:'FitZone BD',      location:'Dhaka',       createdAt:'2025-02-07T10:00:00Z' },
+]
+
+const ALL_SEEDS = [...SEED_PRODUCTS, ...SEED_PRODUCTS_2]
+
+async function getProducts(): Promise<any[]> {
+  // Use a dedicated seeded flag so an intentionally-empty list never re-seeds
+  const seeded = await redis.get<string>(`${KEYS.seeded}:products`)
+  if (seeded) {
+    return (await redis.get<any[]>(KEYS.products)) ?? []
+  }
+  // First run — seed data into Redis and mark as seeded
+  await redis.set(KEYS.products, ALL_SEEDS)
+  await redis.set(`${KEYS.seeded}:products`, '1')
+  return ALL_SEEDS
+}
+async function saveProducts(products: any[]) {
+  await redis.set(KEYS.products, products)
+}
+
 // ── PUBLIC routes ─────────────────────────────────────────────────────────────
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { category, subcategory, q, limit, featured, sortBy, order } = req.query as Record<string, string>
-  let result = [...products]
-  if (category && category !== 'All') result = result.filter(p => p.category === category)
-  if (subcategory && subcategory !== 'All') result = result.filter(p => p.subcategory === subcategory)
-  if (q) result = result.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || p.brand.toLowerCase().includes(q.toLowerCase()))
-  if (featured === 'true') result = result.filter(p => p.isFeatured)
-  // Sorting
+  let result = await getProducts()
+  if (category && category !== 'All') result = result.filter((p: any) => p.category === category)
+  if (subcategory && subcategory !== 'All') result = result.filter((p: any) => p.subcategory === subcategory)
+  if (q) result = result.filter((p: any) => p.name.toLowerCase().includes(q.toLowerCase()) || p.brand.toLowerCase().includes(q.toLowerCase()))
+  if (featured === 'true') result = result.filter((p: any) => p.isFeatured)
   if (sortBy) {
     const dir = order === 'desc' ? -1 : 1
-    result.sort((a: any, b: any) => {
-      if (a[sortBy] < b[sortBy]) return -1 * dir
-      if (a[sortBy] > b[sortBy]) return 1 * dir
-      return 0
-    })
+    result.sort((a: any, b: any) => a[sortBy] < b[sortBy] ? -1 * dir : a[sortBy] > b[sortBy] ? 1 * dir : 0)
   }
   if (limit) result = result.slice(0, parseInt(limit))
   res.json({ data: result, total: result.length })
 })
 
-router.get('/:slug', (req, res) => {
-  const product = products.find(p => p.slug === req.params.slug || p.id === req.params.slug)
+router.get('/:slug', async (req, res) => {
+  const products = await getProducts()
+  const product = products.find((p: any) => p.slug === req.params.slug || p.id === req.params.slug)
   if (!product) return res.status(404).json({ error: 'Product not found' })
   res.json(product)
 })
 
-// ── ADMIN: Create product ────────────────────────────────────────────────────
-router.post('/', requireAdmin, (req: any, res) => {
+// ── ADMIN: Create ─────────────────────────────────────────────────────────────
+router.post('/', requireAdmin, async (req: any, res) => {
   const body = req.body
-  if (!body.name || !body.brand || !body.category || !body.price) {
+  if (!body.name || !body.brand || !body.category || !body.price)
     return res.status(400).json({ error: 'name, brand, category and price are required' })
-  }
-  // Generate a unique numeric-style id and a URL slug
   const id   = String(Date.now())
   const slug = toSlug(body.name) + '-' + id.slice(-4)
-
   const product: any = {
-    id,
-    slug,
-    name:         String(body.name),
-    nameBn:       body.nameBn        ? String(body.nameBn)       : String(body.name),
-    brand:        String(body.brand),
-    category:     String(body.category),
-    subcategory:  body.subcategory   ? String(body.subcategory)  : '',
-    categoryBn:   body.categoryBn    ? String(body.categoryBn)   : String(body.category),
-    seller:       body.seller        ? String(body.seller)        : String(body.brand),
-    description:  body.description   ? String(body.description)  : '',
-    price:        Number(body.price),
-    salePrice:    Number(body.salePrice)   || 0,
-    stock:        Number(body.stock)       ?? 0,
-    deliveryDays: Number(body.deliveryDays) || 3,
-    rating:       Number(body.rating)      || 4.5,
-    reviewCount:  0,
-    location:     body.location      ? String(body.location)     : 'Dhaka',
-    isFeatured:   Boolean(body.isFeatured),
-    isNew:        body.isNew !== undefined ? Boolean(body.isNew) : true,
-    images:       Array.isArray(body.images) ? body.images : [],
-    tags:         Array.isArray(body.tags)   ? body.tags   : [],
-    createdAt:    new Date().toISOString(),
+    id, slug,
+    name: String(body.name), nameBn: body.nameBn ? String(body.nameBn) : String(body.name),
+    brand: String(body.brand), category: String(body.category),
+    subcategory: body.subcategory ? String(body.subcategory) : '',
+    categoryBn: body.categoryBn ? String(body.categoryBn) : String(body.category),
+    seller: body.seller ? String(body.seller) : String(body.brand),
+    description: body.description ? String(body.description) : '',
+    price: Number(body.price), salePrice: Number(body.salePrice) || 0,
+    stock: Number(body.stock) ?? 0, deliveryDays: Number(body.deliveryDays) || 3,
+    rating: Number(body.rating) || 4.5, reviewCount: 0,
+    location: body.location ? String(body.location) : 'Dhaka',
+    isFeatured: Boolean(body.isFeatured),
+    isNew: body.isNew !== undefined ? Boolean(body.isNew) : true,
+    images: Array.isArray(body.images) ? body.images : [],
+    tags: Array.isArray(body.tags) ? body.tags : [],
+    createdAt: new Date().toISOString(),
   }
-
+  const products = await getProducts()
   products.push(product)
+  await saveProducts(products)
+  broadcast('products_updated')
   res.status(201).json(product)
 })
 
-// ── ADMIN: Update product ────────────────────────────────────────────────────
-router.put('/:id', requireAdmin, (req: any, res) => {
+// ── ADMIN: Update ─────────────────────────────────────────────────────────────
+router.put('/:id', requireAdmin, async (req: any, res) => {
+  const products = await getProducts()
   const idx = products.findIndex((p: any) => p.id === req.params.id)
   if (idx === -1) return res.status(404).json({ error: 'Product not found' })
-
-  const body    = req.body
-  const current = products[idx] as any
-
-  // Merge — only overwrite fields that were actually sent
+  const body = req.body, current = products[idx]
   const updated: any = {
     ...current,
     ...(body.name         !== undefined && { name:        String(body.name) }),
@@ -144,37 +149,37 @@ router.put('/:id', requireAdmin, (req: any, res) => {
     ...(Array.isArray(body.images)      && { images:      body.images }),
     ...(Array.isArray(body.tags)        && { tags:        body.tags }),
   }
-
   products[idx] = updated
+  await saveProducts(products)
+  broadcast('products_updated')
   res.json(updated)
 })
 
-// ── ADMIN: Delete product ────────────────────────────────────────────────────
-router.delete('/:id', requireAdmin, (req: any, res) => {
+// ── ADMIN: Delete ─────────────────────────────────────────────────────────────
+router.delete('/:id', requireAdmin, async (req: any, res) => {
+  const products = await getProducts()
   const idx = products.findIndex((p: any) => p.id === req.params.id)
   if (idx === -1) return res.status(404).json({ error: 'Product not found' })
   const [deleted] = products.splice(idx, 1)
-  res.json({ message: 'Product deleted', id: (deleted as any).id })
+  await saveProducts(products)
+  broadcast('products_updated')
+  res.json({ message: 'Product deleted', id: deleted.id })
 })
 
-// ── Image upload (admin protected) ───────────────────────────────────────────
+// ── Image upload (admin protected, unchanged) ─────────────────────────────────
 router.post('/upload-image', requireAdmin, (req: any, res) => {
   const ct = req.headers['content-type'] ?? ''
-  if (!ct.includes('multipart/form-data')) {
-    return res.status(400).json({ error: 'Multipart form data required' })
-  }
+  if (!ct.includes('multipart/form-data')) return res.status(400).json({ error: 'Multipart form data required' })
   const boundary = ct.split('boundary=')[1]
   if (!boundary) return res.status(400).json({ error: 'No boundary' })
-
   const chunks: Buffer[] = []
   req.on('data', (chunk: Buffer) => chunks.push(chunk))
   req.on('end', () => {
     try {
       const buf = Buffer.concat(chunks)
       const sep = Buffer.from('--' + boundary)
-      let start = buf.indexOf(sep) + sep.length + 2 // skip \r\n
-      start = buf.indexOf(sep, start) // go to file part
-      // find file header end
+      let start = buf.indexOf(sep) + sep.length + 2
+      start = buf.indexOf(sep, start)
       const headerEnd = buf.indexOf(Buffer.from('\r\n\r\n'), start)
       if (headerEnd === -1) return res.status(400).json({ error: 'Malformed upload' })
       const header = buf.slice(start + sep.length + 2, headerEnd).toString()
@@ -183,18 +188,16 @@ router.post('/upload-image', requireAdmin, (req: any, res) => {
       const extMap: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' }
       const ext = extMap[mime] ?? '.jpg'
       const filename = `${randomBytes(8).toString('hex')}${ext}`
-      const fileStart = headerEnd + 4 // skip \r\n\r\n
+      const fileStart = headerEnd + 4
       const fileEnd = buf.indexOf(Buffer.from('\r\n--' + boundary), fileStart)
       const fileData = buf.slice(fileStart, fileEnd === -1 ? undefined : fileEnd)
       const filePath = join(UPLOAD_DIR, filename)
       const ws = createWriteStream(filePath)
       ws.write(fileData)
       ws.end()
-      ws.on('finish', () => {
-        res.json({ url: `/uploads/${filename}`, filename })
-      })
-    } catch (e) {
-      res.status(500).json({ error: 'Upload failed' })
-    }
+      ws.on('finish', () => res.json({ url: `/uploads/${filename}`, filename }))
+    } catch { res.status(500).json({ error: 'Upload failed' }) }
   })
 })
+
+export default router

@@ -74,6 +74,72 @@ export const useAdminStore = defineStore('admin', () => {
     }))
   })
 
+  // ── SSE real-time connection ──────────────────────────────────────────────
+  let sseSource: EventSource | null = null
+
+  function connectSSE() {
+    if (sseSource) return // already connected
+    const src = new EventSource('/api/events')
+
+    src.addEventListener('snapshot', (e: MessageEvent) => {
+      try {
+        const { orders: o, products: p } = JSON.parse(e.data)
+        if (Array.isArray(o)) orders.value = o
+        if (Array.isArray(p)) {
+          products.value = p
+          const productStore = useProductStore()
+          productStore.products = p as any
+        }
+      } catch {}
+    })
+
+    src.addEventListener('orders_updated', (e: MessageEvent) => {
+      try {
+        const fetched: ApiOrder[] = JSON.parse(e.data) ?? []
+        // Detect new orders and fire notifications
+        if (initialLoadDone) {
+          fetched
+            .filter(o => !knownOrderIds.value.has(o.id))
+            .forEach(o => {
+              notifStore.push({
+                type: 'new_order',
+                title: 'New Order Received!',
+                message: `Order #${o.id} — ৳${o.total.toLocaleString()} from ${o.customer?.name ?? 'Customer'}`,
+                orderId: o.id,
+              })
+            })
+        }
+        fetched.forEach(o => knownOrderIds.value.add(o.id))
+        initialLoadDone = true
+        orders.value = fetched
+        // Refresh dashboard stats silently
+        loadDashboard().catch(() => {})
+      } catch {}
+    })
+
+    src.addEventListener('products_updated', (e: MessageEvent) => {
+      try {
+        const fetched: ApiProduct[] = JSON.parse(e.data) ?? []
+        products.value = fetched
+        const productStore = useProductStore()
+        productStore.products = fetched as any
+      } catch {}
+    })
+
+    src.onerror = () => {
+      // SSE connection dropped — reconnect after 5 s
+      src.close()
+      sseSource = null
+      setTimeout(connectSSE, 5_000)
+    }
+
+    sseSource = src
+  }
+
+  function disconnectSSE() {
+    if (sseSource) { sseSource.close(); sseSource = null }
+  }
+
   // ── Load actions ──────────────────────────────────────────────────────────
   async function loadAll() {
     await Promise.all([loadProducts(), loadOrders(), checkHealth(), loadDashboard()])
@@ -226,5 +292,7 @@ export const useAdminStore = defineStore('admin', () => {
     createProduct, updateProduct, deleteProduct,
     updateOrder, deleteOrder,
     uploadImage,
+    // SSE
+    connectSSE, disconnectSSE,
   }
 })

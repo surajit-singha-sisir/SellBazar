@@ -1,9 +1,9 @@
-// api/index.js  — plain JS, no TypeScript, no compilation needed
+// api/index.js — plain JS, no TypeScript, no compilation needed
 // Vercel runs this directly as a Node.js serverless function
 
 const express = require('express')
-const cors = require('cors')
-const jwt = require('jsonwebtoken')
+const cors    = require('cors')
+const jwt     = require('jsonwebtoken')
 
 const app = express()
 const JWT_SECRET = process.env.JWT_SECRET || 'sellbazar-super-secret-key-2025'
@@ -19,33 +19,27 @@ app.use(cors({
   },
   credentials: true,
 }))
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 
 // ── Upstash Redis persistence layer ──────────────────────────────────────────
-// Vercel KV was sunset Dec 2024 and migrated to Upstash Redis.
-// New projects: install "Upstash for Redis" from Vercel Marketplace →
-//   vercel.com/marketplace/upstash/upstash-kv
-// This auto-injects UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.
-//
-// Also supports the legacy Vercel KV env var names for backwards compat:
+// Install "Upstash for Redis" from Vercel Marketplace and it will auto-inject:
+//   UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+// Also supports legacy Vercel KV env var names:
 //   KV_REST_API_URL / KV_REST_API_TOKEN
 //
-// Without either set (local dev), falls back to in-memory — same as before.
-//
 // KV key schema:
-//   "sb:product:<slug>"  → single product JSON object
-//   "sb:product_ids"     → JSON array of slugs for admin-created products
-//   "sb:deleted_slugs"   → JSON array of seed slugs that were deleted
-//
-const KV_URL   = process.env.UPSTASH_REDIS_REST_URL   || process.env.KV_REST_API_URL
-const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN  || process.env.KV_REST_API_TOKEN
+//   Products  — "sb:product:<slug>"  → single product JSON
+//             — "sb:product_ids"     → JSON array of slugs (admin-created)
+//             — "sb:deleted_slugs"   → JSON array of seed slugs that were deleted
+//   Orders    — "sb:order:<id>"      → single order JSON
+//             — "sb:order_ids"       → JSON array of order IDs
+//   Categories— "sb:categories"      → full CATEGORIES array JSON
+//   Admins    — "sb:admins"          → full ADMIN_ACCOUNTS array JSON (passwords included)
+
+const KV_URL    = process.env.UPSTASH_REDIS_REST_URL   || process.env.KV_REST_API_URL
+const KV_TOKEN  = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
 const KV_ENABLED = !!(KV_URL && KV_TOKEN)
 
-// Upstash REST API uses path-style commands:
-//   GET  <base>/get/<key>           → { result: value | null }
-//   POST <base>/set/<key>/<value>   → { result: "OK" }
-//   POST <base>/del/<key>           → { result: 0|1 }
-// Values are always strings; we JSON-encode objects ourselves.
 const KV_HEADERS = () => ({
   Authorization: `Bearer ${KV_TOKEN}`,
   'Content-Type': 'application/json',
@@ -58,7 +52,6 @@ async function kvGet(key) {
     if (!res.ok) return null
     const json = await res.json()
     if (json.result === null || json.result === undefined) return null
-    // Upstash returns strings; we stored JSON so parse it back
     if (typeof json.result === 'string') {
       try { return JSON.parse(json.result) } catch { return json.result }
     }
@@ -69,11 +62,9 @@ async function kvGet(key) {
 async function kvSet(key, value) {
   if (!KV_ENABLED) return
   try {
-    // Upstash: POST /set/<key>/<value>  — value must be a string
     const encoded = encodeURIComponent(JSON.stringify(value))
     await fetch(`${KV_URL}/set/${encodeURIComponent(key)}/${encoded}`, {
-      method: 'POST',
-      headers: KV_HEADERS(),
+      method: 'POST', headers: KV_HEADERS(),
     })
   } catch (e) { console.error('[KV set]', key, e.message) }
 }
@@ -82,95 +73,24 @@ async function kvDel(key) {
   if (!KV_ENABLED) return
   try {
     await fetch(`${KV_URL}/del/${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: KV_HEADERS(),
+      method: 'POST', headers: KV_HEADERS(),
     })
   } catch (e) { console.error('[KV del]', key, e.message) }
 }
 
 // ── In-memory fallback (local dev / Redis not connected) ─────────────────────
-const _dynamicProducts = []
-const _deletedSlugs    = new Set()
-
-// ── getAllProducts: seed + KV dynamic, minus deleted ─────────────────────────
-async function getAllProducts() {
-  const deleted    = KV_ENABLED ? (await kvGet('sb:deleted_slugs') ?? []) : [..._deletedSlugs]
-  const deletedSet = new Set(deleted)
-  let merged       = products.filter(p => !deletedSet.has(p.slug))
-
-  const dynamicSlugs = KV_ENABLED
-    ? (await kvGet('sb:product_ids') ?? [])
-    : _dynamicProducts.map(p => p.slug)
-
-  const dynamics = await Promise.all(
-    dynamicSlugs.map(slug =>
-      KV_ENABLED ? kvGet(`sb:product:${slug}`) : Promise.resolve(_dynamicProducts.find(p => p.slug === slug))
-    )
-  )
-
-  for (const dp of dynamics) {
-    if (!dp) continue
-    const idx = merged.findIndex(p => p.slug === dp.slug || p.id === dp.id)
-    if (idx !== -1) merged[idx] = dp          // override seed entry (edit)
-    else merged.unshift(dp)                    // brand-new product → front
-  }
-  return merged
+const _mem = {
+  dynamicProducts: [],
+  deletedSlugs:    new Set(),
+  dynamicOrders:   [],
+  categories:      null,   // null = use SEED_CATEGORIES
+  admins:          null,   // null = use SEED_ADMINS
 }
 
-// ── saveDynamicProduct: persist create/update ─────────────────────────────────
-async function saveDynamicProduct(p) {
-  if (KV_ENABLED) {
-    await kvSet(`sb:product:${p.slug}`, p)
-    const ids = (await kvGet('sb:product_ids')) ?? []
-    if (!ids.includes(p.slug)) { ids.unshift(p.slug); await kvSet('sb:product_ids', ids) }
-  } else {
-    const idx = _dynamicProducts.findIndex(x => x.slug === p.slug || x.id === p.id)
-    if (idx !== -1) _dynamicProducts[idx] = p; else _dynamicProducts.unshift(p)
-  }
-}
-
-// ── markDeleted: remove from KV and hide seed entries ─────────────────────────
-async function markDeleted(slug) {
-  if (KV_ENABLED) {
-    const ids = (await kvGet('sb:product_ids')) ?? []
-    await kvSet('sb:product_ids', ids.filter(s => s !== slug))
-    await kvDel(`sb:product:${slug}`)
-    if (products.find(p => p.slug === slug)) {       // it's a seed product
-      const del = (await kvGet('sb:deleted_slugs')) ?? []
-      if (!del.includes(slug)) { del.push(slug); await kvSet('sb:deleted_slugs', del) }
-    }
-  } else {
-    _deletedSlugs.add(slug)
-    const idx = _dynamicProducts.findIndex(p => p.slug === slug)
-    if (idx !== -1) _dynamicProducts.splice(idx, 1)
-  }
-}
-
-
-
-function requireAdmin(req, res, next) {
-  const h = req.headers.authorization
-  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' })
-  try {
-    const p = jwt.verify(h.slice(7), JWT_SECRET)
-    if (p.role !== 'admin' && p.role !== 'superadmin') return res.status(403).json({ error: 'Admin access required' })
-    req.admin = p
-    next()
-  } catch { return res.status(401).json({ error: 'Invalid or expired token' }) }
-}
-
-function requireSuperAdmin(req, res, next) {
-  const h = req.headers.authorization
-  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' })
-  try {
-    const p = jwt.verify(h.slice(7), JWT_SECRET)
-    if (p.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required' })
-    req.admin = p
-    next()
-  } catch { return res.status(401).json({ error: 'Invalid or expired token' }) }
-}
-
-const CATEGORIES = [
+// ──────────────────────────────────────────────────────────────────────────────
+// SEED DATA
+// ──────────────────────────────────────────────────────────────────────────────
+const SEED_CATEGORIES = [
   { id:'c1',slug:'electronics',  name:'Electronics',  nameBn:'ইলেকট্রনিক্স', icon:'fa-microchip',      color:'#3b82f6', subcategories:[{id:'s1-1',slug:'mobile-phones',name:'Mobile Phones',nameBn:'মোবাইল ফোন',icon:'fa-mobile-screen'},{id:'s1-2',slug:'laptops',name:'Laptops',nameBn:'ল্যাপটপ',icon:'fa-laptop'},{id:'s1-3',slug:'tablets',name:'Tablets',nameBn:'ট্যাবলেট',icon:'fa-tablet-screen-button'},{id:'s1-4',slug:'headphones',name:'Headphones',nameBn:'হেডফোন',icon:'fa-headphones'},{id:'s1-5',slug:'smart-watches',name:'Smart Watches',nameBn:'স্মার্টওয়াচ',icon:'fa-watch-smart'},{id:'s1-6',slug:'cameras',name:'Cameras',nameBn:'ক্যামেরা',icon:'fa-camera'},{id:'s1-7',slug:'televisions',name:'Televisions',nameBn:'টেলিভিশন',icon:'fa-tv'},{id:'s1-8',slug:'accessories',name:'Accessories',nameBn:'আনুষাঙ্গিক',icon:'fa-plug'}]},
   { id:'c2',slug:'fashion',      name:'Fashion',      nameBn:'ফ্যাশন',         icon:'fa-shirt',           color:'#ec4899', subcategories:[{id:'s2-1',slug:'mens-clothing',name:"Men's Clothing",nameBn:'পুরুষ পোশাক',icon:'fa-person'},{id:'s2-2',slug:'womens-clothing',name:"Women's Clothing",nameBn:'মহিলা পোশাক',icon:'fa-person-dress'},{id:'s2-3',slug:'kids-clothing',name:"Kids' Clothing",nameBn:'শিশু পোশাক',icon:'fa-child'},{id:'s2-4',slug:'footwear',name:'Footwear',nameBn:'জুতা',icon:'fa-shoe-prints'},{id:'s2-5',slug:'sarees',name:'Sarees',nameBn:'শাড়ি',icon:'fa-scarf'},{id:'s2-6',slug:'bags-wallets',name:'Bags & Wallets',nameBn:'ব্যাগ ও মানিব্যাগ',icon:'fa-bag-shopping'},{id:'s2-7',slug:'ethnic-wear',name:'Ethnic Wear',nameBn:'ঐতিহ্যবাহী পোশাক',icon:'fa-vest'}]},
   { id:'c3',slug:'grocery',      name:'Grocery',      nameBn:'মুদিখানা',        icon:'fa-basket-shopping', color:'#22c55e', subcategories:[{id:'s3-1',slug:'rice-grains',name:'Rice & Grains',nameBn:'চাল ও শস্য',icon:'fa-wheat-awn'},{id:'s3-2',slug:'oil-spices',name:'Oil & Spices',nameBn:'তেল ও মশলা',icon:'fa-jar'},{id:'s3-3',slug:'beverages',name:'Beverages',nameBn:'পানীয়',icon:'fa-bottle-water'},{id:'s3-4',slug:'snacks',name:'Snacks',nameBn:'স্ন্যাকস',icon:'fa-cookie-bite'},{id:'s3-5',slug:'dairy',name:'Dairy',nameBn:'দুগ্ধজাত পণ্য',icon:'fa-cow'},{id:'s3-6',slug:'fresh-produce',name:'Fresh Produce',nameBn:'তাজা শাকসবজি',icon:'fa-carrot'}]},
@@ -181,7 +101,7 @@ const CATEGORIES = [
   { id:'c8',slug:'books',        name:'Books',        nameBn:'বই',              icon:'fa-book-open',       color:'#fbbf24', subcategories:[{id:'s8-1',slug:'bangla-literature',name:'Bangla Literature',nameBn:'বাংলা সাহিত্য',icon:'fa-book'},{id:'s8-2',slug:'academic',name:'Academic',nameBn:'শিক্ষামূলক',icon:'fa-graduation-cap'},{id:'s8-3',slug:'self-help',name:'Self Help',nameBn:'সেলফ হেল্প',icon:'fa-brain'},{id:'s8-4',slug:'religious',name:'Religious',nameBn:'ধর্মীয়',icon:'fa-star-and-crescent'},{id:'s8-5',slug:'children',name:"Children's",nameBn:'শিশু',icon:'fa-child-reaching'}]},
 ]
 
-const products = [
+const SEED_PRODUCTS = [
   { id:'1',  slug:'samsung-galaxy-a55',   name:'Samsung Galaxy A55 5G',              nameBn:'স্যামসাং গ্যালাক্সি A55',   description:'6.6" AMOLED, 50MP camera, 5000mAh',                     price:45000,salePrice:39999,images:['https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=400&h=400&fit=crop'],category:'Electronics',subcategory:'mobile-phones',categoryBn:'ইলেকট্রনিক্স',brand:'Samsung',stock:42,rating:4.6,reviewCount:318,tags:['phone','5g'],isNew:true,isFeatured:false,deliveryDays:2,seller:'TechWorld BD',location:'Dhaka',createdAt:'2025-01-10T10:00:00Z'},
   { id:'2',  slug:'nike-air-max-2027',    name:'Nike Air Max 2027',                  nameBn:'নাইকি এয়ার ম্যাক্স',         description:'Future-forward cushioning, breathable mesh',              price:12000,salePrice:9499, images:['https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop'],category:'Fashion',    subcategory:'footwear',        categoryBn:'ফ্যাশন',       brand:'Nike',   stock:80,rating:4.8,reviewCount:512,tags:['shoes','sneakers'],isNew:false,isFeatured:false,deliveryDays:3,seller:'SportZone',location:'Chittagong',createdAt:'2025-01-12T10:00:00Z'},
   { id:'3',  slug:'walton-primo-x7',      name:'Walton Primo X7 Ultra',              nameBn:'ওয়ালটন প্রিমো X7',           description:'Made in Bangladesh, 108MP, 6000mAh',                     price:28000,salePrice:24999,images:['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=400&fit=crop'],category:'Electronics',subcategory:'mobile-phones',categoryBn:'ইলেকট্রনিক্স',brand:'Walton', stock:65,rating:4.3,reviewCount:224,tags:['phone','walton'],isNew:false,isFeatured:true,deliveryDays:1,seller:'Walton Official',location:'Dhaka',createdAt:'2025-01-14T10:00:00Z'},
@@ -214,7 +134,7 @@ const products = [
 function daysAgo(n) {
   const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString()
 }
-const orders = [
+const SEED_ORDERS = [
   { id:'SB-240001',customer:{name:'Rahim Uddin',email:'rahim.uddin@gmail.com',phone:'01711-234567',address:'House 12, Road 5, Dhanmondi, Dhaka'},items:[{productId:'1',name:'Samsung Galaxy A55 5G',quantity:1,price:39999}],subtotal:39999,shipping:80,total:40079,status:'delivered',paymentMethod:'bkash',paymentStatus:'paid',notes:'',trackingNumber:'SA-TRK-78234',createdAt:daysAgo(5),updatedAt:daysAgo(3)},
   { id:'SB-240002',customer:{name:'Fatema Begum',email:'fatema.b@yahoo.com',phone:'01812-345678',address:'Apt 4B, Bashundhara R/A, Dhaka'},items:[{productId:'4',name:'Jamdani Muslin Saree',quantity:2,price:7200}],subtotal:14400,shipping:120,total:14520,status:'shipped',paymentMethod:'cod',paymentStatus:'pending',notes:'',trackingNumber:'SA-TRK-78299',createdAt:daysAgo(3),updatedAt:daysAgo(2)},
   { id:'SB-240003',customer:{name:'Karim Hossain',email:'k.hossain@outlook.com',phone:'01955-456789',address:'Narsingdi'},items:[{productId:'7',name:'PRAN Mango Juice 1L',quantity:12,price:99},{productId:'11',name:'RFL Pressure Cooker 5L',quantity:1,price:1799}],subtotal:2987,shipping:150,total:3137,status:'processing',paymentMethod:'nagad',paymentStatus:'paid',notes:'',trackingNumber:'',createdAt:daysAgo(1),updatedAt:daysAgo(1)},
@@ -222,16 +142,195 @@ const orders = [
   { id:'SB-240005',customer:{name:'Nasir Ahmed',email:'nasir.a@proton.me',phone:'01517-678901',address:'Mirpur, Dhaka'},items:[{productId:'2',name:'Nike Air Max 2027',quantity:1,price:9499},{productId:'9',name:'Aarong Cotton Kurta',quantity:3,price:2800}],subtotal:17899,shipping:80,total:17979,status:'delivered',paymentMethod:'rocket',paymentStatus:'paid',notes:'',trackingNumber:'SA-TRK-77891',createdAt:daysAgo(4),updatedAt:daysAgo(2)},
 ]
 
-const users = []
-const userCarts = {}
-const userWishlists = {}
-
-const ADMIN_ACCOUNTS = [
-  { id:'admin-1', email:'admin@sellbazar.com',   password:'Admin@1234',  role:'superadmin', name:'Super Admin'   },
-  { id:'admin-2', email:'manager@sellbazar.com', password:'Manager@123', role:'admin',      name:'Store Manager' },
+const SEED_ADMINS = [
+  { id:'admin-1', email:'admin@sellbazar.com',   password:'Admin@1234',  role:'superadmin', name:'Super Admin',   active:true },
+  { id:'admin-2', email:'manager@sellbazar.com', password:'Manager@123', role:'admin',      name:'Store Manager', active:true },
 ]
 
-// ── HEALTH
+// ──────────────────────────────────────────────────────────────────────────────
+// KV-backed data accessors — Products
+// ──────────────────────────────────────────────────────────────────────────────
+
+async function getAllProducts() {
+  const deleted    = KV_ENABLED ? (await kvGet('sb:deleted_slugs') ?? []) : [..._mem.deletedSlugs]
+  const deletedSet = new Set(deleted)
+  let merged       = SEED_PRODUCTS.filter(p => !deletedSet.has(p.slug))
+
+  const dynamicSlugs = KV_ENABLED
+    ? (await kvGet('sb:product_ids') ?? [])
+    : _mem.dynamicProducts.map(p => p.slug)
+
+  const dynamics = await Promise.all(
+    dynamicSlugs.map(slug =>
+      KV_ENABLED
+        ? kvGet(`sb:product:${slug}`)
+        : Promise.resolve(_mem.dynamicProducts.find(p => p.slug === slug))
+    )
+  )
+
+  for (const dp of dynamics) {
+    if (!dp) continue
+    const idx = merged.findIndex(p => p.slug === dp.slug || p.id === dp.id)
+    if (idx !== -1) merged[idx] = dp   // override seed entry (edit)
+    else merged.unshift(dp)            // new product → front
+  }
+  return merged
+}
+
+async function saveDynamicProduct(p) {
+  if (KV_ENABLED) {
+    await kvSet(`sb:product:${p.slug}`, p)
+    const ids = (await kvGet('sb:product_ids')) ?? []
+    if (!ids.includes(p.slug)) { ids.unshift(p.slug); await kvSet('sb:product_ids', ids) }
+  } else {
+    const idx = _mem.dynamicProducts.findIndex(x => x.slug === p.slug || x.id === p.id)
+    if (idx !== -1) _mem.dynamicProducts[idx] = p; else _mem.dynamicProducts.unshift(p)
+  }
+}
+
+async function markProductDeleted(slug) {
+  if (KV_ENABLED) {
+    const ids = (await kvGet('sb:product_ids')) ?? []
+    await kvSet('sb:product_ids', ids.filter(s => s !== slug))
+    await kvDel(`sb:product:${slug}`)
+    if (SEED_PRODUCTS.find(p => p.slug === slug)) {
+      const del = (await kvGet('sb:deleted_slugs')) ?? []
+      if (!del.includes(slug)) { del.push(slug); await kvSet('sb:deleted_slugs', del) }
+    }
+  } else {
+    _mem.deletedSlugs.add(slug)
+    const idx = _mem.dynamicProducts.findIndex(p => p.slug === slug)
+    if (idx !== -1) _mem.dynamicProducts.splice(idx, 1)
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// KV-backed data accessors — Orders
+// ──────────────────────────────────────────────────────────────────────────────
+
+async function getAllOrders() {
+  if (KV_ENABLED) {
+    const ids = (await kvGet('sb:order_ids')) ?? null
+    // First time: no orders in KV yet — seed them in
+    if (ids === null) {
+      await seedOrdersToKV()
+      return [...SEED_ORDERS]
+    }
+    const orders = await Promise.all(ids.map(id => kvGet(`sb:order:${id}`)))
+    return orders.filter(Boolean)
+  }
+  // In-memory fallback: seed once
+  if (_mem.dynamicOrders.length === 0) {
+    _mem.dynamicOrders.push(...SEED_ORDERS.map(o => ({ ...o })))
+  }
+  return [..._mem.dynamicOrders]
+}
+
+async function seedOrdersToKV() {
+  const ids = SEED_ORDERS.map(o => o.id)
+  await kvSet('sb:order_ids', ids)
+  await Promise.all(SEED_ORDERS.map(o => kvSet(`sb:order:${o.id}`, o)))
+}
+
+async function saveOrder(order) {
+  if (KV_ENABLED) {
+    await kvSet(`sb:order:${order.id}`, order)
+    const ids = (await kvGet('sb:order_ids')) ?? []
+    if (!ids.includes(order.id)) { ids.unshift(order.id); await kvSet('sb:order_ids', ids) }
+  } else {
+    const idx = _mem.dynamicOrders.findIndex(o => o.id === order.id)
+    if (idx !== -1) _mem.dynamicOrders[idx] = order; else _mem.dynamicOrders.unshift(order)
+  }
+}
+
+async function deleteOrder(id) {
+  if (KV_ENABLED) {
+    const ids = (await kvGet('sb:order_ids')) ?? []
+    await kvSet('sb:order_ids', ids.filter(i => i !== id))
+    await kvDel(`sb:order:${id}`)
+  } else {
+    const idx = _mem.dynamicOrders.findIndex(o => o.id === id)
+    if (idx !== -1) _mem.dynamicOrders.splice(idx, 1)
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// KV-backed data accessors — Categories
+// ──────────────────────────────────────────────────────────────────────────────
+
+async function getCategories() {
+  if (KV_ENABLED) {
+    const cats = await kvGet('sb:categories')
+    return cats ?? SEED_CATEGORIES
+  }
+  return _mem.categories ?? SEED_CATEGORIES
+}
+
+async function saveCategories(cats) {
+  if (KV_ENABLED) await kvSet('sb:categories', cats)
+  else _mem.categories = cats
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// KV-backed data accessors — Admins
+// ──────────────────────────────────────────────────────────────────────────────
+
+async function getAdmins() {
+  if (KV_ENABLED) {
+    const admins = await kvGet('sb:admins')
+    return admins ?? SEED_ADMINS
+  }
+  return _mem.admins ?? SEED_ADMINS
+}
+
+async function saveAdmins(admins) {
+  if (KV_ENABLED) await kvSet('sb:admins', admins)
+  else _mem.admins = admins
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Middleware
+// ──────────────────────────────────────────────────────────────────────────────
+
+const users      = []
+const userCarts  = {}
+const userWishlists = {}
+
+function requireAdmin(req, res, next) {
+  const h = req.headers.authorization
+  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' })
+  try {
+    const p = jwt.verify(h.slice(7), JWT_SECRET)
+    if (p.role !== 'admin' && p.role !== 'superadmin' && p.role !== 'manager' && p.role !== 'editor')
+      return res.status(403).json({ error: 'Admin access required' })
+    req.admin = p
+    next()
+  } catch { return res.status(401).json({ error: 'Invalid or expired token' }) }
+}
+
+function requireSuperAdmin(req, res, next) {
+  const h = req.headers.authorization
+  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' })
+  try {
+    const p = jwt.verify(h.slice(7), JWT_SECRET)
+    if (p.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin access required' })
+    req.admin = p
+    next()
+  } catch { return res.status(401).json({ error: 'Invalid or expired token' }) }
+}
+
+// Disable Vercel edge caching for all API routes
+app.use('/api', (_, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Surrogate-Control', 'no-store')
+  next()
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// HEALTH
+// ──────────────────────────────────────────────────────────────────────────────
+
 app.get('/api/health', async (_, res) => {
   let redisOk = false
   if (KV_ENABLED) {
@@ -249,7 +348,10 @@ app.get('/api/health', async (_, res) => {
   })
 })
 
-// ── AUTH
+// ──────────────────────────────────────────────────────────────────────────────
+// AUTH (public users)
+// ──────────────────────────────────────────────────────────────────────────────
+
 app.post('/api/auth/login', (req, res) => {
   const { phone, email, password } = req.body
   if ((!phone && !email) || !password) return res.status(400).json({ error:'Credentials required' })
@@ -259,6 +361,7 @@ app.post('/api/auth/login', (req, res) => {
   const { password:_p, ...safe } = user
   res.json({ user:safe, token:'mock-jwt-token' })
 })
+
 app.post('/api/auth/register', (req, res) => {
   const { name, phone, email, division, password } = req.body
   if (!name||!phone||!email||!password) return res.status(400).json({ error:'All fields required' })
@@ -269,6 +372,7 @@ app.post('/api/auth/register', (req, res) => {
   const { password:_p, ...safe } = u
   res.json({ user:safe, token:'mock-jwt-token' })
 })
+
 app.post('/api/auth/check', (req, res) => {
   const { email, phone } = req.body
   if (email && users.find(u=>u.email===email)) return res.status(409).json({ field:'email', error:'Email already registered' })
@@ -276,52 +380,60 @@ app.post('/api/auth/check', (req, res) => {
   res.json({ available:true })
 })
 
-// ── ADMIN AUTH
-app.post('/api/admin/login', (req, res) => {
+// ──────────────────────────────────────────────────────────────────────────────
+// ADMIN AUTH
+// ──────────────────────────────────────────────────────────────────────────────
+
+app.post('/api/admin/login', async (req, res) => {
   const { email, password } = req.body
-  const admin = ADMIN_ACCOUNTS.find(a => a.email === email && a.password === password)
+  const admins = await getAdmins()
+  const admin  = admins.find(a => a.email === email && a.password === password)
   if (!admin) return res.status(401).json({ error: 'Invalid credentials' })
   if (admin.active === false) return res.status(403).json({ error: 'Account is disabled. Contact your superadmin.' })
   const token = jwt.sign({ id: admin.id, email: admin.email, role: admin.role }, JWT_SECRET, { expiresIn: '24h' })
   res.json({ token, admin: { id: admin.id, email: admin.email, role: admin.role, name: admin.name } })
 })
-app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ admin:req.admin }))
-app.post('/api/admin/logout', requireAdmin, (_, res) => res.json({ message:'Logged out' }))
 
-// ── PRODUCTS
-// Disable Vercel edge caching for all product routes — products change
-// dynamically and must always be served fresh from the lambda.
-app.use('/api/products', (_, res, next) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-  res.setHeader('Pragma', 'no-cache')
-  res.setHeader('Surrogate-Control', 'no-store')
-  next()
-})
+app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ admin: req.admin }))
+app.post('/api/admin/logout', requireAdmin, (_, res) => res.json({ message: 'Logged out' }))
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PRODUCTS
+// ──────────────────────────────────────────────────────────────────────────────
+
 app.get('/api/products', async (req, res) => {
   const { category, subcategory, q, limit, featured, sortBy, order } = req.query
   let r = await getAllProducts()
-  if (category && category!=='All') r = r.filter(p=>p.category===category)
-  if (subcategory && subcategory!=='All') r = r.filter(p=>p.subcategory===subcategory)
-  if (q) r = r.filter(p=>p.name.toLowerCase().includes(q.toLowerCase())||p.brand.toLowerCase().includes(q.toLowerCase()))
-  if (featured==='true') r = r.filter(p=>p.isFeatured)
-  if (sortBy) { const dir=order==='desc'?-1:1; r.sort((a,b)=>a[sortBy]<b[sortBy]?-dir:a[sortBy]>b[sortBy]?dir:0) }
+  if (category && category !== 'All') r = r.filter(p => p.category === category)
+  if (subcategory && subcategory !== 'All') r = r.filter(p => p.subcategory === subcategory)
+  if (q) r = r.filter(p =>
+    p.name.toLowerCase().includes(q.toLowerCase()) ||
+    (p.brand && p.brand.toLowerCase().includes(q.toLowerCase()))
+  )
+  if (featured === 'true') r = r.filter(p => p.isFeatured)
+  if (sortBy) {
+    const dir = order === 'desc' ? -1 : 1
+    r.sort((a, b) => a[sortBy] < b[sortBy] ? -dir : a[sortBy] > b[sortBy] ? dir : 0)
+  }
   if (limit) r = r.slice(0, parseInt(limit))
-  res.json({ data:r, total:r.length })
+  res.json({ data: r, total: r.length })
 })
+
 app.get('/api/products/:slug', async (req, res) => {
-  // 1. Check KV / in-memory dynamic store first (fastest for admin-created products)
   if (KV_ENABLED) {
     const kp = await kvGet(`sb:product:${req.params.slug}`)
     if (kp) return res.json(kp)
   } else {
-    const mp = _dynamicProducts.find(p=>p.slug===req.params.slug||p.id===req.params.slug)
+    const mp = _mem.dynamicProducts.find(p => p.slug === req.params.slug || p.id === req.params.slug)
     if (mp) return res.json(mp)
   }
-  // 2. Fall back to seed data
-  const p = products.find(p=>p.slug===req.params.slug||p.id===req.params.slug)
-  if (!p) return res.status(404).json({ error:'Product not found' })
+  const p = SEED_PRODUCTS.find(p => p.slug === req.params.slug || p.id === req.params.slug)
+  if (!p) return res.status(404).json({ error: 'Product not found' })
+  // If this seed product was edited and stored as a dynamic product, it would
+  // already have been found above; otherwise return seed as-is
   res.json(p)
 })
+
 app.post('/api/products', requireAdmin, async (req, res) => {
   function makeSlug(name) {
     return name.toLowerCase().replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').replace(/-+/g,'-').substring(0,80)
@@ -330,245 +442,322 @@ app.post('/api/products', requireAdmin, async (req, res) => {
   const allNow = await getAllProducts()
   const baseSlug = req.body.slug || makeSlug(req.body.name || id)
   let slug = baseSlug, suffix = 1
-  while (allNow.find(p=>p.slug===slug)) { slug = `${baseSlug}-${suffix++}` }
-  const p = { id, ...req.body, slug, createdAt:new Date().toISOString() }
+  while (allNow.find(p => p.slug === slug)) { slug = `${baseSlug}-${suffix++}` }
+  const p = { id, ...req.body, slug, createdAt: new Date().toISOString() }
   await saveDynamicProduct(p)
   res.status(201).json(p)
 })
+
 app.put('/api/products/:id', requireAdmin, async (req, res) => {
-  const allNow = await getAllProducts()
-  const existing = allNow.find(p=>p.id===req.params.id||p.slug===req.params.id)
-  if (!existing) return res.status(404).json({ error:'Product not found' })
-  const updated = { ...existing, ...req.body, id:existing.id, slug:existing.slug }
+  const allNow  = await getAllProducts()
+  const existing = allNow.find(p => p.id === req.params.id || p.slug === req.params.id)
+  if (!existing) return res.status(404).json({ error: 'Product not found' })
+  const updated = { ...existing, ...req.body, id: existing.id, slug: existing.slug }
   await saveDynamicProduct(updated)
   res.json(updated)
 })
+
 app.delete('/api/products/:id', requireAdmin, async (req, res) => {
-  const allNow = await getAllProducts()
-  const existing = allNow.find(p=>p.id===req.params.id||p.slug===req.params.id)
-  if (!existing) return res.status(404).json({ error:'Product not found' })
-  await markDeleted(existing.slug)
-  res.json({ message:'Deleted', id:existing.id })
+  const allNow  = await getAllProducts()
+  const existing = allNow.find(p => p.id === req.params.id || p.slug === req.params.id)
+  if (!existing) return res.status(404).json({ error: 'Product not found' })
+  await markProductDeleted(existing.slug)
+  res.json({ message: 'Deleted', id: existing.id })
 })
 
-// ── CATEGORIES
+// ──────────────────────────────────────────────────────────────────────────────
+// CATEGORIES
+// ──────────────────────────────────────────────────────────────────────────────
+
 app.get('/api/categories', async (_, res) => {
+  const cats       = await getCategories()
   const allProducts = await getAllProducts()
-  const data = CATEGORIES.map(c=>({ ...c,
-    productCount: allProducts.filter(p=>p.category===c.name).length,
-    subcategories: c.subcategories.map(s=>({ ...s, productCount:allProducts.filter(p=>p.subcategory===s.slug).length }))
+  const data = cats.map(c => ({
+    ...c,
+    productCount: allProducts.filter(p => p.category === c.name).length,
+    subcategories: c.subcategories.map(s => ({
+      ...s,
+      productCount: allProducts.filter(p => p.subcategory === s.slug).length,
+    })),
   }))
-  res.json({ data, total:data.length })
+  res.json({ data, total: data.length })
 })
-app.post('/api/categories', requireAdmin, (req, res) => {
+
+app.post('/api/categories', requireAdmin, async (req, res) => {
+  const cats = await getCategories()
   const { name, nameBn, slug, icon, color } = req.body
-  if (!name||!slug) return res.status(400).json({ error:'name and slug required' })
-  if (CATEGORIES.find(c=>c.slug===slug)) return res.status(409).json({ error:'Slug already exists' })
+  if (!name || !slug) return res.status(400).json({ error: 'name and slug required' })
+  if (cats.find(c => c.slug === slug)) return res.status(409).json({ error: 'Slug already exists' })
   const c = { id:'c'+Date.now(), slug, name, nameBn:nameBn||name, icon:icon||'tag', color:color||'#6b7280', subcategories:[] }
-  CATEGORIES.push(c); res.status(201).json(c)
+  cats.push(c)
+  await saveCategories(cats)
+  res.status(201).json(c)
 })
-app.get('/api/categories/:slug', (req, res) => {
-  const c = CATEGORIES.find(c=>c.slug===req.params.slug)
-  if (!c) return res.status(404).json({ error:'Category not found' })
-  res.json({ ...c, productCount:products.filter(p=>p.category===c.name).length,
-    subcategories:c.subcategories.map(s=>({ ...s, productCount:products.filter(p=>p.subcategory===s.slug).length })) })
+
+app.get('/api/categories/:slug', async (req, res) => {
+  const cats = await getCategories()
+  const allProducts = await getAllProducts()
+  const c = cats.find(c => c.slug === req.params.slug)
+  if (!c) return res.status(404).json({ error: 'Category not found' })
+  res.json({
+    ...c,
+    productCount: allProducts.filter(p => p.category === c.name).length,
+    subcategories: c.subcategories.map(s => ({ ...s, productCount: allProducts.filter(p => p.subcategory === s.slug).length })),
+  })
 })
-app.put('/api/categories/:slug', requireAdmin, (req, res) => {
-  const idx = CATEGORIES.findIndex(c=>c.slug===req.params.slug)
-  if (idx===-1) return res.status(404).json({ error:'Category not found' })
-  CATEGORIES[idx] = { ...CATEGORIES[idx], ...req.body, id:CATEGORIES[idx].id, subcategories:CATEGORIES[idx].subcategories }
-  res.json(CATEGORIES[idx])
+
+app.put('/api/categories/:slug', requireAdmin, async (req, res) => {
+  const cats = await getCategories()
+  const idx  = cats.findIndex(c => c.slug === req.params.slug)
+  if (idx === -1) return res.status(404).json({ error: 'Category not found' })
+  cats[idx] = { ...cats[idx], ...req.body, id: cats[idx].id, subcategories: cats[idx].subcategories }
+  await saveCategories(cats)
+  res.json(cats[idx])
 })
-app.delete('/api/categories/:slug', requireAdmin, (req, res) => {
-  const idx = CATEGORIES.findIndex(c=>c.slug===req.params.slug)
-  if (idx===-1) return res.status(404).json({ error:'Category not found' })
-  const [d] = CATEGORIES.splice(idx,1); res.json({ message:'Deleted', slug:d.slug })
+
+app.delete('/api/categories/:slug', requireAdmin, async (req, res) => {
+  const cats = await getCategories()
+  const idx  = cats.findIndex(c => c.slug === req.params.slug)
+  if (idx === -1) return res.status(404).json({ error: 'Category not found' })
+  const [d] = cats.splice(idx, 1)
+  await saveCategories(cats)
+  res.json({ message: 'Deleted', slug: d.slug })
 })
+
 // Subcategory routes
-app.post('/api/categories/:slug/subcategories', requireAdmin, (req, res) => {
-  const cat = CATEGORIES.find(c=>c.slug===req.params.slug)
-  if (!cat) return res.status(404).json({ error:'Category not found' })
+app.post('/api/categories/:slug/subcategories', requireAdmin, async (req, res) => {
+  const cats = await getCategories()
+  const cat  = cats.find(c => c.slug === req.params.slug)
+  if (!cat) return res.status(404).json({ error: 'Category not found' })
   const { name, nameBn, slug, icon } = req.body
-  if (!name||!slug) return res.status(400).json({ error:'name and slug required' })
-  if (cat.subcategories.find(s=>s.slug===slug)) return res.status(409).json({ error:'Subcategory slug already exists' })
+  if (!name || !slug) return res.status(400).json({ error: 'name and slug required' })
+  if (cat.subcategories.find(s => s.slug === slug)) return res.status(409).json({ error: 'Subcategory slug already exists' })
   const sub = { id:'s'+Date.now(), slug, name, nameBn:nameBn||name, icon:icon||'tag' }
-  cat.subcategories.push(sub); res.status(201).json(sub)
+  cat.subcategories.push(sub)
+  await saveCategories(cats)
+  res.status(201).json(sub)
 })
-app.put('/api/categories/:slug/subcategories/:subSlug', requireAdmin, (req, res) => {
-  const cat = CATEGORIES.find(c=>c.slug===req.params.slug)
-  if (!cat) return res.status(404).json({ error:'Category not found' })
-  const idx = cat.subcategories.findIndex(s=>s.slug===req.params.subSlug)
-  if (idx===-1) return res.status(404).json({ error:'Subcategory not found' })
-  cat.subcategories[idx] = { ...cat.subcategories[idx], ...req.body, id:cat.subcategories[idx].id }
+
+app.put('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (req, res) => {
+  const cats = await getCategories()
+  const cat  = cats.find(c => c.slug === req.params.slug)
+  if (!cat) return res.status(404).json({ error: 'Category not found' })
+  const idx  = cat.subcategories.findIndex(s => s.slug === req.params.subSlug)
+  if (idx === -1) return res.status(404).json({ error: 'Subcategory not found' })
+  cat.subcategories[idx] = { ...cat.subcategories[idx], ...req.body, id: cat.subcategories[idx].id }
+  await saveCategories(cats)
   res.json(cat.subcategories[idx])
 })
-app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, (req, res) => {
-  const cat = CATEGORIES.find(c=>c.slug===req.params.slug)
-  if (!cat) return res.status(404).json({ error:'Category not found' })
-  const idx = cat.subcategories.findIndex(s=>s.slug===req.params.subSlug)
-  if (idx===-1) return res.status(404).json({ error:'Subcategory not found' })
-  const [d] = cat.subcategories.splice(idx,1); res.json({ message:'Deleted', slug:d.slug })
+
+app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (req, res) => {
+  const cats = await getCategories()
+  const cat  = cats.find(c => c.slug === req.params.slug)
+  if (!cat) return res.status(404).json({ error: 'Category not found' })
+  const idx  = cat.subcategories.findIndex(s => s.slug === req.params.subSlug)
+  if (idx === -1) return res.status(404).json({ error: 'Subcategory not found' })
+  const [d] = cat.subcategories.splice(idx, 1)
+  await saveCategories(cats)
+  res.json({ message: 'Deleted', slug: d.slug })
 })
 
-// ── ORDERS
-app.get('/api/orders/by-id/:id', (req, res) => {
-  const o = orders.find(o=>o.id===req.params.id)
-  if (!o) return res.status(404).json({ error:'Order not found' })
+// ──────────────────────────────────────────────────────────────────────────────
+// ORDERS
+// ──────────────────────────────────────────────────────────────────────────────
+
+app.get('/api/orders/by-id/:id', async (req, res) => {
+  const orders = await getAllOrders()
+  const o = orders.find(o => o.id === req.params.id)
+  if (!o) return res.status(404).json({ error: 'Order not found' })
   res.json(o)
 })
-app.get('/api/orders', requireAdmin, (req, res) => {
-  let r = [...orders]
-  if (req.query.status && req.query.status!=='all') r = r.filter(o=>o.status===req.query.status)
-  r.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
-  res.json({ data:r, total:r.length })
+
+app.get('/api/orders', requireAdmin, async (req, res) => {
+  let r = await getAllOrders()
+  if (req.query.status && req.query.status !== 'all') r = r.filter(o => o.status === req.query.status)
+  r.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  res.json({ data: r, total: r.length })
 })
-app.post('/api/orders', (req, res) => {
+
+app.post('/api/orders', async (req, res) => {
   const { customer, items, subtotal, shipping, total, paymentMethod } = req.body
-  if (!customer||!items||!items.length||!total) return res.status(400).json({ error:'customer, items and total required' })
-  const o = { id:'SB-'+Date.now(), customer, items, subtotal:Number(subtotal||total), shipping:Number(shipping||0),
-    total:Number(total), status:'pending', paymentMethod:paymentMethod||'cod', paymentStatus:'pending',
-    notes:req.body.notes||'', trackingNumber:'', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }
-  orders.unshift(o); res.status(201).json(o)
-})
-app.put('/api/orders/:id', requireAdmin, (req, res) => {
-  const i = orders.findIndex(o=>o.id===req.params.id)
-  if (i===-1) return res.status(404).json({ error:'Order not found' })
-  orders[i] = { ...orders[i], ...req.body, id:orders[i].id, updatedAt:new Date().toISOString() }
-  res.json(orders[i])
-})
-app.delete('/api/orders/:id', requireAdmin, (req, res) => {
-  const i = orders.findIndex(o=>o.id===req.params.id)
-  if (i===-1) return res.status(404).json({ error:'Order not found' })
-  const [d] = orders.splice(i,1); res.json({ message:'Deleted', id:d.id })
+  if (!customer || !items || !items.length || !total)
+    return res.status(400).json({ error: 'customer, items and total required' })
+  const o = {
+    id: 'SB-' + Date.now(),
+    customer, items,
+    subtotal: Number(subtotal || total),
+    shipping: Number(shipping || 0),
+    total: Number(total),
+    status: 'pending',
+    paymentMethod: paymentMethod || 'cod',
+    paymentStatus: 'pending',
+    notes: req.body.notes || '',
+    trackingNumber: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  await saveOrder(o)
+  res.status(201).json(o)
 })
 
-// ── USER DATA
+app.put('/api/orders/:id', requireAdmin, async (req, res) => {
+  const orders  = await getAllOrders()
+  const existing = orders.find(o => o.id === req.params.id)
+  if (!existing) return res.status(404).json({ error: 'Order not found' })
+  const updated = { ...existing, ...req.body, id: existing.id, updatedAt: new Date().toISOString() }
+  await saveOrder(updated)
+  res.json(updated)
+})
+
+app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
+  const orders  = await getAllOrders()
+  const existing = orders.find(o => o.id === req.params.id)
+  if (!existing) return res.status(404).json({ error: 'Order not found' })
+  await deleteOrder(existing.id)
+  res.json({ message: 'Deleted', id: existing.id })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// USER DATA (cart & wishlist — session-scoped, no persistence needed)
+// ──────────────────────────────────────────────────────────────────────────────
+
 function uid(req) { return req.headers['x-user-id'] || (req.body && req.body.userId) || null }
-app.get('/api/user/cart',      (req,res)=>{ const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); res.json({cart:userCarts[u]||[]}) })
-app.post('/api/user/cart',     (req,res)=>{ const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); userCarts[u]=req.body.cart||[]; res.json({ok:true}) })
-app.get('/api/user/wishlist',  (req,res)=>{ const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); res.json({wishlist:userWishlists[u]||[]}) })
-app.post('/api/user/wishlist', (req,res)=>{ const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); userWishlists[u]=req.body.wishlist||[]; res.json({ok:true}) })
 
-// ── ADMIN DASHBOARD
+app.get('/api/user/cart',      (req,res) => { const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); res.json({cart:userCarts[u]||[]}) })
+app.post('/api/user/cart',     (req,res) => { const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); userCarts[u]=req.body.cart||[]; res.json({ok:true}) })
+app.get('/api/user/wishlist',  (req,res) => { const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); res.json({wishlist:userWishlists[u]||[]}) })
+app.post('/api/user/wishlist', (req,res) => { const u=uid(req); if(!u) return res.status(401).json({error:'Unauthorized'}); userWishlists[u]=req.body.wishlist||[]; res.json({ok:true}) })
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ADMIN DASHBOARD
+// ──────────────────────────────────────────────────────────────────────────────
+
 app.get('/api/admin/dashboard', requireAdmin, async (req, res) => {
-  const allProducts = await getAllProducts()
-  const paid = orders.filter(o=>o.paymentStatus==='paid')
-  const totalRevenue = paid.reduce((s,o)=>s+o.total, 0)
-  const statusCounts = orders.reduce((a,o)=>{ a[o.status]=(a[o.status]||0)+1; return a }, {})
+  const [allProducts, allOrders] = await Promise.all([getAllProducts(), getAllOrders()])
+  const paid = allOrders.filter(o => o.paymentStatus === 'paid')
+  const totalRevenue = paid.reduce((s, o) => s + o.total, 0)
+  const statusCounts = allOrders.reduce((a, o) => { a[o.status] = (a[o.status] || 0) + 1; return a }, {})
   const catMap = {}
-  allProducts.forEach(p=>{ catMap[p.category]=(catMap[p.category]||0)+1 })
-  res.json({ totalRevenue, totalOrders:orders.length, totalProducts:allProducts.length,
-    lowStockCount:allProducts.filter(p=>p.stock<25).length, statusCounts,
-    pendingOrders:(statusCounts.pending||0)+(statusCounts.processing||0),
-    categoryBreakdown:Object.entries(catMap).map(([name,count])=>({name,count})),
-    recentOrders:[...orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5) })
+  allProducts.forEach(p => { catMap[p.category] = (catMap[p.category] || 0) + 1 })
+  res.json({
+    totalRevenue,
+    totalOrders: allOrders.length,
+    totalProducts: allProducts.length,
+    lowStockCount: allProducts.filter(p => p.stock < 25).length,
+    statusCounts,
+    pendingOrders: (statusCounts.pending || 0) + (statusCounts.processing || 0),
+    categoryBreakdown: Object.entries(catMap).map(([name, count]) => ({ name, count })),
+    recentOrders: [...allOrders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5),
+  })
 })
-app.get('/api/admin/customers', requireAdmin, (req, res) => {
+
+app.get('/api/admin/customers', requireAdmin, async (req, res) => {
+  const allOrders = await getAllOrders()
   const map = {}
-  orders.forEach(o => {
+  allOrders.forEach(o => {
     const e = (o.customer && o.customer.email) || o.id
     if (!map[e]) {
       map[e] = {
-        id: e,
-        ...o.customer,
-        orderCount: 0,
-        totalSpent: 0,
-        orders: [],
-        firstOrder: o.createdAt,
-        lastOrder: o.createdAt,
+        id: e, ...o.customer,
+        orderCount: 0, totalSpent: 0, orders: [],
+        firstOrder: o.createdAt, lastOrder: o.createdAt,
         paymentMethod: o.paymentMethod || 'cod',
       }
     }
     map[e].orderCount++
     map[e].totalSpent += o.total
     map[e].orders.push(o.id)
-    // track earliest and latest order dates
     if (o.createdAt < map[e].firstOrder) map[e].firstOrder = o.createdAt
-    if (o.createdAt > map[e].lastOrder)  map[e].lastOrder  = o.createdAt
-    // use most recent payment method
-    if (o.createdAt >= map[e].lastOrder) map[e].paymentMethod = o.paymentMethod || map[e].paymentMethod
+    if (o.createdAt > map[e].lastOrder)  { map[e].lastOrder = o.createdAt; map[e].paymentMethod = o.paymentMethod || map[e].paymentMethod }
   })
   const data = Object.values(map).sort((a, b) => b.totalSpent - a.totalSpent)
   res.json({ data, total: data.length })
 })
 
-// ── ADMIN MANAGEMENT (superadmin only) ───────────────────────────────────────
-// List all admins (passwords stripped)
-app.get('/api/admin/admins', requireSuperAdmin, (req, res) => {
-  const data = ADMIN_ACCOUNTS.map(({ password: _, ...a }) => a)
+// ──────────────────────────────────────────────────────────────────────────────
+// ADMIN MANAGEMENT (superadmin only)
+// ──────────────────────────────────────────────────────────────────────────────
+
+app.get('/api/admin/admins', requireSuperAdmin, async (req, res) => {
+  const admins = await getAdmins()
+  const data   = admins.map(({ password: _, ...a }) => a)
   res.json({ data, total: data.length })
 })
 
-// Create new admin
-app.post('/api/admin/admins', requireSuperAdmin, (req, res) => {
+app.post('/api/admin/admins', requireSuperAdmin, async (req, res) => {
+  const admins = await getAdmins()
   const { name, email, password, role } = req.body
   if (!name || !email || !password) return res.status(400).json({ error: 'name, email and password are required' })
   const validRoles = ['admin', 'manager', 'editor', 'viewer']
   if (role && !validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role. Use: admin, manager, editor, viewer' })
-  if (ADMIN_ACCOUNTS.find(a => a.email === email)) return res.status(409).json({ error: 'Email already in use' })
+  if (admins.find(a => a.email === email)) return res.status(409).json({ error: 'Email already in use' })
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
   const a = { id: 'admin-' + Date.now(), name, email, password, role: role || 'admin', active: true, createdAt: new Date().toISOString() }
-  ADMIN_ACCOUNTS.push(a)
+  admins.push(a)
+  await saveAdmins(admins)
   const { password: _, ...safe } = a
   res.status(201).json(safe)
 })
 
-// Update admin (role, name, active — NOT password for now)
-app.put('/api/admin/admins/:id', requireSuperAdmin, (req, res) => {
-  const idx = ADMIN_ACCOUNTS.findIndex(a => a.id === req.params.id)
+app.put('/api/admin/admins/:id', requireSuperAdmin, async (req, res) => {
+  const admins = await getAdmins()
+  const idx    = admins.findIndex(a => a.id === req.params.id)
   if (idx === -1) return res.status(404).json({ error: 'Admin not found' })
-  const target = ADMIN_ACCOUNTS[idx]
-  // Cannot demote or edit the primary superadmin (admin-1)
+  const target = admins[idx]
   if (target.id === 'admin-1' && req.body.role && req.body.role !== 'superadmin')
     return res.status(403).json({ error: 'Cannot change the primary superadmin role' })
-  const allowed = ['name', 'role', 'active']
   const validRoles = ['superadmin', 'admin', 'manager', 'editor', 'viewer']
   if (req.body.role && !validRoles.includes(req.body.role))
     return res.status(400).json({ error: 'Invalid role' })
-  allowed.forEach(k => { if (req.body[k] !== undefined) target[k] = req.body[k] })
-  // If password change requested
+  ;['name', 'role', 'active'].forEach(k => { if (req.body[k] !== undefined) target[k] = req.body[k] })
   if (req.body.password) {
     if (req.body.password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
     target.password = req.body.password
   }
+  await saveAdmins(admins)
   const { password: _, ...safe } = target
   res.json(safe)
 })
 
-// Delete admin
-app.delete('/api/admin/admins/:id', requireSuperAdmin, (req, res) => {
+app.delete('/api/admin/admins/:id', requireSuperAdmin, async (req, res) => {
   if (req.params.id === 'admin-1') return res.status(403).json({ error: 'Cannot delete the primary superadmin' })
-  // Cannot delete yourself
   if (req.params.id === req.admin.id) return res.status(403).json({ error: 'Cannot delete your own account' })
-  const idx = ADMIN_ACCOUNTS.findIndex(a => a.id === req.params.id)
+  const admins = await getAdmins()
+  const idx    = admins.findIndex(a => a.id === req.params.id)
   if (idx === -1) return res.status(404).json({ error: 'Admin not found' })
-  const [d] = ADMIN_ACCOUNTS.splice(idx, 1)
+  const [d] = admins.splice(idx, 1)
+  await saveAdmins(admins)
   res.json({ message: 'Admin deleted', id: d.id })
 })
 
-// Reset password (superadmin only)
-app.post('/api/admin/admins/:id/reset-password', requireSuperAdmin, (req, res) => {
+app.post('/api/admin/admins/:id/reset-password', requireSuperAdmin, async (req, res) => {
   const { newPassword } = req.body
   if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' })
-  const a = ADMIN_ACCOUNTS.find(a => a.id === req.params.id)
+  const admins = await getAdmins()
+  const a      = admins.find(a => a.id === req.params.id)
   if (!a) return res.status(404).json({ error: 'Admin not found' })
   a.password = newPassword
+  await saveAdmins(admins)
   res.json({ message: 'Password updated successfully' })
 })
 
-// ── IMAGE UPLOAD
-// Vercel serverless has no persistent disk, so we cannot store files.
-// The client handles conversion to Base64 data URLs entirely client-side.
-// This endpoint is kept for compatibility but is no longer called by the
-// default upload flow.  If a dataUrl is posted in the JSON body we echo it
-// back so older integrations still work without a round-trip failure.
+// ──────────────────────────────────────────────────────────────────────────────
+// IMAGE UPLOAD
+// ──────────────────────────────────────────────────────────────────────────────
+// Vercel serverless has no persistent disk.  Images should be uploaded to ImgBB
+// client-side (handled in useAdminApi.ts).  This endpoint echoes back a dataUrl
+// if posted in JSON for backwards compatibility.
+
 app.post('/api/admin/upload', requireAdmin, (req, res) => {
   const dataUrl = req.body && req.body.dataUrl
   if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
     return res.json({ url: dataUrl, filename: req.body.filename || 'image', message: 'ok' })
   }
-  // No persistent storage — tell caller to use client-side Base64 conversion
   res.status(422).json({ url: '', filename: '', message: 'Serverless environment has no persistent storage. Convert images to Base64 on the client instead.' })
 })
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Export
+// ──────────────────────────────────────────────────────────────────────────────
 
 module.exports = app

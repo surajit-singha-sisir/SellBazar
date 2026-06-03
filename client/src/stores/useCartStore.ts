@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { CartItem, Product } from '@/types'
 
-const API = 'http://localhost:4000/api/user'
+const API = '/api/user'
 
 function authHeaders(userId: string): HeadersInit {
   return { 'Content-Type': 'application/json', 'x-user-id': userId }

@@ -1,57 +1,52 @@
 import { Router, Request, Response } from 'express'
+import { redis, KEYS } from '../lib/redis.js'
 
 const router = Router()
 
-// In-memory per-user storage  { userId -> data }
-const userCarts: Record<string, unknown[]> = {}
-const userWishlists: Record<string, string[]> = {}
-
-// ── Simple token extraction helper ───────────────────────────────────────────
-// For the demo "mock-jwt-token" we just trust the userId sent in header/body.
-// Replace with real JWT verification when you add proper auth.
 function getUserId(req: Request): string | null {
-  // Prefer X-User-Id header; fall back to body.userId
   return (req.headers['x-user-id'] as string) ?? req.body?.userId ?? null
 }
 
 // ── Cart ──────────────────────────────────────────────────────────────────────
-router.get('/cart', (req: Request, res: Response) => {
+router.get('/cart', async (req: Request, res: Response) => {
   const uid = getUserId(req)
   if (!uid) return res.status(401).json({ error: 'Unauthorized' })
-  res.json({ cart: userCarts[uid] ?? [] })
+  const cart = await redis.get<unknown[]>(KEYS.cart(uid))
+  res.json({ cart: cart ?? [] })
 })
 
-router.post('/cart', (req: Request, res: Response) => {
+router.post('/cart', async (req: Request, res: Response) => {
   const uid = getUserId(req)
   if (!uid) return res.status(401).json({ error: 'Unauthorized' })
   const { cart } = req.body
   if (!Array.isArray(cart)) return res.status(400).json({ error: 'cart must be an array' })
-  userCarts[uid] = cart
+  await redis.set(KEYS.cart(uid), cart)
   res.json({ ok: true })
 })
 
 // ── Wishlist ──────────────────────────────────────────────────────────────────
-router.get('/wishlist', (req: Request, res: Response) => {
+router.get('/wishlist', async (req: Request, res: Response) => {
   const uid = getUserId(req)
   if (!uid) return res.status(401).json({ error: 'Unauthorized' })
-  res.json({ wishlist: userWishlists[uid] ?? [] })
+  const wishlist = await redis.get<string[]>(KEYS.wishlist(uid))
+  res.json({ wishlist: wishlist ?? [] })
 })
 
-router.post('/wishlist', (req: Request, res: Response) => {
+router.post('/wishlist', async (req: Request, res: Response) => {
   const uid = getUserId(req)
   if (!uid) return res.status(401).json({ error: 'Unauthorized' })
   const { wishlist } = req.body
   if (!Array.isArray(wishlist)) return res.status(400).json({ error: 'wishlist must be an array' })
-  userWishlists[uid] = wishlist
+  await redis.set(KEYS.wishlist(uid), wishlist)
   res.json({ ok: true })
 })
 
-// ── Clear all user data (called on logout from client, optional) ──────────────
-router.delete('/userdata', (req: Request, res: Response) => {
+// ── Clear user data ───────────────────────────────────────────────────────────
+router.delete('/userdata', async (req: Request, res: Response) => {
   const uid = getUserId(req)
   if (!uid) return res.status(401).json({ error: 'Unauthorized' })
-  delete userCarts[uid]
-  delete userWishlists[uid]
+  await redis.del(KEYS.cart(uid))
+  await redis.del(KEYS.wishlist(uid))
   res.json({ ok: true })
 })
 

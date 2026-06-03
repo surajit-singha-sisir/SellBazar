@@ -66,6 +66,11 @@
           <button class="topbar-btn" @click="adminStore.loadAll()" title="Refresh data">
             <i class="fa-sharp fa-solid fa-arrows-rotate" :class="{ 'fa-spin': isLoading }"></i>
           </button>
+          <!-- SSE live indicator -->
+          <div class="sse-pill" :class="sseStatus" :title="sseStatus === 'live' ? 'Live — real-time sync active' : 'Reconnecting…'">
+            <span class="sse-dot"></span>
+            <span class="sse-label">{{ sseStatus === 'live' ? 'Live' : 'Syncing…' }}</span>
+          </div>
           <NotificationPanel />
           <div class="theme-toggle-wrap" :title="themeStore.isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
             <ThemeToggle />
@@ -163,12 +168,14 @@ watch(
 
 onMounted(() => {
   document.addEventListener('click', onDocClick)
-  adminStore.loadAll()
-  startPolling()
+  adminStore.loadAll()          // initial full fetch
+  adminStore.connectSSE()       // open SSE stream — live updates from here on
+  startPolling()                // keep optional heartbeat polling if user wants it
 })
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
   clearInterval(pollingTimer)
+  adminStore.disconnectSSE()    // close SSE when admin logs out / navigates away
 })
 
 function handleLogout() {
@@ -213,6 +220,11 @@ const isLoading = computed(() =>
 const serverStatus = computed(() =>
   adminStore.serverOnline === null ? 'checking' :
   adminStore.serverOnline ? 'online' : 'offline'
+)
+
+// SSE liveness — mirrors serverOnline (SSE runs on the same server)
+const sseStatus = computed(() =>
+  adminStore.serverOnline === false ? 'reconnecting' : 'live'
 )
 </script>
 
@@ -410,6 +422,28 @@ const serverStatus = computed(() =>
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-6px) scale(0.97); }
 .admin-page-enter-active, .admin-page-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }
 .admin-page-enter-from, .admin-page-leave-to { opacity: 0; transform: translateY(6px); }
+
+/* ── SSE live pill ──────────────────────────────────────────────────────── */
+.sse-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  border: 1px solid transparent; user-select: none; cursor: default;
+  transition: background 0.3s, border-color 0.3s;
+}
+.sse-pill.live {
+  background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.3); color: #22c55e;
+}
+.sse-pill.reconnecting {
+  background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.3); color: #eab308;
+}
+.sse-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.sse-pill.live        .sse-dot { background: #22c55e; box-shadow: 0 0 5px #22c55e; animation: sse-pulse 2s infinite; }
+.sse-pill.reconnecting .sse-dot { background: #eab308; animation: sse-pulse 0.8s infinite; }
+@keyframes sse-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+@media (max-width: 768px) { .sse-label { display: none; } .sse-pill { padding: 4px 6px; } }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
