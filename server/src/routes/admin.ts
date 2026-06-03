@@ -5,6 +5,7 @@ import { join, extname } from 'path'
 import { randomBytes } from 'crypto'
 import { requireAdmin } from '../middleware/auth.js'
 import { redis, KEYS } from '../lib/redis.js'
+import { broadcast } from './events.js'
 
 const router = Router()
 
@@ -112,6 +113,38 @@ router.get('/customers', requireAdmin, async (_req, res) => {
   })
   const customers = Object.values(map).sort((a: any, b: any) => b.totalSpent - a.totalSpent)
   res.json({ data: customers, total: customers.length })
+})
+
+// ── POST /api/admin/migrate-seed-flags ───────────────────────────────────────
+// One-time call: writes sb:seeded:* flags for any collection that already has
+// data in Redis (so the new seed-guard logic doesn't re-seed them on next load)
+router.post('/migrate-seed-flags', requireAdmin, async (_req, res) => {
+  const results: Record<string, string> = {}
+  for (const col of ['products', 'orders', 'categories'] as const) {
+    const key = KEYS[col]
+    const data = await redis.get<any[]>(key)
+    const flagKey = `${KEYS.seeded}:${col}`
+    if (data !== null) {
+      await redis.set(flagKey, '1')
+      results[col] = `flag set (${Array.isArray(data) ? data.length : 0} items)`
+    } else {
+      results[col] = 'no data — flag NOT set (will seed on next request)'
+    }
+  }
+  res.json({ ok: true, results })
+})
+
+// ── DELETE /api/admin/reset-collection/:col ───────────────────────────────────
+// Wipes a collection AND its seed flag so it will re-seed on next request.
+router.delete('/reset-collection/:col', requireAdmin, async (req, res) => {
+  const col = req.params.col as 'products' | 'orders' | 'categories'
+  if (!['products', 'orders', 'categories'].includes(col))
+    return res.status(400).json({ error: 'col must be products | orders | categories' })
+  await redis.del(KEYS[col])
+  await redis.del(`${KEYS.seeded}:${col}`)
+  if (col === 'products') broadcast('products_updated')
+  if (col === 'orders')   broadcast('orders_updated')
+  res.json({ ok: true, message: `${col} cleared — will auto-reseed on next request` })
 })
 
 export default router

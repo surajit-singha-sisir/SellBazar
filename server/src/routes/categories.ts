@@ -6,10 +6,12 @@ import { redis, KEYS } from '../lib/redis.js'
 const router = Router()
 
 async function getCategories() {
-  const stored = await redis.get<any[]>(KEYS.categories)
-  if (stored && stored.length > 0) return stored
-  // First run: seed into Redis
+  const seeded = await redis.get<string>(`${KEYS.seeded}:categories`)
+  if (seeded) {
+    return (await redis.get<any[]>(KEYS.categories)) ?? []
+  }
   await redis.set(KEYS.categories, SEED_CATEGORIES)
+  await redis.set(`${KEYS.seeded}:categories`, '1')
   return [...SEED_CATEGORIES]
 }
 async function saveCategories(cats: any[]) {
