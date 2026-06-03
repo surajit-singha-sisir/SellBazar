@@ -537,25 +537,36 @@ const canReview = ref(false)
 const userAlreadyReviewed = ref(false)
 
 async function checkCanReview(slug: string) {
+  canReview.value = false
+  userAlreadyReviewed.value = false
   if (!authStore.isLoggedIn || !authStore.user?.email) return
+
   const email = authStore.user.email
-  // Check if user already reviewed
-  userAlreadyReviewed.value = reviews.value.some(r => r.userEmail?.toLowerCase() === email.toLowerCase())
-  if (userAlreadyReviewed.value) { canReview.value = false; return }
-  // Check orders: fetch user's reviews to cross-check (lightweight)
+
+  // Fast-path: check locally loaded reviews first
+  if (reviews.value.some(r => r.userEmail?.toLowerCase() === email.toLowerCase())) {
+    userAlreadyReviewed.value = true
+    return
+  }
+
+  // Call the eligibility endpoint
   try {
-    const res = await fetch(`/api/user/reviews?email=${encodeURIComponent(email)}`)
+    const res = await fetch(
+      `/api/reviews/${encodeURIComponent(slug)}/eligibility?email=${encodeURIComponent(email)}`,
+      { cache: 'no-store' }
+    )
     if (res.ok) {
       const data = await res.json()
-      userAlreadyReviewed.value = (data.data ?? []).some((r: Review) => r.productSlug === slug)
-      if (userAlreadyReviewed.value) { canReview.value = false; return }
+      if (data.eligible) {
+        canReview.value = true
+      } else if (data.reason === 'already_reviewed') {
+        userAlreadyReviewed.value = true
+      }
+      // reason === 'no_delivered_order' → both stay false (not eligible, hasn't reviewed)
     }
-  } catch {}
-  // Check eligibility by attempting — the API returns 403 if not eligible
-  // We determine it by fetching orders (via the check below)
-  // Since the API validates on submit, we show the button optimistically for logged-in users
-  // and let the server respond. But to be accurate, we check via a light probe.
-  canReview.value = true
+  } catch (e) {
+    console.warn('[checkCanReview] eligibility check failed:', e)
+  }
 }
 
 async function loadReviews(slug: string) {
@@ -579,8 +590,25 @@ async function onReviewImagePick(e: Event) {
   if (!file || newReview.images.length >= 5) return
   uploadingImage.value = true
   try {
-    const { url } = await uploadImage(file)
-    newReview.images.push(url)
+    // Convert file to base64 and upload via public /api/upload/imgbb endpoint
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        // Strip the data:image/...;base64, prefix — ImgBB wants raw base64
+        resolve(result.split(',')[1] ?? result)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+    const res = await fetch('/api/upload/imgbb', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64, name: file.name }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+    newReview.images.push(data.url)
   } catch (err: any) {
     reviewError.value = err.message ?? 'Image upload failed'
   } finally {

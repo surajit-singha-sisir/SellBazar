@@ -687,6 +687,38 @@ app.get('/api/reviews/:productSlug', async (req, res) => {
   res.json({ data: approved, total: approved.length })
 })
 
+// Public: check review eligibility (has delivered order + hasn't already reviewed)
+app.get('/api/reviews/:productSlug/eligibility', async (req, res) => {
+  const { productSlug } = req.params
+  const email = req.query.email
+  if (!email) return res.status(400).json({ eligible: false, reason: 'email required' })
+
+  const allProducts = await getAllProducts()
+  const productData = allProducts.find(p => p.slug === productSlug)
+  const productId   = productData?.id
+
+  const allOrders = await getAllOrders()
+  const hasPurchased = allOrders.some(o => {
+    const emailMatch = o.customer?.email?.toLowerCase() === email.toLowerCase()
+    const hasItem    = o.items?.some(i =>
+      i.productId === productId ||
+      i.productId === productSlug ||
+      (i.name && productData?.name && i.name.toLowerCase() === productData.name.toLowerCase())
+    )
+    return emailMatch && hasItem && o.status === 'delivered'
+  })
+
+  if (!hasPurchased)
+    return res.json({ eligible: false, reason: 'no_delivered_order' })
+
+  const reviews = await getProductReviews(productSlug)
+  const alreadyReviewed = reviews.some(r => r.userEmail?.toLowerCase() === email.toLowerCase())
+  if (alreadyReviewed)
+    return res.json({ eligible: false, reason: 'already_reviewed' })
+
+  res.json({ eligible: true })
+})
+
 // Public: submit a review (only delivered-order customers)
 app.post('/api/reviews/:productSlug', async (req, res) => {
   const { productSlug } = req.params
@@ -703,7 +735,11 @@ app.post('/api/reviews/:productSlug', async (req, res) => {
   const allOrders = await getAllOrders()
   const hasPurchased = allOrders.some(o => {
     const emailMatch = o.customer?.email?.toLowerCase() === userEmail.toLowerCase()
-    const hasItem    = o.items?.some(i => i.productId === productId || i.productId === productSlug)
+    const hasItem    = o.items?.some(i =>
+      i.productId === productId ||
+      i.productId === productSlug ||
+      (i.name && productData?.name && i.name.toLowerCase() === productData.name.toLowerCase())
+    )
     return emailMatch && hasItem && o.status === 'delivered'
   })
   if (!hasPurchased)
@@ -909,6 +945,29 @@ app.post('/api/admin/admins/:id/reset-password', requireSuperAdmin, async (req, 
   a.password = newPassword
   await saveAdmins(admins)
   res.json({ message: 'Password updated successfully' })
+})
+
+// Public: upload review image via ImgBB (no auth required)
+app.post('/api/upload/imgbb', async (req, res) => {
+  const { base64, name } = req.body
+  const apiKey = process.env.IMGBB_API_KEY
+  if (!apiKey) return res.status(503).json({ error: 'Image upload not configured (IMGBB_API_KEY missing)' })
+  if (!base64) return res.status(400).json({ error: 'base64 image data required' })
+  try {
+    const form = new URLSearchParams()
+    form.append('key', apiKey)
+    form.append('image', base64)
+    if (name) form.append('name', name)
+    const imgRes = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      body: form,
+    })
+    const data = await imgRes.json()
+    if (!data.success) return res.status(500).json({ error: data.error?.message ?? 'ImgBB upload failed' })
+    res.json({ url: data.data.url, deleteUrl: data.data.delete_url })
+  } catch (e) {
+    res.status(500).json({ error: e.message ?? 'Upload failed' })
+  }
 })
 
 // ──────────────────────────────────────────────────────────────────────────────
