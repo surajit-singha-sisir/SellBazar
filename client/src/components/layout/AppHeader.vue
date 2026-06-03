@@ -232,7 +232,6 @@ const showMobileMenu  = ref(false)
 const scrolled        = ref(false)
 const cartBounced     = ref(false)
 
-const searchWrap = ref<HTMLElement | null>(null)
 const userMenu   = ref<HTMLElement | null>(null)
 
 const navCategories = [
