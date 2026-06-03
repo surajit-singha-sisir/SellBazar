@@ -597,6 +597,9 @@ const paymentMethods = [
   { id: 'cod',    name: 'Cash on Delivery', icon: 'fa-sharp fa-solid fa-money-bill-wave',      color: '#22c55e' },
 ]
 
+// ── API base — works both locally (Vite proxy → :4000) and on Vercel ─────────
+const API = '/api'
+
 // ── Real-time duplicate check ─────────────────────────────────────────────────
 async function checkDuplicate(field: 'email' | 'phone') {
   if (authStore.isLoggedIn) return
@@ -604,7 +607,7 @@ async function checkDuplicate(field: 'email' | 'phone') {
   if (errors.value[field]) return
   if (!value) return
   try {
-    const res = await fetch('http://localhost:4000/api/auth/check', {
+    const res = await fetch(`${API}/auth/check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: value }),
@@ -643,7 +646,7 @@ async function placeOrder() {
   try {
     // Auto-register guest user
     if (!authStore.isLoggedIn) {
-      const regRes = await fetch('http://localhost:4000/api/auth/register', {
+      const regRes = await fetch(`${API}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

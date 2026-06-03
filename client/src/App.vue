@@ -6,8 +6,11 @@
       <CartDrawer />
       <main class="bg-[var(--color-bg)] min-h-screen">
         <RouterView v-slot="{ Component }">
-          <Transition name="page" mode="out-in">
-            <component :is="Component" />
+          <!-- NOTE: mode="out-in" removed — it caused blank screens when the
+               incoming view mounted before its async data resolved, because the
+               old view had already faded out leaving nothing visible. -->
+          <Transition name="page">
+            <component :is="Component" :key="$route.fullPath" />
           </Transition>
         </RouterView>
       </main>

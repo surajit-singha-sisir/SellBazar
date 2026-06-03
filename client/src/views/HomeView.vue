@@ -1,5 +1,35 @@
 <template>
-  <div class="bg-mesh min-h-screen">
+  <!-- ── Loading skeleton (first load only) ──────────────────────────── -->
+  <div v-if="productStore.isLoading && !productStore.products.length"
+       class="min-h-screen bg-[var(--color-bg)] animate-pulse">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-10">
+      <!-- Hero skeleton -->
+      <div class="grid lg:grid-cols-2 gap-8 items-center">
+        <div class="space-y-4">
+          <div class="h-4 w-48 rounded-full bg-[var(--color-surface-2)]"></div>
+          <div class="h-12 w-3/4 rounded-xl bg-[var(--color-surface-2)]"></div>
+          <div class="h-12 w-1/2 rounded-xl bg-[var(--color-surface-2)]"></div>
+          <div class="h-4 w-full rounded bg-[var(--color-surface-2)]"></div>
+          <div class="flex gap-3">
+            <div class="h-11 w-32 rounded-2xl bg-[var(--color-surface-2)]"></div>
+            <div class="h-11 w-36 rounded-2xl bg-[var(--color-surface-2)]"></div>
+          </div>
+        </div>
+        <div class="hidden lg:block h-80 rounded-3xl bg-[var(--color-surface-2)]"></div>
+      </div>
+      <!-- Category chips skeleton -->
+      <div class="grid grid-cols-4 lg:grid-cols-8 gap-3">
+        <div v-for="n in 8" :key="n" class="h-24 rounded-2xl bg-[var(--color-surface-2)]"></div>
+      </div>
+      <!-- Product cards skeleton -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div v-for="n in 8" :key="n" class="h-64 rounded-2xl bg-[var(--color-surface-2)]"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Main content ─────────────────────────────────────────────────── -->
+  <div v-else class="bg-mesh min-h-screen">
 
     <!-- ── Hero Section ──────────────────────────────────────────────── -->
     <section class="relative overflow-hidden py-12 px-4 sm:px-6 max-w-7xl mx-auto">
@@ -77,6 +107,7 @@
       </div>
     </section>
 
+
     <!-- ── Categories ─────────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
       <div class="flex items-center justify-between mb-6">
@@ -125,10 +156,15 @@
         </div>
         <RouterLink to="/products" class="btn-ghost text-sm">View all <i class="fa-sharp fa-regular fa-arrow-right"></i></RouterLink>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div v-if="productStore.featured.length" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         <ProductCard v-for="p in productStore.featured" :key="p.id" :product="p" />
       </div>
+      <!-- inline mini-skeleton while re-fetching after stale nav -->
+      <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
+        <div v-for="n in 8" :key="n" class="h-64 rounded-2xl bg-[var(--color-surface-2)]"></div>
+      </div>
     </section>
+
 
     <!-- ── Deals Banner ───────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
@@ -165,10 +201,14 @@
         </div>
         <RouterLink to="/products?filter=new" class="btn-ghost text-sm">See all <i class="fa-sharp fa-regular fa-arrow-right"></i></RouterLink>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div v-if="productStore.newArr.length" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         <ProductCard v-for="p in productStore.newArr" :key="p.id" :product="p" />
       </div>
+      <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
+        <div v-for="n in 4" :key="n" class="h-64 rounded-2xl bg-[var(--color-surface-2)]"></div>
+      </div>
     </section>
+
 
     <!-- ── Why SellBazar ──────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
@@ -199,7 +239,7 @@
       </div>
     </section>
 
-  </div>
+  </div><!-- end v-else main content -->
 </template>
 
 <script setup lang="ts">
@@ -210,11 +250,17 @@ import ProductCard from '@/components/product/ProductCard.vue'
 const productStore = useProductStore()
 
 onMounted(async () => {
-  await Promise.all([
-    productStore.fetchProducts(),
-    productStore.fetchCategories(),
-  ])
+  // Only fetch if store is empty (avoids redundant refetch on back-navigation)
+  if (!productStore.products.length) {
+    await Promise.all([
+      productStore.fetchProducts(),
+      productStore.fetchCategories(),
+    ])
+  } else if (!productStore.categories.length) {
+    await productStore.fetchCategories()
+  }
 })
+
 
 // Static fallback — icons are bare names (no fa- prefix); the template prepends "fa-sharp fa-solid fa-"
 const staticCategories = [
