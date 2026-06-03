@@ -25,13 +25,13 @@
         <span class="text-[var(--color-text)] font-medium truncate max-w-[200px]">{{ product.name }}</span>
       </nav>
 
-      <div class="grid lg:grid-cols-2 gap-8 lg:gap-12">
+      <div class="product-grid">
 
         <!-- Image Gallery -->
-        <div class="space-y-3">
+        <div class="gallery-col">
 
           <!-- Main Swiper -->
-          <div class="card overflow-hidden aspect-square bg-[var(--color-surface-2)] relative">
+          <div class="main-image-wrap card overflow-hidden bg-[var(--color-surface-2)] relative">
             <Swiper
               :modules="mainModules"
               :thumbs="{ swiper: thumbsSwiper }"
@@ -48,7 +48,7 @@
                 <img
                   :src="img"
                   :alt="`${product.name} view ${i + 1}`"
-                  class="w-full h-full object-cover"
+                  class="w-full h-full object-contain"
                   draggable="false"
                 />
               </SwiperSlide>
@@ -72,15 +72,15 @@
           <Swiper
             :modules="thumbModules"
             watch-slides-progress
-            :slides-per-view="product.images.length"
+            :slides-per-view="Math.min(product.images.length, 5)"
             :space-between="8"
-            class="thumbs-swiper w-full"
+            class="thumbs-swiper w-full mt-3"
             @swiper="onThumbsSwiper"
           >
             <SwiperSlide
               v-for="(img, i) in product.images"
               :key="i"
-              class="!aspect-square rounded-xl overflow-hidden border-2 cursor-pointer transition-all duration-200"
+              class="thumb-slide rounded-xl overflow-hidden border-2 cursor-pointer transition-all duration-200"
               :class="i === activeIdx
                 ? 'border-orange-500 shadow-[0_0_0_2px_rgba(249,115,22,0.3)]'
                 : 'border-[var(--color-border)] opacity-60 hover:opacity-100 hover:border-orange-300'"
@@ -90,22 +90,22 @@
           </Swiper>
 
           <!-- Hint -->
-          <p class="text-center text-xs text-[var(--color-text-muted)]">
+          <p class="text-center text-xs text-[var(--color-text-muted)] mt-2">
             <i class="fa-sharp fa-regular fa-hand-pointer mr-1 text-orange-400"></i>
             Click image to enlarge · Auto-slides every 3s
           </p>
         </div>
 
         <!-- Product Info -->
-        <div class="space-y-5">
+        <div class="info-col">
           <div class="flex flex-wrap gap-2">
             <span class="badge badge-brand">{{ product.brand }}</span>
             <span v-if="product.isNew"      class="badge badge-green">New Arrival</span>
             <span v-if="product.isFeatured" class="badge badge-purple">Top Pick</span>
           </div>
 
-          <h1 class="font-display font-extrabold text-3xl leading-tight">{{ product.name }}</h1>
-          <p class="text-[var(--color-text-muted)] font-bangla text-lg">{{ product.nameBn }}</p>
+          <h1 class="product-title">{{ product.name }}</h1>
+          <p class="text-[var(--color-text-muted)] font-bangla text-lg break-words">{{ product.nameBn }}</p>
 
           <div class="flex items-center gap-3">
             <div class="stars">
@@ -117,13 +117,13 @@
             <span class="text-[var(--color-text-muted)] text-sm">({{ product.reviewCount.toLocaleString() }} reviews)</span>
           </div>
 
-          <div class="flex items-baseline gap-3">
-            <span class="text-4xl font-extrabold text-orange-500">৳{{ (product.salePrice ?? product.price).toLocaleString() }}</span>
-            <span v-if="product.salePrice" class="text-xl text-[var(--color-text-muted)] line-through">৳{{ product.price.toLocaleString() }}</span>
+          <div class="price-row">
+            <span class="price-main">৳{{ (product.salePrice ?? product.price).toLocaleString() }}</span>
+            <span v-if="product.salePrice" class="price-original">৳{{ product.price.toLocaleString() }}</span>
             <span v-if="product.salePrice" class="badge badge-red text-sm">{{ discountPct }}% OFF</span>
           </div>
 
-          <div class="product-description text-[var(--color-text-2)] leading-relaxed" v-html="product.description"></div>
+          <div class="product-description" v-html="product.description"></div>
 
           <div class="card p-4 space-y-3 bg-[var(--color-surface-2)]">
             <div class="flex items-center gap-3 text-sm">
@@ -333,47 +333,115 @@ watch(() => route.params.slug, (slug) => { if (slug) load(slug as string) })
 </script>
 
 <style scoped lang="scss">
-/* Thumbs: active slide highlight */
-.thumbs-swiper :deep(.swiper-slide-thumb-active) {
-  border-color: rgb(249 115 22) !important;
-  opacity: 1 !important;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+/* ── Layout grid ─────────────────────────────────────────────────────────── */
+.product-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem 3rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .product-grid { grid-template-columns: 1fr; gap: 1.5rem; }
 }
 
-/* Override Swiper nav button colours inside main swiper */
-:deep(.swiper-button-prev),
-:deep(.swiper-button-next) {
-  display: none; /* we use custom buttons */
+/* ── Gallery column ──────────────────────────────────────────────────────── */
+.gallery-col {
+  /* Stick to top on desktop when info panel scrolls */
+  position: sticky;
+  top: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;           /* prevent overflow from breaking grid */
+}
+@media (max-width: 900px) {
+  .gallery-col { position: static; }
 }
 
-/* Lightbox pagination dots */
-.lb-swiper :deep(.swiper-pagination-bullet) {
-  background: rgba(255, 255, 255, 0.45);
-  opacity: 1;
+/* Main image box: fixed square capped at 520px, never expands beyond container */
+.main-image-wrap {
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  border-radius: 16px;
+  overflow: hidden;
 }
-.lb-swiper :deep(.swiper-pagination-bullet-active) {
-  background: #ffffff;
-  transform: scale(1.3);
-}
-.lb-swiper :deep(.swiper-pagination) {
-  bottom: -28px;
+@media (max-width: 480px) {
+  .main-image-wrap { max-width: 100%; border-radius: 12px; }
 }
 
-/* Lightbox fade transition */
-.lb-enter-active,
-.lb-leave-active { transition: opacity 0.2s ease; }
-.lb-enter-from,
-.lb-leave-to     { opacity: 0; }
+/* Thumbs: fixed height squares */
+.thumb-slide {
+  aspect-ratio: 1 / 1;
+  max-width: 72px;
+}
+@media (max-width: 480px) {
+  .thumb-slide { max-width: 56px; }
+}
 
-/* ── Quill HTML description rendering ── */
-.product-description :deep(h2) { font-size: 1.15rem; font-weight: 700; margin: 12px 0 6px; }
-.product-description :deep(h3) { font-size: 1rem;    font-weight: 600; margin: 10px 0 4px; }
+/* ── Info column ─────────────────────────────────────────────────────────── */
+.info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  min-width: 0;           /* critical: prevents text from blowing out the grid */
+}
+
+/* Title: clamp font size, allow wrapping */
+.product-title {
+  font-family: var(--font-display, inherit);
+  font-weight: 800;
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+  line-height: 1.25;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+/* Price row */
+.price-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+.price-main {
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  font-weight: 800;
+  color: rgb(249 115 22);
+  word-break: break-all;  /* ৳ signs and long numbers don't overflow */
+}
+.price-original {
+  font-size: clamp(1rem, 3vw, 1.25rem);
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+/* ── Description (v-html) ────────────────────────────────────────────────── */
+.product-description {
+  color: var(--color-text-2, var(--color-text-muted));
+  line-height: 1.75;
+  /* The two most important rules for v-html text wrapping */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  max-width: 100%;
+}
+/* Rich text elements inside v-html */
+.product-description :deep(*) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.product-description :deep(h2) { font-size: 1.1rem; font-weight: 700; margin: 12px 0 6px; }
+.product-description :deep(h3) { font-size: 1rem;   font-weight: 600; margin: 10px 0 4px; }
 .product-description :deep(p)  { margin: 0 0 8px; line-height: 1.7; }
 .product-description :deep(strong) { font-weight: 700; }
 .product-description :deep(em)     { font-style: italic; }
 .product-description :deep(s)      { text-decoration: line-through; }
 .product-description :deep(ul),
-.product-description :deep(ol)     { padding-left: 20px; margin: 6px 0 10px; }
+.product-description :deep(ol)     { padding-left: 1.25rem; margin: 6px 0 10px; }
 .product-description :deep(ul)     { list-style: disc; }
 .product-description :deep(ol)     { list-style: decimal; }
 .product-description :deep(li)     { margin-bottom: 4px; line-height: 1.65; }
@@ -384,7 +452,50 @@ watch(() => route.params.slug, (slug) => { if (slug) load(slug as string) })
 }
 .product-description :deep(pre) {
   background: var(--color-surface-2); border-radius: 8px;
-  padding: 10px 14px; font-size: 12px; overflow-x: auto; margin: 8px 0;
+  padding: 10px 14px; font-size: 12px;
+  overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  margin: 8px 0;
 }
-.product-description :deep(a) { color: rgb(249 115 22); text-decoration: underline; }
+.product-description :deep(code) {
+  background: var(--color-surface-2); border-radius: 4px;
+  padding: 1px 5px; font-size: 12px; word-break: break-all;
+}
+.product-description :deep(a) {
+  color: rgb(249 115 22); text-decoration: underline;
+  word-break: break-all;
+}
+.product-description :deep(img) {
+  max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0;
+}
+.product-description :deep(table) {
+  width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0;
+}
+.product-description :deep(td),
+.product-description :deep(th) {
+  border: 1px solid var(--color-border); padding: 6px 10px;
+  word-break: break-word;
+}
+
+/* ── Thumbs Swiper active highlight ──────────────────────────────────────── */
+.thumbs-swiper :deep(.swiper-slide-thumb-active) {
+  border-color: rgb(249 115 22) !important;
+  opacity: 1 !important;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+}
+
+/* Hide default Swiper nav (we use custom buttons) */
+:deep(.swiper-button-prev),
+:deep(.swiper-button-next) { display: none; }
+
+/* ── Lightbox ─────────────────────────────────────────────────────────────── */
+.lb-swiper :deep(.swiper-pagination-bullet) {
+  background: rgba(255,255,255,0.45); opacity: 1;
+}
+.lb-swiper :deep(.swiper-pagination-bullet-active) {
+  background: #fff; transform: scale(1.3);
+}
+.lb-swiper :deep(.swiper-pagination) { bottom: -28px; }
+
+.lb-enter-active, .lb-leave-active { transition: opacity 0.2s ease; }
+.lb-enter-from, .lb-leave-to { opacity: 0; }
 </style>
