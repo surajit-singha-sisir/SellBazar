@@ -90,7 +90,7 @@ async function login() {
   if (!phone.value || !password.value) { error.value = 'Please enter phone and password'; return }
   loading.value = true; error.value = ''
   try {
-    const res = await fetch('http://localhost:4000/api/auth/login', {
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: '+880' + phone.value, password: password.value }),

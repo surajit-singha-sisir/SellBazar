@@ -125,6 +125,7 @@ interface Order {
 const orders  = ref<Order[]>([])
 const loading = ref(true)
 const error   = ref('')
+const API     = '/api'
 
 async function fetchOrders() {
   loading.value = true
@@ -135,7 +136,7 @@ async function fetchOrders() {
 
     const results = await Promise.all(
       savedIds.map(id =>
-        fetch(`http://localhost:4000/api/orders/by-id/${id}`)
+        fetch(`${API}/orders/by-id/${id}`)
           .then(r => r.ok ? r.json() : null)
           .catch(() => null)
       )
