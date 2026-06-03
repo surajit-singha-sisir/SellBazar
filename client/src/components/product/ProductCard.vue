@@ -24,13 +24,13 @@
       @mouseleave="stopCarousel"
     >
       <img
-        :src="product.images[currentImageIdx]"
+        :src="product.images?.[currentImageIdx] || 'https://placehold.co/400x400/f97316/fff?text=?'"
         :alt="product.name"
         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         loading="lazy"
       />
       <!-- Image dots indicator (only if multiple images) -->
-      <div v-if="product.images.length > 1" class="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-10">
+      <div v-if="(product.images?.length ?? 0) > 1" class="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-10">
         <span
           v-for="(_, i) in product.images"
           :key="i"
@@ -53,19 +53,19 @@
         <div class="stars text-xs">
           <i v-for="n in 5" :key="n" :class="n <= Math.round(product.rating) ? 'fa-sharp fa-solid fa-star' : 'fa-sharp fa-regular fa-star'"></i>
         </div>
-        <span class="text-[11px] text-[var(--color-text-muted)]">({{ product.reviewCount.toLocaleString() }})</span>
+        <span class="text-[11px] text-[var(--color-text-muted)]">({{ (product.reviewCount ?? 0).toLocaleString() }})</span>
       </div>
 
       <!-- Price -->
       <div class="flex items-baseline gap-2 mt-auto">
-        <span class="text-lg font-bold text-orange-500">৳{{ (product.salePrice ?? product.price).toLocaleString() }}</span>
-        <span v-if="product.salePrice" class="price-original">৳{{ product.price.toLocaleString() }}</span>
+        <span class="text-lg font-bold text-orange-500">৳{{ ((product.salePrice ?? product.price) || 0).toLocaleString() }}</span>
+        <span v-if="product.salePrice" class="price-original">৳{{ (product.price || 0).toLocaleString() }}</span>
       </div>
 
       <!-- Delivery -->
       <div class="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
         <i class="fa-sharp fa-regular fa-truck-fast text-green-500"></i>
-        <span class="text-green-600 font-medium">{{ product.deliveryDays === 1 ? 'Same Day' : `${product.deliveryDays}-day` }} delivery</span>
+        <span class="text-green-600 font-medium">{{ product.deliveryDays === 1 ? 'Same Day' : `${product.deliveryDays ?? '?'}-day` }} delivery</span>
         <span>· {{ product.location }}</span>
       </div>
 
@@ -99,7 +99,7 @@ const currentImageIdx = ref(0)
 let carouselTimer: ReturnType<typeof setInterval> | null = null
 
 function startCarousel() {
-  if (props.product.images.length <= 1) return
+  if ((props.product.images?.length ?? 0) <= 1) return
   currentImageIdx.value = 0
   carouselTimer = setInterval(() => {
     currentImageIdx.value = (currentImageIdx.value + 1) % props.product.images.length
