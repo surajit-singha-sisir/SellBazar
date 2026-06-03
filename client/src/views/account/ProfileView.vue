@@ -293,6 +293,56 @@
             </div>
           </div>
 
+          <!-- ══ My Reviews ════════════════════════════════════════════════ -->
+          <div v-else-if="activeTab === 'reviews'" key="reviews" class="panel">
+            <div class="panel-header">
+              <h2><i class="fa-sharp-duotone fa-solid fa-star"></i> My Reviews</h2>
+              <p>Products you've reviewed after purchase</p>
+            </div>
+            <div class="panel-body">
+              <div v-if="reviewsLoading" class="reviews-loading">
+                <i class="fa-sharp fa-solid fa-spinner fa-spin text-2xl text-orange-500 block mb-2"></i>
+                Loading reviews…
+              </div>
+              <div v-else-if="userReviews.length === 0" class="reviews-empty">
+                <i class="fa-sharp fa-regular fa-star text-4xl opacity-20 block mb-3"></i>
+                <p class="font-medium text-[var(--color-text-muted)]">No reviews yet</p>
+                <p class="text-sm text-[var(--color-text-muted)]">Purchase and receive products to write reviews.</p>
+              </div>
+              <div v-else class="user-reviews-list">
+                <div v-for="review in userReviews" :key="review.id" class="user-review-card">
+                  <div class="user-review-top">
+                    <RouterLink :to="`/products/${review.productSlug}`" class="user-review-product">
+                      <i class="fa-sharp fa-regular fa-box text-orange-400"></i>
+                      {{ review.productName || review.productSlug }}
+                    </RouterLink>
+                    <div class="review-stars-sm">
+                      <i v-for="n in 5" :key="n"
+                        :class="n <= review.rating ? 'fa-sharp fa-solid fa-star' : 'fa-sharp fa-regular fa-star'"
+                        class="text-xs text-amber-400"></i>
+                    </div>
+                    <span class="user-review-date">{{ formatReviewDate(review.createdAt) }}</span>
+                  </div>
+                  <p v-if="review.title" class="user-review-title">{{ review.title }}</p>
+                  <p class="user-review-body">{{ review.body }}</p>
+                  <div v-if="review.images?.length" class="user-review-images">
+                    <img v-for="(img, i) in review.images" :key="i" :src="img"
+                      class="w-14 h-14 object-cover rounded-lg border border-[var(--color-border)]" />
+                  </div>
+                  <div class="user-review-meta">
+                    <span class="review-status" :class="review.status">
+                      <i :class="review.status === 'approved' ? 'fa-sharp fa-solid fa-circle-check' : 'fa-sharp fa-regular fa-clock'"></i>
+                      {{ review.status }}
+                    </span>
+                    <span v-if="review.helpful > 0" class="text-xs text-[var(--color-text-muted)]">
+                      <i class="fa-sharp fa-regular fa-thumbs-up"></i> {{ review.helpful }} found helpful
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- ══ Security ════════════════════════════════════════════════════ -->
           <div v-else-if="activeTab === 'security'" key="security" class="panel">
             <div class="panel-header">
@@ -342,9 +392,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useAuthStore } from '@/stores/useAuthStore'
-import type { Address, PhoneEntry, User } from '@/types'
+import type { Address, PhoneEntry, User, Review } from '@/types'
 
 const authStore = useAuthStore()
 
@@ -353,6 +403,7 @@ const tabs = [
   { id: 'personal',  label: 'Personal Info',  icon: 'fa-sharp-duotone fa-solid fa-id-card'          },
   { id: 'phones',    label: 'Phone Numbers',  icon: 'fa-sharp-duotone fa-solid fa-mobile-screen'     },
   { id: 'addresses', label: 'Addresses',      icon: 'fa-sharp-duotone fa-solid fa-map-location-dot'  },
+  { id: 'reviews',   label: 'My Reviews',     icon: 'fa-sharp-duotone fa-solid fa-star'              },
   { id: 'security',  label: 'Security',       icon: 'fa-sharp-duotone fa-solid fa-shield-keyhole'    },
 ]
 const activeTab = ref('personal')
@@ -470,6 +521,33 @@ async function saveAddresses() {
   saving.addresses = false; flash('addresses')
 }
 async function handleLogout() { await authStore.logout() }
+
+// ── My Reviews ────────────────────────────────────────────────────────────────
+const userReviews   = ref<Review[]>([])
+const reviewsLoading = ref(false)
+
+function formatReviewDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-BD', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+async function loadUserReviews() {
+  const email = authStore.user?.email
+  if (!email) return
+  reviewsLoading.value = true
+  try {
+    const res = await fetch(`/api/user/reviews?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+    if (res.ok) {
+      const data = await res.json()
+      userReviews.value = data.data ?? []
+    }
+  } catch {}
+  finally { reviewsLoading.value = false }
+}
+
+// Lazy-load reviews when the tab is activated
+watch(activeTab, (tab) => {
+  if (tab === 'reviews' && userReviews.value.length === 0) loadUserReviews()
+})
 </script>
 
 <style scoped lang="scss">
@@ -829,4 +907,63 @@ async function handleLogout() { await authStore.logout() }
   .panel-footer { padding: 14px 16px; }
   .panel-header { padding: 16px 16px 12px; }
 }
+
+/* ── My Reviews panel ────────────────────────────────────────────────────── */
+.panel-body { padding: 20px 24px; }
+
+.reviews-loading, .reviews-empty {
+  text-align: center; padding: 40px 20px;
+  color: var(--color-text-muted);
+}
+
+.user-reviews-list { display: flex; flex-direction: column; gap: 14px; }
+
+.user-review-card {
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--color-surface-2);
+  transition: border-color .2s;
+  &:hover { border-color: rgba(249,115,22,.3); }
+}
+.user-review-top {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.user-review-product {
+  font-weight: 600; font-size: .85rem;
+  color: var(--color-text); display: flex; align-items: center; gap: 6px;
+  text-decoration: none;
+  &:hover { color: var(--color-brand); }
+}
+.user-review-date {
+  font-size: .75rem; color: var(--color-text-muted);
+  margin-left: auto;
+}
+.review-stars-sm { display: flex; gap: 2px; }
+.user-review-title { font-weight: 600; font-size: .87rem; margin: 0 0 4px; }
+.user-review-body {
+  font-size: .83rem; color: var(--color-text-muted);
+  line-height: 1.6; white-space: pre-line; margin: 0 0 10px;
+}
+.user-review-images { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.user-review-meta {
+  display: flex; align-items: center; gap: 10px;
+}
+.review-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 99px;
+  &.approved {
+    background: rgba(34,197,94,.1); color: #22c55e;
+    border: 1px solid rgba(34,197,94,.2);
+  }
+  &.pending {
+    background: rgba(249,115,22,.1); color: var(--color-brand);
+    border: 1px solid rgba(249,115,22,.2);
+  }
+  &.rejected {
+    background: rgba(239,68,68,.1); color: #ef4444;
+    border: 1px solid rgba(239,68,68,.2);
+  }
+}
+
 </style>

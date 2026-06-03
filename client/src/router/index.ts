@@ -49,6 +49,7 @@ const router = createRouter({
         { path: 'products/edit/:id', name: 'admin-product-edit', component: () => import('@/views/admin/ProductFormView.vue') },
         { path: 'categories',        name: 'admin-categories',   component: () => import('@/views/admin/CategoriesView.vue') },
         { path: 'orders',            name: 'admin-orders',       component: () => import('@/views/admin/OrdersView.vue') },
+        { path: 'reviews',           name: 'admin-reviews',      component: () => import('@/views/admin/ReviewsView.vue') },
         { path: 'analytics',         name: 'admin-analytics',    component: () => import('@/views/admin/AnalyticsView.vue') },
         { path: 'customers',         name: 'admin-customers',    component: () => import('@/views/admin/CustomersView.vue') },
         { path: 'settings',          name: 'admin-settings',     component: () => import('@/views/admin/SettingsView.vue') },

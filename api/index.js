@@ -627,6 +627,167 @@ app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
 })
 
 // ──────────────────────────────────────────────────────────────────────────────
+// REVIEWS
+// ──────────────────────────────────────────────────────────────────────────────
+// KV key schema:
+//   "sb:reviews:<productSlug>" → JSON array of review objects
+//
+// In-memory fallback
+const _reviews = {}
+
+async function getProductReviews(productSlug) {
+  if (KV_ENABLED) {
+    return (await kvGet(`sb:reviews:${productSlug}`)) ?? []
+  }
+  return _reviews[productSlug] ?? []
+}
+
+async function saveProductReviews(productSlug, reviews) {
+  if (KV_ENABLED) {
+    await kvSet(`sb:reviews:${productSlug}`, reviews)
+  } else {
+    _reviews[productSlug] = reviews
+  }
+}
+
+async function getAllReviews() {
+  const allProducts = await getAllProducts()
+  const reviewArrays = await Promise.all(
+    allProducts.map(async p => {
+      const reviews = await getProductReviews(p.slug)
+      return reviews.map(r => ({ ...r, productSlug: p.slug, productName: p.name }))
+    })
+  )
+  return reviewArrays.flat()
+}
+
+async function recalculateProductRating(productSlug) {
+  const reviews = await getProductReviews(productSlug)
+  const approved = reviews.filter(r => r.status === 'approved')
+  const count = approved.length
+  const avg = count > 0
+    ? Math.round((approved.reduce((s, r) => s + r.rating, 0) / count) * 10) / 10
+    : null
+  const allProducts = await getAllProducts()
+  const product = allProducts.find(p => p.slug === productSlug)
+  if (product) {
+    const updated = { ...product,
+      rating: avg !== null ? avg : product.rating,
+      reviewCount: count
+    }
+    await saveDynamicProduct(updated)
+  }
+}
+
+// Public: get approved reviews for a product
+app.get('/api/reviews/:productSlug', async (req, res) => {
+  const reviews = await getProductReviews(req.params.productSlug)
+  const approved = reviews.filter(r => r.status === 'approved')
+  approved.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  res.json({ data: approved, total: approved.length })
+})
+
+// Public: submit a review (only delivered-order customers)
+app.post('/api/reviews/:productSlug', async (req, res) => {
+  const { productSlug } = req.params
+  const { userEmail, userName, userId, rating, title, body, images } = req.body
+  if (!userEmail || !rating || !body)
+    return res.status(400).json({ error: 'userEmail, rating and body are required' })
+  if (rating < 1 || rating > 5)
+    return res.status(400).json({ error: 'Rating must be 1–5' })
+
+  const allProducts = await getAllProducts()
+  const productData = allProducts.find(p => p.slug === productSlug)
+  const productId   = productData?.id
+
+  const allOrders = await getAllOrders()
+  const hasPurchased = allOrders.some(o => {
+    const emailMatch = o.customer?.email?.toLowerCase() === userEmail.toLowerCase()
+    const hasItem    = o.items?.some(i => i.productId === productId || i.productId === productSlug)
+    return emailMatch && hasItem && o.status === 'delivered'
+  })
+  if (!hasPurchased)
+    return res.status(403).json({ error: 'Only customers who have received this product can review it.' })
+
+  const reviews = await getProductReviews(productSlug)
+  if (reviews.some(r => r.userEmail.toLowerCase() === userEmail.toLowerCase()))
+    return res.status(409).json({ error: 'You have already reviewed this product.' })
+
+  const review = {
+    id:          'rv-' + Date.now(),
+    productSlug,
+    productName: productData?.name ?? productSlug,
+    userId:      userId ?? userEmail,
+    userEmail,
+    userName:    userName ?? 'Customer',
+    rating:      Number(rating),
+    title:       title ?? '',
+    body,
+    images:      Array.isArray(images) ? images.slice(0, 5) : [],
+    status:      'approved',
+    helpful:     0,
+    createdAt:   new Date().toISOString(),
+  }
+  reviews.push(review)
+  await saveProductReviews(productSlug, reviews)
+  await recalculateProductRating(productSlug)
+  res.status(201).json(review)
+})
+
+// User: get own reviews by email
+app.get('/api/user/reviews', async (req, res) => {
+  const email = req.query.email
+  if (!email) return res.status(400).json({ error: 'email query param required' })
+  const all = await getAllReviews()
+  const userReviews = all
+    .filter(r => r.userEmail?.toLowerCase() === email.toLowerCase())
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  res.json({ data: userReviews, total: userReviews.length })
+})
+
+// Public: mark a review helpful
+app.post('/api/reviews/:productSlug/:reviewId/helpful', async (req, res) => {
+  const reviews = await getProductReviews(req.params.productSlug)
+  const review  = reviews.find(r => r.id === req.params.reviewId)
+  if (!review) return res.status(404).json({ error: 'Review not found' })
+  review.helpful = (review.helpful || 0) + 1
+  await saveProductReviews(req.params.productSlug, reviews)
+  res.json({ helpful: review.helpful })
+})
+
+// Admin: all reviews
+app.get('/api/admin/reviews', requireAdmin, async (req, res) => {
+  let all = await getAllReviews()
+  if (req.query.status && req.query.status !== 'all') all = all.filter(r => r.status === req.query.status)
+  if (req.query.productSlug) all = all.filter(r => r.productSlug === req.query.productSlug)
+  all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  res.json({ data: all, total: all.length })
+})
+
+// Admin: update review status / note
+app.patch('/api/admin/reviews/:productSlug/:reviewId', requireAdmin, async (req, res) => {
+  const reviews = await getProductReviews(req.params.productSlug)
+  const review  = reviews.find(r => r.id === req.params.reviewId)
+  if (!review) return res.status(404).json({ error: 'Review not found' })
+  if (req.body.status    !== undefined) review.status    = req.body.status
+  if (req.body.adminNote !== undefined) review.adminNote = req.body.adminNote
+  await saveProductReviews(req.params.productSlug, reviews)
+  await recalculateProductRating(req.params.productSlug)
+  res.json(review)
+})
+
+// Admin: delete review
+app.delete('/api/admin/reviews/:productSlug/:reviewId', requireAdmin, async (req, res) => {
+  const reviews = await getProductReviews(req.params.productSlug)
+  const idx     = reviews.findIndex(r => r.id === req.params.reviewId)
+  if (idx === -1) return res.status(404).json({ error: 'Review not found' })
+  reviews.splice(idx, 1)
+  await saveProductReviews(req.params.productSlug, reviews)
+  await recalculateProductRating(req.params.productSlug)
+  res.json({ message: 'Deleted' })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
 // USER DATA (cart & wishlist — session-scoped, no persistence needed)
 // ──────────────────────────────────────────────────────────────────────────────
 

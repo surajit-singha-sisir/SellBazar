@@ -92,6 +92,23 @@ export interface Category {
   subcategories?: Subcategory[]
 }
 
+export interface Review {
+  id: string
+  productSlug: string
+  productName?: string
+  userId: string
+  userEmail: string
+  userName: string
+  rating: number          // 1–5
+  title: string
+  body: string
+  images: string[]        // ImgBB CDN URLs
+  status: 'approved' | 'pending' | 'rejected'
+  helpful: number
+  adminNote?: string
+  createdAt: string
+}
+
 export interface Banner {
   id: string
   title: string

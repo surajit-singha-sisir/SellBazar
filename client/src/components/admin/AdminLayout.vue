@@ -189,6 +189,7 @@ const mainNav = computed(() => [
   { to: '/admin/products', label: 'Products',   icon: 'fa-sharp-duotone fa-solid fa-box-open'        },
   { to: '/admin/orders',   label: 'Orders',     icon: 'fa-sharp-duotone fa-solid fa-bag-shopping',
     badge: adminStore.pendingOrders > 0 ? adminStore.pendingOrders : null },
+  { to: '/admin/reviews',  label: 'Reviews',    icon: 'fa-sharp-duotone fa-solid fa-star'            },
   { to: '/admin/analytics',label: 'Analytics',  icon: 'fa-sharp-duotone fa-solid fa-chart-mixed'     },
 ])
 
@@ -204,6 +205,7 @@ const pageLabels: Record<string, string> = {
   'admin':             'Dashboard',
   'admin-products':    'Products',
   'admin-orders':      'Orders',
+  'admin-reviews':     'Reviews',
   'admin-analytics':   'Analytics',
   'admin-categories':  'Categories',
   'admin-customers':   'Customers',
