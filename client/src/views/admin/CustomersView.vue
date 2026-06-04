@@ -1,9 +1,11 @@
 <template>
   <div class="admin-page-wrap">
+
+    <!-- ── Page header ──────────────────────────────────────────────────── -->
     <div class="admin-page-header">
       <div>
         <h1 class="page-title">Customers</h1>
-        <p class="page-subtitle">{{ filtered.length }} customers from order history.</p>
+        <p class="page-subtitle">{{ filtered.length }} customers found</p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="admin-btn secondary" @click="load">
@@ -11,7 +13,8 @@
         </button>
         <div class="export-wrap" v-click-outside="() => exportOpen = false">
           <button class="admin-btn secondary" @click="exportOpen = !exportOpen">
-            <i class="fa-sharp fa-solid fa-file-export"></i> Export <i class="fa-solid fa-chevron-down" style="font-size:10px"></i>
+            <i class="fa-sharp fa-solid fa-file-export"></i> Export
+            <i class="fa-solid fa-chevron-down" style="font-size:10px"></i>
           </button>
           <div v-if="exportOpen" class="export-dropdown">
             <button @click="doExport('excel')"><i class="fa-solid fa-file-excel" style="color:#22c55e"></i> Excel</button>
@@ -20,13 +23,10 @@
             <button @click="doExport('json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
           </div>
         </div>
-        <button class="admin-btn secondary" :class="showMap?'primary':''" @click="showMap=!showMap">
-          <i class="fa-sharp fa-solid fa-map-location-dot"></i> {{ showMap ? 'Hide Map' : 'Show Map' }}
-        </button>
       </div>
     </div>
 
-    <!-- Summary cards -->
+    <!-- ── Summary cards ────────────────────────────────────────────────── -->
     <div class="admin-grid-4" style="margin-bottom:20px">
       <div class="admin-stat-card">
         <div class="stat-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6">
@@ -72,24 +72,11 @@
       </div>
     </div>
 
-    <!-- Leaflet Map -->
-    <Transition name="slide-up">
-      <div v-if="showMap" class="map-card">
-        <div class="chart-header" style="padding:14px 18px 0">
-          <div>
-            <div class="chart-title">Customer Locations</div>
-            <div class="chart-subtitle">Approximate locations based on address data ({{ mapPins.length }} mapped)</div>
-          </div>
-        </div>
-        <div ref="mapEl" style="height:340px;border-radius:0 0 14px 14px;z-index:1"></div>
-      </div>
-    </Transition>
-
-    <!-- Filters -->
+    <!-- ── Filters ───────────────────────────────────────────────────────── -->
     <div class="admin-filters">
       <div class="search-wrap">
         <i class="fa-sharp fa-solid fa-magnifying-glass search-icon"></i>
-        <input class="filter-input" v-model="search" placeholder="Search by name, email, address…" />
+        <input class="filter-input" v-model="search" placeholder="Search name, email, phone, address…" />
       </div>
       <select class="filter-select" v-model="sortBy">
         <option value="totalSpent">Sort: Highest Spent</option>
@@ -104,267 +91,333 @@
       </select>
     </div>
 
+    <!-- ── Table ─────────────────────────────────────────────────────────── -->
     <div class="admin-table-wrap">
-      <div v-if="adminStore.loading.customers" style="padding:32px;text-align:center;color:var(--text-secondary)">
+      <div v-if="adminStore.loading.customers" style="padding:40px;text-align:center;color:var(--text-secondary)">
         <i class="fa-solid fa-spinner-third fa-spin fa-2x"></i><br><br>Loading customers…
       </div>
-      <table v-else class="admin-table">
-        <thead><tr>
-          <th>#</th>
-          <th class="sortable" @click="sortBy='name'">Customer</th>
-          <th class="sortable" @click="sortBy='orderCount'">Orders</th>
-          <th class="sortable" @click="sortBy='totalSpent'">Total Spent</th>
-          <th>Avg. Order</th>
-          <th class="sortable" @click="sortBy='lastOrder'">Last Order</th>
-          <th>Payment</th>
-          <th>Status</th>
-        </tr></thead>
+
+      <table v-else class="admin-table customers-table">
+        <thead>
+          <tr>
+            <th style="width:36px">#</th>
+            <th class="sortable" @click="sortBy='name'">Customer</th>
+            <th>Phone No.</th>
+            <th>Addresses</th>
+            <th class="sortable" @click="sortBy='orderCount'" style="text-align:center">Total Orders</th>
+            <th class="sortable" @click="sortBy='totalSpent'">Total Spent</th>
+            <th class="sortable" @click="sortBy='lastOrder'">Last Order</th>
+            <th>Account Age</th>
+            <th style="text-align:center">All Orders</th>
+            <th style="text-align:center">Actions</th>
+          </tr>
+        </thead>
         <tbody>
           <tr v-for="(c, i) in paginated" :key="c.id">
-            <td style="color:var(--text-secondary);font-size:12px">{{ (page-1)*perPage+i+1 }}</td>
+
+            <!-- # -->
+            <td class="col-index">{{ (page - 1) * perPage + i + 1 }}</td>
+
+            <!-- Customer: avatar + name + email -->
             <td>
-              <div style="display:flex;align-items:center;gap:10px">
-                <div class="customer-avatar" :style="{background: avatarBg(c.id), color: avatarFg(c.id)}">
+              <div class="cust-identity">
+                <div class="customer-avatar" :style="{ background: avatarBg(c.id), color: avatarFg(c.id) }">
                   {{ initials(c.name) }}
                 </div>
                 <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary)">{{ c.name }}</div>
-                  <div style="font-size:11px;color:var(--text-secondary)">{{ c.email || c.phone || '—' }}</div>
-                  <div v-if="c.address" style="font-size:10px;color:var(--text-secondary);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                    <i class="fa-solid fa-location-dot" style="color:var(--brand);font-size:9px"></i> {{ c.address }}
-                  </div>
+                  <div class="cust-name">{{ c.name }}</div>
+                  <div class="cust-email">{{ c.email || '—' }}</div>
+                  <span class="status-badge" :class="c.orderCount > 1 ? 'delivered' : 'pending'" style="margin-top:3px">
+                    {{ c.orderCount > 1 ? 'Loyal' : 'New' }}
+                  </span>
                 </div>
               </div>
             </td>
-            <td style="font-weight:700">{{ c.orderCount }}</td>
-            <td style="font-weight:700;color:var(--brand)">৳{{ c.totalSpent.toLocaleString() }}</td>
-            <td style="color:var(--text-secondary)">৳{{ Math.round(c.totalSpent/c.orderCount).toLocaleString() }}</td>
-            <td style="font-size:12px;color:var(--text-secondary)">{{ fmtDate(c.lastOrder) }}</td>
-            <td><span class="status-badge processing" style="text-transform:capitalize">{{ c.paymentMethod || '—' }}</span></td>
+
+            <!-- Phone numbers (may be one or array) -->
             <td>
-              <span class="status-badge" :class="c.orderCount > 1 ? 'delivered' : 'pending'">
-                {{ c.orderCount > 1 ? 'Loyal' : 'New' }}
-              </span>
+              <div class="phone-list">
+                <template v-if="phoneList(c).length">
+                  <a v-for="ph in phoneList(c)" :key="ph" :href="'tel:' + ph" class="phone-chip">
+                    <i class="fa-sharp fa-solid fa-phone"></i> {{ ph }}
+                  </a>
+                </template>
+                <span v-else class="col-muted">—</span>
+              </div>
+            </td>
+
+            <!-- Addresses: text + Google Maps link -->
+            <td>
+              <div class="address-list">
+                <template v-if="addressList(c).length">
+                  <div v-for="addr in addressList(c)" :key="addr" class="address-row">
+                    <span class="address-text">
+                      <i class="fa-sharp fa-solid fa-location-dot" style="color:var(--brand);font-size:10px;margin-right:3px"></i>
+                      {{ addr }}
+                    </span>
+                    <a
+                      :href="googleMapsUrl(addr)"
+                      target="_blank"
+                      rel="noopener"
+                      class="map-link"
+                      title="Open in Google Maps"
+                    >
+                      <i class="fa-sharp fa-solid fa-share-from-square"></i>
+                    </a>
+                  </div>
+                </template>
+                <span v-else class="col-muted">—</span>
+              </div>
+            </td>
+
+            <!-- Total Orders -->
+            <td style="text-align:center">
+              <span class="orders-badge">{{ c.orderCount }}</span>
+            </td>
+
+            <!-- Total Spent -->
+            <td>
+              <div class="spent-value">৳{{ c.totalSpent.toLocaleString() }}</div>
+              <div class="col-muted" style="font-size:10px;margin-top:1px">
+                avg ৳{{ Math.round(c.totalSpent / Math.max(c.orderCount, 1)).toLocaleString() }}
+              </div>
+            </td>
+
+            <!-- Last Order -->
+            <td>
+              <div style="font-size:12px;font-weight:500">{{ fmtDate(c.lastOrder) }}</div>
+              <div class="col-muted" style="font-size:10px;margin-top:1px">{{ timeAgo(c.lastOrder) }}</div>
+            </td>
+
+            <!-- Account Age: created date + human duration -->
+            <td>
+              <div style="font-size:11px;color:var(--text-secondary)">
+                <i class="fa-sharp fa-regular fa-calendar" style="margin-right:3px"></i>
+                {{ fmtDate(c.firstOrder) }}
+              </div>
+              <div class="age-pill">{{ accountAge(c.firstOrder) }}</div>
+            </td>
+
+            <!-- All Orders button -->
+            <td style="text-align:center">
+              <button class="admin-btn secondary" style="padding:5px 12px;font-size:11px" @click="openOrders(c)">
+                <i class="fa-sharp fa-solid fa-receipt"></i>
+                {{ c.orderCount }}
+              </button>
+            </td>
+
+            <!-- Actions: Edit + Delete -->
+            <td>
+              <div class="action-btns">
+                <button class="action-btn edit" title="Edit customer" @click="openEdit(c)">
+                  <i class="fa-sharp fa-solid fa-pen-to-square"></i>
+                </button>
+                <button class="action-btn delete" title="Delete customer & all data" @click="confirmDelete(c)">
+                  <i class="fa-sharp fa-solid fa-trash"></i>
+                </button>
+              </div>
             </td>
           </tr>
-          <tr v-if="paginated.length === 0">
-            <td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary)">No customers found.</td>
+
+          <tr v-if="!paginated.length">
+            <td colspan="10" style="text-align:center;padding:40px;color:var(--text-secondary)">
+              No customers found.
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
 
+    <!-- ── Pagination ────────────────────────────────────────────────────── -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:8px">
       <span style="font-size:12px;color:var(--text-secondary)">
-        Showing {{ Math.min((page-1)*perPage+1, filtered.length) }}–{{ Math.min(page*perPage, filtered.length) }} of {{ filtered.length }}
+        Showing {{ Math.min((page-1)*perPage+1, filtered.length) }}–{{ Math.min(page*perPage, filtered.length) }}
+        of {{ filtered.length }}
       </span>
       <div style="display:flex;gap:6px">
         <button class="admin-btn secondary" style="padding:6px 12px" :disabled="page===1" @click="page--">
           <i class="fa-solid fa-chevron-left"></i>
         </button>
-        <span style="padding:6px 12px;font-size:13px;font-weight:600;color:var(--brand)">{{ page }} / {{ totalPages }}</span>
+        <span style="padding:6px 14px;font-size:13px;font-weight:700;color:var(--brand)">
+          {{ page }} / {{ totalPages }}
+        </span>
         <button class="admin-btn secondary" style="padding:6px 12px" :disabled="page>=totalPages" @click="page++">
           <i class="fa-solid fa-chevron-right"></i>
         </button>
       </div>
     </div>
   </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       ORDERS POPUP MODAL
+  ══════════════════════════════════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="cmodal">
+      <div v-if="ordersModal.open" class="cmodal-overlay" @click.self="ordersModal.open = false">
+        <div class="cmodal-box">
+          <!-- Header -->
+          <div class="cmodal-header">
+            <div>
+              <div class="cmodal-title">
+                <i class="fa-sharp fa-solid fa-receipt" style="color:var(--brand)"></i>
+                Orders — {{ ordersModal.customer?.name }}
+              </div>
+              <div class="cmodal-sub">{{ ordersModal.orders.length }} order(s) found</div>
+            </div>
+            <button class="admin-btn ghost" style="padding:6px 10px" @click="ordersModal.open = false">
+              <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
+            </button>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="ordersModal.loading" style="padding:40px;text-align:center;color:var(--text-secondary)">
+            <i class="fa-solid fa-spinner-third fa-spin fa-2x"></i><br><br>Loading orders…
+          </div>
+
+          <!-- Empty -->
+          <div v-else-if="!ordersModal.orders.length" class="admin-empty">
+            <i class="fa-sharp fa-solid fa-box-open"></i>
+            No orders found for this customer.
+          </div>
+
+          <!-- Order list -->
+          <div v-else class="cmodal-body">
+            <div v-for="ord in ordersModal.orders" :key="ord.id" class="order-card">
+              <!-- Order header -->
+              <div class="order-card-head">
+                <div>
+                  <span class="order-id">#{{ ord.id.slice(-8).toUpperCase() }}</span>
+                  <span class="status-badge" :class="ord.status" style="margin-left:8px">{{ ord.status }}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span style="font-size:12px;color:var(--text-secondary)">
+                    {{ fmtDate(ord.createdAt) }}
+                  </span>
+                  <span class="order-total">৳{{ ord.total.toLocaleString() }}</span>
+                </div>
+              </div>
+
+              <!-- Items -->
+              <div class="order-items">
+                <div v-for="item in ord.items" :key="item.name + item.quantity" class="order-item">
+                  <img
+                    v-if="item.image"
+                    :src="item.image"
+                    :alt="item.name"
+                    class="order-item-img"
+                    onerror="this.style.display='none'"
+                  />
+                  <div class="order-item-img-placeholder" v-else>
+                    <i class="fa-sharp fa-solid fa-box" style="font-size:12px;opacity:0.4"></i>
+                  </div>
+                  <div class="order-item-info">
+                    <div class="order-item-name">{{ item.name }}</div>
+                    <div class="order-item-meta">
+                      ৳{{ item.price.toLocaleString() }} × {{ item.quantity }}
+                    </div>
+                  </div>
+                  <div class="order-item-subtotal">
+                    ৳{{ (item.price * item.quantity).toLocaleString() }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Totals row -->
+              <div class="order-totals">
+                <span class="col-muted">Subtotal ৳{{ ord.subtotal?.toLocaleString() ?? '—' }}</span>
+                <span class="col-muted" v-if="ord.shipping">+ Shipping ৳{{ ord.shipping }}</span>
+                <span class="col-muted">· Payment: <strong style="color:var(--text-primary)">{{ ord.paymentMethod }}</strong></span>
+                <span class="col-muted">· Status: <strong style="color:var(--text-primary)">{{ ord.paymentStatus }}</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       EDIT CUSTOMER MODAL
+  ══════════════════════════════════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="cmodal">
+      <div v-if="editModal.open" class="cmodal-overlay" @click.self="editModal.open = false">
+        <div class="cmodal-box" style="max-width:480px">
+          <div class="cmodal-header">
+            <div class="cmodal-title">
+              <i class="fa-sharp fa-solid fa-pen-to-square" style="color:var(--brand)"></i>
+              Edit Customer
+            </div>
+            <button class="admin-btn ghost" style="padding:6px 10px" @click="editModal.open = false">
+              <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
+            </button>
+          </div>
+
+          <div class="cmodal-body" style="padding:20px">
+            <div class="edit-field">
+              <label>Full Name</label>
+              <input class="admin-input" v-model="editForm.name" placeholder="Full name" />
+            </div>
+            <div class="edit-field">
+              <label>Email</label>
+              <input class="admin-input" v-model="editForm.email" type="email" placeholder="Email address" />
+            </div>
+            <div class="edit-field">
+              <label>Phone</label>
+              <input class="admin-input" v-model="editForm.phone" placeholder="+880…" />
+            </div>
+            <div class="edit-field">
+              <label>Address</label>
+              <textarea class="admin-input" v-model="editForm.address" rows="3" placeholder="Full address" style="resize:vertical"></textarea>
+            </div>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+              <button class="admin-btn secondary" @click="editModal.open = false">Cancel</button>
+              <button class="admin-btn primary" :disabled="editModal.saving" @click="saveEdit">
+                <i class="fa-sharp fa-solid fa-floppy-disk"></i>
+                {{ editModal.saving ? 'Saving…' : 'Save Changes' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       DELETE CONFIRMATION MODAL
+  ══════════════════════════════════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="cmodal">
+      <div v-if="deleteModal.open" class="cmodal-overlay" @click.self="deleteModal.open = false">
+        <div class="cmodal-box" style="max-width:420px">
+          <div class="cmodal-header">
+            <div class="cmodal-title" style="color:#ef4444">
+              <i class="fa-sharp fa-solid fa-triangle-exclamation"></i>
+              Delete Customer
+            </div>
+            <button class="admin-btn ghost" style="padding:6px 10px" @click="deleteModal.open = false">
+              <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
+            </button>
+          </div>
+          <div class="cmodal-body" style="padding:20px">
+            <p style="font-size:13px;color:var(--text-primary);margin-bottom:8px">
+              Are you sure you want to delete <strong>{{ deleteModal.customer?.name }}</strong>?
+            </p>
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">
+              This will permanently remove the customer and all their associated order data.
+              This action <strong style="color:#ef4444">cannot be undone</strong>.
+            </p>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button class="admin-btn secondary" @click="deleteModal.open = false">Cancel</button>
+              <button class="admin-btn danger" :disabled="deleteModal.deleting" @click="doDelete">
+                <i class="fa-sharp fa-solid fa-trash"></i>
+                {{ deleteModal.deleting ? 'Deleting…' : 'Yes, Delete' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useAdminStore } from '@/stores/useAdminStore'
-import { useExport } from '@/composables/useExport'
-
-const adminStore = useAdminStore()
-const exporter   = useExport()
-
-const search        = ref('')
-const sortBy        = ref<string>('totalSpent')
-const loyaltyFilter = ref('')
-const page          = ref(1)
-const perPage       = 15
-const exportOpen    = ref(false)
-const showMap       = ref(false)
-const mapEl         = ref<HTMLElement | null>(null)
-let leafletMap: any = null
-
-const COLORS = ['#f97316','#3b82f6','#a855f7','#22c55e','#ef4444','#06b6d4','#ec4899','#f59e0b']
-function hashIdx(s: string) { let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))%COLORS.length; return Math.abs(h)%COLORS.length }
-function avatarBg(id: string) { return COLORS[hashIdx(id)] + '22' }
-function avatarFg(id: string) { return COLORS[hashIdx(id)] }
-function initials(name: string) { return (name||'?').split(' ').map((w:string)=>w[0]).join('').slice(0,2).toUpperCase() }
-
-// Use real API data (from /api/admin/customers)
-const customers = computed(() => adminStore.customers)
-
-const repeatCount = computed(() => customers.value.filter(c=>c.orderCount>1).length)
-const avgLtv = computed(() => {
-  if (!customers.value.length) return 0
-  return Math.round(customers.value.reduce((s,c)=>s+c.totalSpent,0)/customers.value.length)
-})
-const topSpender = computed(() =>
-  customers.value.reduce((a,b) => b.totalSpent > (a?.totalSpent??-1) ? b : a, customers.value[0] ?? null)
-)
-
-watch([search, sortBy, loyaltyFilter], () => { page.value = 1 })
-
-const filtered = computed(() => {
-  let list = [...customers.value]
-  if (search.value) {
-    const q = search.value.toLowerCase()
-    list = list.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q) ||
-      c.address?.toLowerCase().includes(q) ||
-      c.phone?.includes(q)
-    )
-  }
-  if (loyaltyFilter.value === 'loyal') list = list.filter(c=>c.orderCount>1)
-  if (loyaltyFilter.value === 'new')   list = list.filter(c=>c.orderCount===1)
-  list.sort((a:any,b:any) => {
-    if (sortBy.value === 'name') return (a.name||'').localeCompare(b.name||'')
-    if (sortBy.value === 'lastOrder') return (b.lastOrder||'').localeCompare(a.lastOrder||'')
-    return (b[sortBy.value]??0) - (a[sortBy.value]??0)
-  })
-  return list
-})
-
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length/perPage)))
-const paginated  = computed(() => filtered.value.slice((page.value-1)*perPage, page.value*perPage))
-
-// Bangladesh city lat/lng lookup for rough mapping
-const BD_CITIES: Record<string,{lat:number;lng:number}> = {
-  dhaka:{lat:23.8103,lng:90.4125}, chittagong:{lat:22.3569,lng:91.7832},
-  sylhet:{lat:24.8949,lng:91.8687}, rajshahi:{lat:24.3745,lng:88.6042},
-  khulna:{lat:22.8456,lng:89.5403}, barisal:{lat:22.7010,lng:90.3535},
-  rangpur:{lat:25.7439,lng:89.2752}, mymensingh:{lat:24.7471,lng:90.4203},
-  comilla:{lat:23.4607,lng:91.1809}, narsingdi:{lat:23.9139,lng:90.7153},
-  gazipur:{lat:23.9999,lng:90.4203}, narayanganj:{lat:23.6238,lng:90.4996},
-}
-
-function cityCoords(address: string): {lat:number;lng:number}|null {
-  const lower = address.toLowerCase()
-  for (const [city, coord] of Object.entries(BD_CITIES)) {
-    if (lower.includes(city)) return coord
-  }
-  return null
-}
-
-const mapPins = computed(() =>
-  customers.value
-    .filter(c => c.address)
-    .map(c => ({ ...cityCoords(c.address), name: c.name, spent: c.totalSpent, orders: c.orderCount, address: c.address }))
-    .filter(p => p.lat) as {lat:number;lng:number;name:string;spent:number;orders:number;address:string}[]
-)
-
-// Init Leaflet map
-async function initMap() {
-  if (!mapEl.value || leafletMap) return
-  try {
-    const L = (await import('leaflet')).default
-    await import('leaflet/dist/leaflet.css')
-
-    leafletMap = L.map(mapEl.value, { center: [23.8103, 90.4125], zoom: 7 })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(leafletMap)
-
-    // Custom marker icon
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="width:28px;height:28px;background:#f97316;border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.35)"><i class="fa-solid fa-user" style="color:white;font-size:12px"></i></div>`,
-      iconSize: [28, 28], iconAnchor: [14, 14]
-    })
-
-    mapPins.value.forEach(pin => {
-      L.marker([pin.lat + (Math.random()-0.5)*0.08, pin.lng + (Math.random()-0.5)*0.08], { icon })
-        .bindPopup(`<b>${pin.name}</b><br><small>${pin.address}</small><br>Orders: ${pin.orders} | Spent: ৳${pin.spent.toLocaleString()}`)
-        .addTo(leafletMap)
-    })
-  } catch (e) { console.error('Leaflet init failed', e) }
-}
-
-watch(showMap, async (val) => {
-  if (val) { await nextTick(); initMap() }
-  else if (leafletMap) { leafletMap.remove(); leafletMap = null }
-})
-
-watch(mapPins, () => {
-  if (!leafletMap) return
-  // re-init for simplicity
-  leafletMap.remove(); leafletMap = null
-  nextTick(() => initMap())
-}, { deep: true })
-
-function fmtDate(d: string) {
-  if (!d) return '—'
-  const dt = new Date(d)
-  if (isNaN(dt.getTime())) return '—'
-  return dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})
-}
-function fmtNum(n: number) { return n>=1000?(n/1000).toFixed(1)+'K':n.toLocaleString() }
-
-function doExport(fmt: 'excel'|'pdf'|'csv'|'json') {
-  exportOpen.value = false
-  const data = filtered.value.map(c => ({
-    Name: c.name, Email: c.email, Phone: c.phone, Address: c.address,
-    Orders: c.orderCount, TotalSpent: c.totalSpent,
-    AvgOrder: Math.round(c.totalSpent/c.orderCount),
-    LastOrder: fmtDate(c.lastOrder), FirstOrder: fmtDate(c.firstOrder),
-    Payment: c.paymentMethod, Loyalty: c.orderCount>1?'Loyal':'New'
-  }))
-  const filename = `customers_${new Date().toISOString().slice(0,10)}`
-  if (fmt === 'excel') exporter.exportExcel(data, filename, 'Customers')
-  else if (fmt === 'csv') exporter.exportCSV(data, filename)
-  else if (fmt === 'json') exporter.exportJSON(data, filename)
-  else exporter.exportPDF(
-    ['Name','Email','Orders','Total Spent','Last Order','Status'],
-    filtered.value.map(c=>[c.name, c.email||'—', c.orderCount, `৳${c.totalSpent}`, fmtDate(c.lastOrder), c.orderCount>1?'Loyal':'New']),
-    filename, 'SellBazar — Customers Export'
-  )
-}
-
-async function load() {
-  await adminStore.loadCustomers()
-}
-
-onMounted(load)
-onUnmounted(() => { if (leafletMap) { leafletMap.remove(); leafletMap = null } })
-
-const vClickOutside = {
-  mounted(el: any, binding: any) {
-    el._clickHandler = (e: Event) => { if (!el.contains(e.target)) binding.value(e) }
-    document.addEventListener('click', el._clickHandler)
-  },
-  unmounted(el: any) { document.removeEventListener('click', el._clickHandler) }
-}
-</script>
-
-<style scoped>
-.export-wrap { position: relative; }
-.export-dropdown {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
-  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
-  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-  min-width: 160px; overflow: hidden;
-}
-.export-dropdown button {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px;
-  background: none; border: none; color: var(--text-primary); font-size: 13px;
-  cursor: pointer; text-align: left; transition: background 0.15s;
-}
-.export-dropdown button:hover { background: var(--surface-hover); }
-.map-card {
-  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
-  border-radius: 14px; margin-bottom: 20px; overflow: hidden;
-}
-.customer-avatar {
-  width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center;
-  justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0;
-}
-.sortable { cursor: pointer; user-select: none; }
-.sortable:hover { color: var(--brand); }
-.slide-up-enter-active, .slide-up-leave-active { transition: opacity 0.25s, transform 0.25s; }
-.slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(-8px); }
-</style>
