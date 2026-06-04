@@ -791,8 +791,8 @@ onMounted(async () => {
 
     // ── Set custom FA6 icons BEFORE creating the Quill instance ─────────────
     const icons = Quill.import('ui/icons')
-    icons['undo']        = `<i class="fa-sharp fa-solid fa-rotate-left"></i>`
-    icons['redo']        = `<i class="fa-sharp fa-solid fa-rotate-right"></i>`
+    icons['undo']        = `<i class="fa-sharp fa-solid fa-undo"></i>`
+    icons['redo']        = `<i class="fa-sharp fa-solid fa-redo"></i>`
     icons['divider']     = `<svg viewBox="0 0 18 18"><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="16" y2="4" stroke="currentColor" stroke-width="1" opacity=".4"/><line x1="2" y1="14" x2="16" y2="14" stroke="currentColor" stroke-width="1" opacity=".4"/></svg>`
     icons['table']       = `<i class="fa-sharp fa-solid fa-table"></i>`
     icons['fullscreen']  = `<i class="fa-sharp fa-solid fa-expand"></i>`
