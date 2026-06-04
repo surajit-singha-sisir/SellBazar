@@ -119,7 +119,14 @@
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
-            <div ref="quillContainer" class="quill-editor-wrap"></div>
+            <div class="quill-editor-wrap" :class="{ 'quill-uploading': descImgUploading }">
+              <div ref="quillContainer"></div>
+              <div v-if="descImgUploading" class="quill-upload-overlay">
+                <i class="fa-solid fa-spinner-third fa-spin"></i>
+                Uploading image to ImgBB…
+              </div>
+            </div>
+            <input ref="descImgInput" type="file" accept="image/*" style="display:none" @change="onDescImagePick" />
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -312,10 +319,13 @@ const api = useAdminApi()
 const isEdit = computed(() => !!route.params.id)
 const currentSlug = ref('')
 
+const loading = ref(false)
 const saving    = ref(false)
 const uploading = ref(false)
+const descImgUploading = ref(false)
 const formError = ref('')
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput    = ref<HTMLInputElement | null>(null)
+const descImgInput = ref<HTMLInputElement | null>(null)
 const urlInput  = ref('')
 const tagsInput = ref('')
 const customCategory = ref('')
@@ -529,15 +539,20 @@ onMounted(async () => {
       theme: 'snow',
       placeholder: 'Detailed product description…',
       modules: {
-        toolbar: [
-          [{ header: [2, 3, false] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ color: [] }, { background: [] }],
-          [{ list: 'ordered' }, { list: 'bullet' }],
-          ['blockquote', 'code-block'],
-          ['link'],
-          ['clean'],
-        ],
+        toolbar: {
+          container: [
+            [{ header: [2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ color: [] }, { background: [] }],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            ['blockquote', 'code-block'],
+            ['link', 'image'],
+            ['clean'],
+          ],
+          handlers: {
+            image: () => { descImgInput.value?.click() },
+          },
+        },
       },
     })
     quillInstance.on('text-change', () => {
@@ -605,6 +620,35 @@ async function onDrop(e: DragEvent) {
   } catch (err: any) {
     showToast(err.message ?? 'Upload failed', 'error')
   } finally { uploading.value = false }
+}
+
+async function onDescImagePick(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file || !quillInstance) return
+  if (!file.type.startsWith('image/')) { showToast('Only image files are supported', 'error'); return }
+  if (file.size > 25 * 1024 * 1024)   { showToast('Image must be smaller than 25 MB', 'error'); return }
+
+  descImgUploading.value = true
+  // Insert a temporary placeholder so the user knows something is happening
+  const range = quillInstance.getSelection(true)
+  quillInstance.insertText(range.index, '⏳ Uploading image…', 'italic', true)
+  quillInstance.setSelection(range.index + 18)
+
+  try {
+    const res = await api.uploadImage(file)
+    // Remove the placeholder text then insert the real image
+    quillInstance.deleteText(range.index, 18)
+    quillInstance.insertEmbed(range.index, 'image', res.url, 'user')
+    quillInstance.setSelection(range.index + 1)
+    form.description = quillInstance.getSemanticHTML()
+  } catch (err: any) {
+    // Remove placeholder on failure
+    quillInstance.deleteText(range.index, 18)
+    showToast(err.message ?? 'Image upload failed', 'error')
+  } finally {
+    descImgUploading.value = false
+    ;(e.target as HTMLInputElement).value = ''
+  }
 }
 
 function addImageUrl() {
@@ -772,7 +816,21 @@ select.form-input {
 @keyframes toast-in { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 /* ── Quill editor theme overrides ───────────────────────────────────────── */
-.quill-editor-wrap { border-radius: 9px; overflow: hidden; border: 1px solid var(--sidebar-border); }
+.quill-editor-wrap {
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--sidebar-border);
+  position: relative;
+}
+.quill-editor-wrap.quill-uploading :deep(.ql-editor) { opacity: 0.45; pointer-events: none; }
+.quill-upload-overlay {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; font-size: 13px; font-weight: 600; color: var(--brand);
+  background: rgba(var(--admin-bg-rgb, 255,255,255), 0.7);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
 .quill-editor-wrap :deep(.ql-toolbar) {
   background: var(--admin-bg);
   border: none;
