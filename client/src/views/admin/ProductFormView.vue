@@ -14,7 +14,7 @@
       <div style="display:flex;gap:8px">
         <RouterLink to="/admin/products" class="admin-btn secondary">Cancel</RouterLink>
         <button class="admin-btn primary" @click="submitForm" :disabled="saving || !isFormValid">
-          <i v-if="saving" class="fa-solid fa-spinner-third fa-spin"></i>
+          <i v-if="saving" class="fa-solid fa-spinner fa-spin"></i>
           <i v-else class="fa-sharp fa-solid fa-floppy-disk"></i>
           {{ saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Product' }}
         </button>
@@ -128,7 +128,7 @@
                   <i class="fa-solid fa-magnifying-glass"></i> Find
                 </button>
                 <button type="button" class="qe-meta-btn" :class="{ active: emojiPickerOpen }" @click="emojiPickerOpen = !emojiPickerOpen" title="Insert Emoji">
-                  <i class="fa-solid fa-face-smile"></i>
+                  <i class="fa-regular fa-face-smile"></i>
                 </button>
                 <button type="button" class="qe-meta-btn" @click="insertTable" title="Insert Table">
                   <i class="fa-solid fa-table"></i>
@@ -162,8 +162,12 @@
 
             <div class="quill-editor-wrap" :class="{ 'quill-uploading': descImgUploading, 'quill-fullscreen': isFullscreen }">
               <div ref="quillContainer"></div>
+              <!-- Fullscreen exit button (visible only in fullscreen mode) -->
+              <button v-if="isFullscreen" type="button" class="qe-exit-fullscreen-btn" @click="toggleFullscreen" title="Exit fullscreen (Esc)">
+                <i class="fa-solid fa-compress"></i> Exit fullscreen
+              </button>
               <div v-if="descImgUploading" class="quill-upload-overlay">
-                <i class="fa-solid fa-spinner-third fa-spin"></i>
+                <i class="fa-solid fa-spinner fa-spin"></i>
                 Uploading image to ImgBB…
               </div>
               <!-- Autosave indicator -->
@@ -290,7 +294,7 @@
             <div style="font-weight:600;font-size:13px">Drop images here or click to upload</div>
             <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">PNG, JPG, WEBP up to 25 MB — auto-compressed &amp; converted to WebP</div>
             <div v-if="uploading" style="margin-top:8px;color:var(--brand);font-size:12px">
-              <i class="fa-solid fa-spinner-third fa-spin"></i> Compressing &amp; uploading to ImgBB…
+              <i class="fa-solid fa-spinner fa-spin"></i> Compressing &amp; uploading to ImgBB…
             </div>
           </div>
 
@@ -349,7 +353,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useAdminApi } from '@/composables/useAdminApi'
@@ -420,6 +424,19 @@ function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
   nextTick(() => quillInstance?.focus())
 }
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && isFullscreen.value) {
+    isFullscreen.value = false
+    nextTick(() => quillInstance?.focus())
+  }
+}
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeyDown)
+  clearTimeout(autoSaveTimer)
+  clearTimeout(toastTimer)
+})
 
 function insertEmoji(em: string) {
   if (!quillInstance) return
