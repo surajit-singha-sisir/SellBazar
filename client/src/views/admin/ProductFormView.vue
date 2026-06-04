@@ -172,8 +172,6 @@
                 <i class="fa-solid fa-spinner fa-spin"></i>
                 Uploading image to ImgBB…
               </div>
-              <!-- Autosave indicator -->
-              <div class="qe-autosave-badge" :class="autoSaveState">{{ autoSaveLabel }}</div>
               <!-- Drag-resize handle -->
               <div class="qe-resize-handle" title="Drag to resize editor"></div>
             </div>
@@ -357,8 +355,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, computed, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useAdminApi } from '@/composables/useAdminApi'
 
@@ -392,9 +390,8 @@ const findReplaceOpen  = ref(false)
 const findText         = ref('')
 const replaceText      = ref('')
 const findStatus       = ref('')
-const autoSaveState    = ref<'idle' | 'saving' | 'saved'>('idle')
-const autoSaveLabel    = ref('')
-let   autoSaveTimer    = 0
+// ── Unsaved-changes tracking ─────────────────────────────────────────────────
+const isDirty = ref(false)
 
 const emojiList = [
   '😀','😂','😍','🤔','😎','🥳','🔥','✅','⭐','💡',
@@ -410,18 +407,8 @@ function updateWordCount() {
   editorWordCount.value = text ? text.split(/\s+/).filter(Boolean).length : 0
 }
 
-function triggerAutoSave() {
-  clearTimeout(autoSaveTimer)
-  autoSaveState.value = 'saving'
-  autoSaveLabel.value = 'Saving…'
-  autoSaveTimer = window.setTimeout(() => {
-    autoSaveState.value = 'saved'
-    autoSaveLabel.value = '✓ Auto-saved'
-    window.setTimeout(() => {
-      autoSaveState.value = 'idle'
-      autoSaveLabel.value = ''
-    }, 2200)
-  }, 1400)
+function markDirty() {
+  isDirty.value = true
 }
 
 function toggleFullscreen() {
@@ -466,9 +453,23 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
+// ── Unsaved-changes warning ───────────────────────────────────────────────────
+function beforeUnloadHandler(e: BeforeUnloadEvent) {
+  if (!isDirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (!isDirty.value) { next(); return }
+  const ok = window.confirm('You have unsaved changes. Leave anyway?')
+  if (ok) { isDirty.value = false; next() }
+  else next(false)
+})
+
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeyDown)
-  clearTimeout(autoSaveTimer)
+  window.removeEventListener('beforeunload', beforeUnloadHandler)
   clearTimeout(toastTimer)
 })
 
@@ -768,6 +769,10 @@ function resolveImg(url: string) {
 
 onMounted(async () => {
   document.addEventListener('keydown', onKeyDown)
+  window.addEventListener('beforeunload', beforeUnloadHandler)
+  // Watch all form fields — mark dirty on any change
+  watch(form, () => { isDirty.value = true }, { deep: true })
+  watch(tagsInput, () => { isDirty.value = true })
   // Load categories (for subcategory dropdown) and quill in parallel
   await Promise.all([loadCategoryList(), nextTick()])
   const Quill = (window as any).Quill
@@ -885,7 +890,7 @@ onMounted(async () => {
     quillInstance.on('text-change', () => {
       form.description = quillInstance.getSemanticHTML()
       updateWordCount()
-      triggerAutoSave()
+      markDirty()
     })
 
     // Initial word count
@@ -1063,9 +1068,11 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await adminStore.updateProduct(String(route.params.id), payload)
+      isDirty.value = false
       showToast(`"${form.name}" updated`)
     } else {
       const created = await adminStore.createProduct(payload)
+      isDirty.value = false
       // Update currentSlug with the server-confirmed slug so the store link
       // on this page reflects the real URL immediately.
       if (created?.slug) currentSlug.value = created.slug
