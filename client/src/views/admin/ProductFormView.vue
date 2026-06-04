@@ -534,30 +534,71 @@ onMounted(async () => {
   // Load categories (for subcategory dropdown) and quill in parallel
   await Promise.all([loadCategoryList(), nextTick()])
   const Quill = (window as any).Quill
+  const ImageResize = (window as any).ImageResize
+
   if (Quill && quillContainer.value) {
+    // Register custom fonts
+    const FontAttributor = Quill.import('attributors/class/font')
+    FontAttributor.whitelist = ['sans-serif', 'serif', 'monospace', 'bangla']
+    Quill.register(FontAttributor, true)
+
+    // Register image-resize module if available
+    if (ImageResize) {
+      Quill.register('modules/imageResize', ImageResize.default ?? ImageResize)
+    }
+
     quillInstance = new Quill(quillContainer.value, {
       theme: 'snow',
-      placeholder: 'Detailed product description…',
+      placeholder: 'Write a detailed product description…',
       modules: {
         toolbar: {
           container: [
-            [{ header: [2, 3, false] }],
+            // Row 1: History + format type
+            ['undo', 'redo'],
+            [{ header: [1, 2, 3, 4, false] }],
+            [{ font: ['sans-serif', 'serif', 'monospace', 'bangla'] }],
+            [{ size: ['small', false, 'large', 'huge'] }],
+            // Row 2: Inline text styles
             ['bold', 'italic', 'underline', 'strike'],
+            [{ script: 'sub' }, { script: 'super' }],
             [{ color: [] }, { background: [] }],
-            [{ list: 'ordered' }, { list: 'bullet' }],
+            // Row 3: Paragraph / alignment
+            [{ align: [] }],
+            [{ indent: '-1' }, { indent: '+1' }],
+            [{ list: 'ordered' }, { list: 'bullet' }, { list: 'check' }],
+            // Row 4: Blocks + media
             ['blockquote', 'code-block'],
-            ['link', 'image'],
+            ['link', 'image', 'video'],
+            // Row 5: Utilities
+            ['divider'],
             ['clean'],
           ],
           handlers: {
-            image: () => { descImgInput.value?.click() },
+            image:   () => { descImgInput.value?.click() },
+            video:   handleVideoEmbed,
+            divider: insertDivider,
+            undo:    () => (quillInstance as any).history.undo(),
+            redo:    () => (quillInstance as any).history.redo(),
           },
         },
+        history: { delay: 1000, maxStack: 100, userOnly: true },
+        ...(ImageResize ? { imageResize: { displaySize: true } } : {}),
       },
     })
+
+    // Custom undo/redo SVG icons
+    const icons = Quill.import('ui/icons')
+    icons['undo'] = `<svg viewBox="0 0 18 18"><polyline points="1 8 4 5 7 8"/><path d="M4 5v4a5 5 0 0 0 9.9 1"/></svg>`
+    icons['redo'] = `<svg viewBox="0 0 18 18"><polyline points="11 8 14 5 17 8"/><path d="M14 5v4a5 5 0 0 1-9.9 1"/></svg>`
+    icons['divider'] = `<svg viewBox="0 0 18 18"><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="16" y2="4" stroke="currentColor" stroke-width="1" opacity=".4"/><line x1="2" y1="14" x2="16" y2="14" stroke="currentColor" stroke-width="1" opacity=".4"/></svg>`
+
     quillInstance.on('text-change', () => {
       form.description = quillInstance.getSemanticHTML()
+      updateWordCount()
     })
+
+    // Initial word count
+    updateWordCount()
   }
 
   if (!adminStore.products.length) await adminStore.loadProducts()
