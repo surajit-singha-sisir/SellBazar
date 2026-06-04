@@ -39,7 +39,7 @@
               <!-- Category dropdown -->
               <select
                 v-model="searchCategory"
-                class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-2 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
+                class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-4 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
               >
                 <option value="">All</option>
                 <option v-for="cat in productStore.categoryNames.filter(c => c !== 'All')" :key="cat" :value="cat">{{ cat }}</option>
@@ -53,7 +53,7 @@
               @blur="hideSuggestions"
               type="text"
               placeholder="Search products, brands, categories..."
-              class="w-full pl-10 sm:pl-28 pr-14 py-2.5 rounded-xl text-sm input-field"
+              class="w-full pl-20 sm:pl-28 pr-14 py-2.5 rounded-xl text-sm input-field"
             />
             <button
               @click="doSearch"
