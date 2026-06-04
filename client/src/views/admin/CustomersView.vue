@@ -1213,5 +1213,4 @@ const vClickOutside = {
   /* Avoid page breaks inside a single order block */
   .inv-order-block { page-break-inside: avoid; break-inside: avoid; }
 }
-}
 </style>
