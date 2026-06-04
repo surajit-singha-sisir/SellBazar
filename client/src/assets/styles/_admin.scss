@@ -263,35 +263,6 @@
   flex-wrap: wrap;
   margin-bottom: 16px;
 
-  .filter-input {
-    flex: 1;
-    min-width: 200px;
-    max-width: 340px;
-    padding: 9px 14px 9px 36px;
-    background: var(--surface);
-    border: 1px solid var(--sidebar-border);
-    border-radius: 9px;
-    font-size: 13px;
-    color: var(--text-primary);
-    outline: none;
-    transition: border-color 0.15s;
-    &::placeholder { color: var(--text-secondary); }
-    &:focus { border-color: var(--brand); }
-  }
-
-  .filter-select {
-    padding: 9px 14px;
-    background: var(--surface);
-    border: 1px solid var(--sidebar-border);
-    border-radius: 9px;
-    font-size: 13px;
-    color: var(--text-primary);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.15s;
-    &:focus { border-color: var(--brand); }
-  }
-
   .search-wrap {
     position: relative;
     .search-icon {
@@ -304,6 +275,46 @@
       pointer-events: none;
     }
   }
+}
+
+// Standalone — usable inside or outside .admin-filters
+.filter-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 340px;
+  padding: 9px 14px 9px 36px;
+  background: var(--surface);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+  &::placeholder { color: var(--text-secondary); }
+  &:focus { border-color: var(--brand); }
+}
+
+.filter-select {
+  padding: 9px 14px;
+  background: var(--surface);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  option {
+    background: var(--surface);
+    color: var(--text-primary);
+  }
+  &:focus { border-color: var(--brand); }
 }
 
 // ── CMS Action Buttons ───────────────────────────────────────────────────────
@@ -368,32 +379,72 @@
 }
 
 // ── Admin Input & Select ─────────────────────────────────────────────────────
+// Tailwind preflight resets all borders/backgrounds on inputs — we re-apply
+// everything explicitly so admin controls look correct after the reset.
 .admin-input {
   padding: 9px 14px;
   background: var(--admin-bg);
-  border: 1px solid var(--sidebar-border);
+  border: 1px solid var(--sidebar-border) !important;
   border-radius: 9px;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
   outline: none;
   transition: border-color 0.15s;
   width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
 
   &::placeholder { color: var(--text-secondary); }
-  &:focus { border-color: var(--brand); }
+  &:focus { border-color: var(--brand) !important; }
 
   &[type="number"] { -moz-appearance: textfield; }
   &[type="number"]::-webkit-inner-spin-button,
   &[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
 }
 
-select.admin-input {
+select.admin-input,
+.admin-input[role="combobox"] {
   cursor: pointer;
   appearance: none;
+  -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
+  background-color: var(--admin-bg);
   padding-right: 32px;
+  option {
+    background: var(--surface);
+    color: var(--text-primary);
+  }
+}
+
+// ── Global admin-shell native element resets ─────────────────────────────────
+// Tailwind preflight zeroes out button/input/select styling; restore them
+// here so every admin element gets the right base regardless of component.
+.admin-shell {
+  button, input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  // All bare select elements inside admin get the admin styling baseline
+  select:not([class]) {
+    background: var(--surface);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 9px;
+    color: var(--text-primary);
+    padding: 7px 28px 7px 10px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    option { background: var(--surface); color: var(--text-primary); }
+  }
 }
 
 // ── Misc quick-stat helpers ──────────────────────────────────────────────────
@@ -490,9 +541,11 @@ select.admin-input {
   outline: none;
   cursor: pointer;
   appearance: none;
+  -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 9px center;
+  option { background: var(--surface); color: var(--text-primary); }
   &:focus { border-color: var(--brand); }
 }
 .sub-filter-badge {
