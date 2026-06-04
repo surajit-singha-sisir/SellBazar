@@ -1186,9 +1186,32 @@ const vClickOutside = {
 
 /* ── Print styles ───────────────────────────────────────────────────────── */
 @media print {
-  body > *:not(#invoice-print-area) { display: none !important; }
-  #invoice-print-area { position: fixed; inset: 0; overflow: visible; padding: 0; }
-  .inv-doc { box-shadow: none; border-radius: 0; }
+  /* Hide everything on the page */
+  body * { visibility: hidden !important; }
+
+  /* Show only the invoice document itself */
+  #invoice-print-area,
+  #invoice-print-area * { visibility: visible !important; }
+
+  /* Position the invoice to fill the page from top-left */
+  #invoice-print-area {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Clean up the doc card for paper */
+  .inv-doc { box-shadow: none !important; border-radius: 0 !important; }
+
+  /* Hide the toolbar (Print button, close button) */
   .invoice-toolbar { display: none !important; }
+
+  /* Avoid page breaks inside a single order block */
+  .inv-order-block { page-break-inside: avoid; break-inside: avoid; }
+}
 }
 </style>
