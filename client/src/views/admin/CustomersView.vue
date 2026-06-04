@@ -836,7 +836,7 @@ const vClickOutside = {
   padding: 16px;
 }
 .cmodal-box {
-  background: var(----sidebar-bg-bg); border: 1px solid var(--sidebar-border);
+  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
   border-radius: 16px; width: 100%; max-width: 760px;
   max-height: 86vh; display: flex; flex-direction: column;
   box-shadow: 0 24px 64px rgba(0,0,0,0.5);
