@@ -444,6 +444,31 @@ function insertTable() {
   showToast('Table inserted — click any cell to edit', 'success')
 }
 
+function handleVideoEmbed() {
+  if (!quillInstance) return
+  const url = prompt('Enter YouTube or Vimeo URL:')?.trim()
+  if (!url) return
+  // Convert watch URLs to embed URLs
+  let embed = url
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/)
+  if (ytMatch) embed = `https://www.youtube.com/embed/${ytMatch[1]}`
+  const vmMatch = url.match(/vimeo\.com\/(\d+)/)
+  if (vmMatch) embed = `https://player.vimeo.com/video/${vmMatch[1]}`
+  const range = quillInstance.getSelection(true) ?? { index: quillInstance.getLength() - 1 }
+  quillInstance.insertEmbed(range.index, 'video', embed, 'user')
+  quillInstance.setSelection(range.index + 1)
+  showToast('Video embedded', 'success')
+}
+
+function insertDivider() {
+  if (!quillInstance) return
+  const range = quillInstance.getSelection(true) ?? { index: quillInstance.getLength() - 1 }
+  quillInstance.insertText(range.index, '\n', 'user')
+  quillInstance.insertEmbed(range.index + 1, 'divider' as any, true, 'user')
+  quillInstance.insertText(range.index + 2, '\n', 'user')
+  quillInstance.setSelection(range.index + 3)
+}
+
 // ── Find & Replace ────────────────────────────────────────────────────────────
 let findLastIndex = -1
 
@@ -490,8 +515,7 @@ function doReplaceAll() {
   findLastIndex = -1
 }
 
-function escReg(s: string): string { return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\function escReg(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\function escReg(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\const quillContainer = ref<HTMLElement | null>(null)
-let quillInstance: any = null') }') }') }
+function escReg(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
 // ── JSON Import state ─────────────────────────────────────────────────────────
 const jsonPanelOpen   = ref(false)
@@ -756,6 +780,7 @@ onMounted(async () => {
     quillInstance.on('text-change', () => {
       form.description = quillInstance.getSemanticHTML()
       updateWordCount()
+      triggerAutoSave()
     })
 
     // Initial word count
@@ -788,7 +813,10 @@ onMounted(async () => {
       if (quillInstance && p.description) {
         quillInstance.clipboard.dangerouslyPasteHTML(p.description)
       }
-      form.images = await api.compressImages(form.images)
+      // Only compress if the method exists (optional optimisation)
+      if (typeof api.compressImages === 'function') {
+        form.images = await api.compressImages(form.images)
+      }
     } else {
       formError.value = `Product not found (id: ${route.params.id})`
     }
@@ -1179,4 +1207,102 @@ select.form-input {
   .pf-json-cols { grid-template-columns: 1fr; }
   .pf-json-divider { width: auto; height: 28px; }
   .pf-json-divider span { padding: 0 8px; }
-}</style>
+}
+
+/* ── Editor meta bar ──────────────────────────────────────────────────────── */
+.qe-meta-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 2px 6px;
+}
+.qe-word-count {
+  font-size: 10.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.qe-meta-actions { display: flex; gap: 4px; }
+.qe-meta-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 7px;
+  background: transparent; border: 1px solid var(--sidebar-border);
+  color: var(--text-secondary); font-size: 11px; cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.qe-meta-btn:hover { background: var(--brand-dim); color: var(--brand); border-color: var(--brand); }
+.qe-meta-btn.active { background: var(--brand-dim); color: var(--brand); border-color: var(--brand); }
+
+/* ── Emoji panel ──────────────────────────────────────────────────────────── */
+.qe-emoji-panel {
+  display: flex; flex-wrap: wrap; gap: 2px;
+  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
+  border-radius: 10px; padding: 8px; margin-bottom: 6px;
+  max-height: 120px; overflow-y: auto;
+}
+.qe-emoji-btn {
+  width: 30px; height: 30px; border: none; background: transparent;
+  border-radius: 6px; font-size: 16px; cursor: pointer; line-height: 1;
+  transition: background 0.12s;
+}
+.qe-emoji-btn:hover { background: var(--brand-dim); }
+
+/* ── Find & Replace panel ─────────────────────────────────────────────────── */
+.qe-find-panel {
+  background: var(--admin-bg); border: 1px solid var(--sidebar-border);
+  border-radius: 9px; padding: 10px 12px; margin-bottom: 6px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.qe-find-row {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.qe-find-status {
+  font-size: 11px; color: var(--text-secondary);
+  padding: 2px 0 0 2px;
+}
+
+/* Shared panel transition */
+.qe-panel-enter-active { transition: all 0.18s ease; overflow: hidden; }
+.qe-panel-leave-active { transition: all 0.14s ease; overflow: hidden; }
+.qe-panel-enter-from, .qe-panel-leave-to { opacity: 0; max-height: 0; padding: 0; }
+.qe-panel-enter-to, .qe-panel-leave-from { opacity: 1; max-height: 300px; }
+
+/* ── Autosave badge ───────────────────────────────────────────────────────── */
+.qe-autosave-badge {
+  position: absolute; bottom: 6px; right: 10px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 2px 7px; border-radius: 5px;
+  pointer-events: none; opacity: 0; transition: opacity 0.2s;
+  z-index: 5;
+}
+.qe-autosave-badge.saving {
+  background: rgba(249,115,22,0.12); color: var(--brand); opacity: 1;
+}
+.qe-autosave-badge.saved {
+  background: rgba(34,197,94,0.12); color: #16a34a; opacity: 1;
+}
+.qe-autosave-badge.idle { opacity: 0; }
+
+/* ── Fullscreen editor ────────────────────────────────────────────────────── */
+.quill-editor-wrap.quill-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  border-radius: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--admin-bg);
+}
+.quill-editor-wrap.quill-fullscreen :deep(.ql-toolbar) {
+  flex-shrink: 0;
+}
+.quill-editor-wrap.quill-fullscreen :deep(.ql-container) {
+  flex: 1;
+  overflow-y: auto;
+  min-height: unset;
+}
+.quill-editor-wrap.quill-fullscreen :deep(.ql-editor) {
+  min-height: unset;
+  height: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 32px;
+  font-size: 15px;
+}
+</style>
