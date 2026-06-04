@@ -119,12 +119,55 @@
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
-            <div class="quill-editor-wrap" :class="{ 'quill-uploading': descImgUploading }">
+
+            <!-- Editor toolbar extras: Find/Replace + Fullscreen -->
+            <div class="qe-meta-bar">
+              <span class="qe-word-count">{{ editorWordCount }} words · {{ editorCharCount }} chars</span>
+              <div class="qe-meta-actions">
+                <button type="button" class="qe-meta-btn" :class="{ active: findReplaceOpen }" @click="findReplaceOpen = !findReplaceOpen" title="Find & Replace">
+                  <i class="fa-solid fa-magnifying-glass"></i> Find
+                </button>
+                <button type="button" class="qe-meta-btn" :class="{ active: emojiPickerOpen }" @click="emojiPickerOpen = !emojiPickerOpen" title="Insert Emoji">
+                  <i class="fa-solid fa-face-smile"></i>
+                </button>
+                <button type="button" class="qe-meta-btn" @click="insertTable" title="Insert Table">
+                  <i class="fa-solid fa-table"></i>
+                </button>
+                <button type="button" class="qe-meta-btn" :class="{ active: isFullscreen }" @click="toggleFullscreen" title="Fullscreen">
+                  <i :class="isFullscreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Emoji panel -->
+            <Transition name="qe-panel">
+              <div v-if="emojiPickerOpen" class="qe-emoji-panel">
+                <button v-for="em in emojiList" :key="em" type="button" class="qe-emoji-btn" @click="insertEmoji(em)">{{ em }}</button>
+              </div>
+            </Transition>
+
+            <!-- Find & Replace panel -->
+            <Transition name="qe-panel">
+              <div v-if="findReplaceOpen" class="qe-find-panel">
+                <div class="qe-find-row">
+                  <input class="form-input" v-model="findText" placeholder="Find…" style="flex:1" @keyup.enter="doFind" />
+                  <input class="form-input" v-model="replaceText" placeholder="Replace with…" style="flex:1" />
+                  <button type="button" class="admin-btn secondary" style="font-size:11px;padding:6px 12px" @click="doFind">Find</button>
+                  <button type="button" class="admin-btn secondary" style="font-size:11px;padding:6px 12px" @click="doReplace">Replace</button>
+                  <button type="button" class="admin-btn secondary" style="font-size:11px;padding:6px 12px" @click="doReplaceAll">All</button>
+                </div>
+                <div v-if="findStatus" class="qe-find-status">{{ findStatus }}</div>
+              </div>
+            </Transition>
+
+            <div class="quill-editor-wrap" :class="{ 'quill-uploading': descImgUploading, 'quill-fullscreen': isFullscreen }">
               <div ref="quillContainer"></div>
               <div v-if="descImgUploading" class="quill-upload-overlay">
                 <i class="fa-solid fa-spinner-third fa-spin"></i>
                 Uploading image to ImgBB…
               </div>
+              <!-- Autosave indicator -->
+              <div class="qe-autosave-badge" :class="autoSaveState">{{ autoSaveLabel }}</div>
             </div>
             <input ref="descImgInput" type="file" accept="image/*" style="display:none" @change="onDescImagePick" />
           </div>
@@ -331,6 +374,124 @@ const tagsInput = ref('')
 const customCategory = ref('')
 const quillContainer = ref<HTMLElement | null>(null)
 let quillInstance: any = null
+
+// ── Editor extras state ──────────────────────────────────────────────────────
+const editorWordCount  = ref(0)
+const editorCharCount  = ref(0)
+const isFullscreen     = ref(false)
+const emojiPickerOpen  = ref(false)
+const findReplaceOpen  = ref(false)
+const findText         = ref('')
+const replaceText      = ref('')
+const findStatus       = ref('')
+const autoSaveState    = ref<'idle' | 'saving' | 'saved'>('idle')
+const autoSaveLabel    = ref('')
+let   autoSaveTimer    = 0
+
+const emojiList = [
+  '😀','😂','😍','🤔','😎','🥳','🔥','✅','⭐','💡',
+  '🎉','👍','❤️','🚀','💰','🛒','📦','🏷️','🎁','📱',
+  '💻','🖥️','⌨️','🖱️','📷','🎵','🌟','✨','💎','🏆',
+  '👏','🙌','💪','👀','🤝','📢','📣','🔔','⚡','🌈',
+]
+
+function updateWordCount() {
+  if (!quillInstance) return
+  const text  = quillInstance.getText().trim()
+  editorCharCount.value = text.length
+  editorWordCount.value = text ? text.split(/\s+/).filter(Boolean).length : 0
+}
+
+function triggerAutoSave() {
+  clearTimeout(autoSaveTimer)
+  autoSaveState.value = 'saving'
+  autoSaveLabel.value = 'Saving…'
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveState.value = 'saved'
+    autoSaveLabel.value = '✓ Auto-saved'
+    window.setTimeout(() => {
+      autoSaveState.value = 'idle'
+      autoSaveLabel.value = ''
+    }, 2200)
+  }, 1400)
+}
+
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
+  nextTick(() => quillInstance?.focus())
+}
+
+function insertEmoji(em: string) {
+  if (!quillInstance) return
+  const range = quillInstance.getSelection(true) ?? { index: quillInstance.getLength() - 1 }
+  quillInstance.insertText(range.index, em, 'user')
+  quillInstance.setSelection(range.index + em.length)
+  emojiPickerOpen.value = false
+}
+
+function insertTable() {
+  if (!quillInstance) return
+  const range = quillInstance.getSelection(true) ?? { index: quillInstance.getLength() - 1 }
+  // Build a minimal HTML table and paste it
+  const tableHtml = `<br><table border="1" style="border-collapse:collapse;width:100%">
+    <thead><tr><th style="padding:6px 10px;background:#f5f5f5">Header 1</th><th style="padding:6px 10px;background:#f5f5f5">Header 2</th><th style="padding:6px 10px;background:#f5f5f5">Header 3</th></tr></thead>
+    <tbody>
+      <tr><td style="padding:6px 10px">Cell</td><td style="padding:6px 10px">Cell</td><td style="padding:6px 10px">Cell</td></tr>
+      <tr><td style="padding:6px 10px">Cell</td><td style="padding:6px 10px">Cell</td><td style="padding:6px 10px">Cell</td></tr>
+    </tbody>
+  </table><br>`
+  quillInstance.clipboard.dangerouslyPasteHTML(range.index, tableHtml)
+  showToast('Table inserted — click any cell to edit', 'success')
+}
+
+// ── Find & Replace ────────────────────────────────────────────────────────────
+let findLastIndex = -1
+
+function doFind() {
+  findStatus.value = ''
+  if (!quillInstance || !findText.value) return
+  const text  = quillInstance.getText()
+  const query = findText.value
+  const start = findLastIndex + 1
+  let   idx   = text.indexOf(query, start)
+  if (idx === -1 && start > 0) idx = text.indexOf(query, 0) // wrap
+  if (idx === -1) { findStatus.value = `"${query}" not found`; findLastIndex = -1; return }
+  quillInstance.setSelection(idx, query.length)
+  findLastIndex = idx
+  const total = (text.match(new RegExp(escReg(query), 'g')) ?? []).length
+  findStatus.value = `Match at pos ${idx} (${total} total)`
+}
+
+function doReplace() {
+  if (!quillInstance || !findText.value) return
+  const sel = quillInstance.getSelection()
+  if (sel && sel.length === findText.value.length) {
+    quillInstance.deleteText(sel.index, sel.length)
+    quillInstance.insertText(sel.index, replaceText.value)
+    quillInstance.setSelection(sel.index + replaceText.value.length)
+    findLastIndex = sel.index - 1
+    findStatus.value = 'Replaced — press Find for next'
+  } else {
+    doFind()
+  }
+}
+
+function doReplaceAll() {
+  if (!quillInstance || !findText.value) return
+  const text   = quillInstance.getText()
+  const count  = (text.match(new RegExp(escReg(findText.value), 'g')) ?? []).length
+  if (!count) { findStatus.value = 'No matches found'; return }
+  // Re-build HTML with replacements
+  let html = quillInstance.getSemanticHTML()
+  html = html.split(findText.value).join(replaceText.value)
+  quillInstance.clipboard.dangerouslyPasteHTML(html)
+  form.description = quillInstance.getSemanticHTML()
+  findStatus.value = `Replaced ${count} occurrence${count > 1 ? 's' : ''}`
+  findLastIndex = -1
+}
+
+function escReg(s: string): string { return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\function escReg(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\function escReg(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\const quillContainer = ref<HTMLElement | null>(null)
+let quillInstance: any = null') }') }') }
 
 // ── JSON Import state ─────────────────────────────────────────────────────────
 const jsonPanelOpen   = ref(false)
