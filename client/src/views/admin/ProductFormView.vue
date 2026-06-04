@@ -789,6 +789,15 @@ onMounted(async () => {
       Quill.register('modules/imageResize', ImageResize.default ?? ImageResize)
     }
 
+    // ── Set custom FA6 icons BEFORE creating the Quill instance ─────────────
+    const icons = Quill.import('ui/icons')
+    icons['undo']        = `<i class="fa-sharp fa-solid fa-rotate-left"></i>`
+    icons['redo']        = `<i class="fa-sharp fa-solid fa-rotate-right"></i>`
+    icons['divider']     = `<svg viewBox="0 0 18 18"><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="16" y2="4" stroke="currentColor" stroke-width="1" opacity=".4"/><line x1="2" y1="14" x2="16" y2="14" stroke="currentColor" stroke-width="1" opacity=".4"/></svg>`
+    icons['table']       = `<i class="fa-sharp fa-solid fa-table"></i>`
+    icons['fullscreen']  = `<i class="fa-sharp fa-solid fa-expand"></i>`
+    icons['code-view']   = `<i class="fa-sharp fa-solid fa-code"></i>`
+
     quillInstance = new Quill(quillContainer.value, {
       theme: 'snow',
       placeholder: 'Write a detailed product description…',
@@ -832,15 +841,6 @@ onMounted(async () => {
         ...(ImageResize ? { imageResize: { displaySize: true } } : {}),
       },
     })
-
-    // Custom toolbar icons — FA6 Pro sharp-solid style via <i> tags
-    const icons = Quill.import('ui/icons')
-    icons['undo']        = `<i class="fa-sharp fa-solid fa-rotate-left"></i>`
-    icons['redo']        = `<i class="fa-sharp fa-solid fa-rotate-right"></i>`
-    icons['divider']     = `<svg viewBox="0 0 18 18"><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="16" y2="4" stroke="currentColor" stroke-width="1" opacity=".4"/><line x1="2" y1="14" x2="16" y2="14" stroke="currentColor" stroke-width="1" opacity=".4"/></svg>`
-    icons['table']       = `<i class="fa-sharp fa-solid fa-table"></i>`
-    icons['fullscreen']  = `<i class="fa-sharp fa-solid fa-expand"></i>`
-    icons['code-view']   = `<i class="fa-sharp fa-solid fa-code"></i>`
 
     // Add title tooltips to every toolbar button/picker
     nextTick(() => {
@@ -1086,6 +1086,8 @@ async function submitForm() {
 </script>
 
 <style scoped>
+/* ── Google Fonts — must be first in the style block ─────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;700&display=swap');
 .pf-error-banner {
   background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
   color: #ef4444; border-radius: 10px; padding: 10px 14px;
@@ -1399,21 +1401,7 @@ select.form-input {
 .qe-panel-enter-from, .qe-panel-leave-to { opacity: 0; max-height: 0; padding: 0; }
 .qe-panel-enter-to, .qe-panel-leave-from { opacity: 1; max-height: 300px; }
 
-/* ── Autosave badge ───────────────────────────────────────────────────────── */
-.qe-autosave-badge {
-  position: absolute; bottom: 6px; right: 10px;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
-  padding: 2px 7px; border-radius: 5px;
-  pointer-events: none; opacity: 0; transition: opacity 0.2s;
-  z-index: 5;
-}
-.qe-autosave-badge.saving {
-  background: rgba(249,115,22,0.12); color: var(--brand); opacity: 1;
-}
-.qe-autosave-badge.saved {
-  background: rgba(34,197,94,0.12); color: #16a34a; opacity: 1;
-}
-.qe-autosave-badge.idle { opacity: 0; }
+/* ── Autosave badge (removed — no autosave) ─────────────────────────────── */
 
 /* ── Fullscreen editor ────────────────────────────────────────────────────── */
 .quill-editor-wrap.quill-fullscreen {
@@ -1441,5 +1429,93 @@ select.form-input {
   margin: 0 auto;
   padding: 24px 32px;
   font-size: 15px;
+}
+
+/* ── Exit-fullscreen button ───────────────────────────────────────────────── */
+.qe-exit-fullscreen-btn {
+  position: fixed;
+  top: 12px; right: 16px;
+  z-index: 9100;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 8px;
+  background: var(--brand); color: #fff;
+  border: none; font-size: 12px; font-weight: 600;
+  cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  transition: background 0.15s;
+}
+.qe-exit-fullscreen-btn:hover { background: #ea6c10; }
+
+/* ── Drag-resize handle ───────────────────────────────────────────────────── */
+.qe-resize-handle {
+  height: 8px;
+  cursor: ns-resize;
+  background: linear-gradient(to bottom, transparent 30%, var(--sidebar-border) 50%, transparent 70%);
+  border-top: 1px solid var(--sidebar-border);
+}
+.qe-resize-handle:hover { background: linear-gradient(to bottom, transparent 20%, var(--brand) 50%, transparent 80%); }
+
+/* ── Code-view textarea ───────────────────────────────────────────────────── */
+.qe-code-view-textarea {
+  width: 100%; min-height: 200px; height: 200px; resize: none;
+  padding: 12px 14px; font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 12px; line-height: 1.6;
+  background: var(--admin-bg); color: var(--text-primary);
+  border: none; outline: none; box-sizing: border-box; display: block;
+}
+
+/* ── Toolbar icon colour — make FA icons inherit toolbar colour ─────────── */
+.quill-editor-wrap :deep(.ql-toolbar button i) {
+  font-size: 13px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.quill-editor-wrap :deep(.ql-toolbar button:hover i),
+.quill-editor-wrap :deep(.ql-toolbar button.ql-active i) {
+  color: var(--brand);
+}
+
+/* ── Custom fonts loaded into the Quill editor ────────────────────────────── */
+/* Kalpurush — served from /public/fonts/ */
+@font-face {
+  font-family: 'Kalpurush';
+  src: url('/fonts/kalpurush.woff2') format('woff2'),
+       url('/fonts/kalpurush.woff')  format('woff'),
+       url('/fonts/kalpurush.ttf')   format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Map Quill ql-font-* classes to the real font names */
+.quill-editor-wrap :deep(.ql-font-hind-siliguri) { font-family: 'Hind Siliguri', sans-serif !important; }
+.quill-editor-wrap :deep(.ql-font-kalpurush)      { font-family: 'Kalpurush', sans-serif !important; }
+.quill-editor-wrap :deep(.ql-font-bangla)         { font-family: 'Hind Siliguri', 'Kalpurush', sans-serif !important; }
+.quill-editor-wrap :deep(.ql-font-serif)          { font-family: Georgia, serif !important; }
+.quill-editor-wrap :deep(.ql-font-monospace)      { font-family: 'Courier New', monospace !important; }
+
+/* Font picker labels in the dropdown */
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-item[data-value="hind-siliguri"]::before),
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-label[data-value="hind-siliguri"]::before) {
+  content: 'Hind Siliguri';
+  font-family: 'Hind Siliguri', sans-serif;
+}
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-item[data-value="kalpurush"]::before),
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-label[data-value="kalpurush"]::before) {
+  content: 'কালপুরুষ';
+  font-family: 'Kalpurush', sans-serif;
+}
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-item[data-value="bangla"]::before),
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-label[data-value="bangla"]::before) {
+  content: 'Bangla';
+}
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-item[data-value="serif"]::before),
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-label[data-value="serif"]::before) {
+  content: 'Serif';
+  font-family: Georgia, serif;
+}
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-item[data-value="monospace"]::before),
+.quill-editor-wrap :deep(.ql-picker.ql-font .ql-picker-label[data-value="monospace"]::before) {
+  content: 'Monospace';
+  font-family: 'Courier New', monospace;
 }
 </style>
