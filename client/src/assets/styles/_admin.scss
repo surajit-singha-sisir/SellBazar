@@ -18,11 +18,14 @@
 }
 
 // ── Admin CSS Variables ──────────────────────────────────────────────────────
-// Declared on :root so Teleport'd modals (outside .admin-shell) can resolve them.
-// Layout-only vars (sidebar widths, topbar height) stay on .admin-shell.
+// Must be on :root (not .admin-shell) so <Teleport to="body"> modals can
+// resolve them — teleported elements are siblings of <body>, outside .admin-shell.
+//
+// Conflict guard: public store uses --color-* prefixed tokens (_variables.scss).
+// Admin uses unprefixed --brand, --surface, --text-* — no overlap.
 
 :root {
-  // Dark mode defaults (admin is dark-first)
+  // Dark defaults (admin is dark-first; public pages use --color-* so no bleed)
   --admin-bg:       #0c0c0f;
   --sidebar-bg:     #111116;
   --sidebar-border: rgba(255,255,255,0.06);
@@ -36,7 +39,7 @@
   --active-border:  #f97316;
 }
 
-// Light mode overrides
+// Light mode — toggled by ThemeStore removing .dark from <html>
 :root:not(.dark) {
   --admin-bg:       #f1f1f5;
   --sidebar-bg:     #ffffff;
@@ -49,7 +52,7 @@
   --active-bg:      rgba(249,115,22,0.1);
 }
 
-// ── Admin Shell Variables (layout-only) ──────────────────────────────────────
+// ── Admin Shell (layout geometry only) ───────────────────────────────────────
 .admin-shell {
   --sidebar-w:           224px;
   --sidebar-collapsed-w: 64px;
