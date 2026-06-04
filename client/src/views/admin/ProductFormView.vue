@@ -120,7 +120,7 @@
           <div class="form-group">
             <label class="form-label">Description</label>
 
-            <!-- Editor toolbar extras: Find/Replace + Fullscreen -->
+            <!-- Editor toolbar extras: Find/Replace + Emoji -->
             <div class="qe-meta-bar">
               <span class="qe-word-count">{{ editorWordCount }} words · {{ editorCharCount }} chars</span>
               <div class="qe-meta-actions">
@@ -129,12 +129,6 @@
                 </button>
                 <button type="button" class="qe-meta-btn" :class="{ active: emojiPickerOpen }" @click="emojiPickerOpen = !emojiPickerOpen" title="Insert Emoji">
                   <i class="fa-regular fa-face-smile"></i>
-                </button>
-                <button type="button" class="qe-meta-btn" @click="insertTable" title="Insert Table">
-                  <i class="fa-solid fa-table"></i>
-                </button>
-                <button type="button" class="qe-meta-btn" :class="{ active: isFullscreen }" @click="toggleFullscreen" title="Fullscreen">
-                  <i :class="isFullscreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
                 </button>
               </div>
             </div>
@@ -161,10 +155,18 @@
             </Transition>
 
             <div class="quill-editor-wrap" :class="{ 'quill-uploading': descImgUploading, 'quill-fullscreen': isFullscreen }">
-              <div ref="quillContainer"></div>
+              <div ref="quillContainer" v-show="!isCodeView"></div>
+              <!-- Code view textarea -->
+              <textarea
+                v-if="isCodeView"
+                v-model="codeViewHtml"
+                class="qe-code-view-textarea"
+                spellcheck="false"
+                placeholder="<p>Edit raw HTML here…</p>"
+              ></textarea>
               <!-- Fullscreen exit button (visible only in fullscreen mode) -->
               <button v-if="isFullscreen" type="button" class="qe-exit-fullscreen-btn" @click="toggleFullscreen" title="Exit fullscreen (Esc)">
-                <i class="fa-solid fa-compress"></i> Exit fullscreen
+                <i class="fa-sharp fa-solid fa-compress"></i> Exit fullscreen
               </button>
               <div v-if="descImgUploading" class="quill-upload-overlay">
                 <i class="fa-solid fa-spinner fa-spin"></i>
@@ -172,6 +174,8 @@
               </div>
               <!-- Autosave indicator -->
               <div class="qe-autosave-badge" :class="autoSaveState">{{ autoSaveLabel }}</div>
+              <!-- Drag-resize handle -->
+              <div class="qe-resize-handle" title="Drag to resize editor"></div>
             </div>
             <input ref="descImgInput" type="file" accept="image/*" style="display:none" @change="onDescImagePick" />
           </div>
@@ -425,10 +429,40 @@ function toggleFullscreen() {
   nextTick(() => quillInstance?.focus())
 }
 
+// ── Code View ─────────────────────────────────────────────────────────────────
+const isCodeView = ref(false)
+const codeViewHtml = ref('')
+
+function toggleCodeView() {
+  isCodeView.value = !isCodeView.value
+  if (isCodeView.value) {
+    // Capture current HTML into the textarea
+    codeViewHtml.value = quillInstance ? quillInstance.getSemanticHTML() : form.description
+  } else {
+    // Apply edited HTML back into Quill
+    if (quillInstance && codeViewHtml.value !== undefined) {
+      quillInstance.clipboard.dangerouslyPasteHTML(codeViewHtml.value)
+      form.description = codeViewHtml.value
+    }
+  }
+  // Update fullscreen icon when toggling code view too
+  nextTick(() => {
+    const fsBtn = quillContainer.value?.closest('.quill-editor-wrap')?.querySelector('.ql-fullscreen i') as HTMLElement | null
+    if (fsBtn) {
+      fsBtn.className = isFullscreen.value ? 'fa-sharp fa-solid fa-compress' : 'fa-sharp fa-solid fa-expand'
+    }
+  })
+}
+
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape' && isFullscreen.value) {
     isFullscreen.value = false
-    nextTick(() => quillInstance?.focus())
+    nextTick(() => {
+      quillInstance?.focus()
+      // Restore expand icon
+      const fsBtn = quillContainer.value?.closest('.quill-editor-wrap')?.querySelector('.ql-fullscreen i') as HTMLElement | null
+      if (fsBtn) fsBtn.className = 'fa-sharp fa-solid fa-expand'
+    })
   }
 }
 
@@ -733,6 +767,7 @@ function resolveImg(url: string) {
 }
 
 onMounted(async () => {
+  document.addEventListener('keydown', onKeyDown)
   // Load categories (for subcategory dropdown) and quill in parallel
   await Promise.all([loadCategoryList(), nextTick()])
   const Quill = (window as any).Quill
@@ -741,7 +776,7 @@ onMounted(async () => {
   if (Quill && quillContainer.value) {
     // Register custom fonts
     const FontAttributor = Quill.import('attributors/class/font')
-    FontAttributor.whitelist = ['sans-serif', 'serif', 'monospace', 'bangla']
+    FontAttributor.whitelist = ['sans-serif', 'serif', 'monospace', 'bangla', 'hind-siliguri', 'kalpurush']
     Quill.register(FontAttributor, true)
 
     // Register image-resize module if available
@@ -758,14 +793,14 @@ onMounted(async () => {
             // Row 1: History + format type
             ['undo', 'redo'],
             [{ header: [1, 2, 3, 4, false] }],
-            [{ font: ['sans-serif', 'serif', 'monospace', 'bangla'] }],
+            [{ font: ['sans-serif', 'serif', 'monospace', 'bangla', 'hind-siliguri', 'kalpurush'] }],
             [{ size: ['small', false, 'large', 'huge'] }],
             // Row 2: Inline text styles
             ['bold', 'italic', 'underline', 'strike'],
             [{ script: 'sub' }, { script: 'super' }],
             [{ color: [] }, { background: [] }],
-            // Row 3: Paragraph / alignment
-            [{ align: [] }],
+            // Row 3: Paragraph / alignment (left, center, right, justify)
+            [{ align: '' }, { align: 'center' }, { align: 'right' }, { align: 'justify' }],
             [{ indent: '-1' }, { indent: '+1' }],
             [{ list: 'ordered' }, { list: 'bullet' }, { list: 'check' }],
             // Row 4: Blocks + media
@@ -773,14 +808,19 @@ onMounted(async () => {
             ['link', 'image', 'video'],
             // Row 5: Utilities
             ['divider'],
+            ['table', 'fullscreen'],
+            ['code-view'],
             ['clean'],
           ],
           handlers: {
-            image:   () => { descImgInput.value?.click() },
-            video:   handleVideoEmbed,
-            divider: insertDivider,
-            undo:    () => (quillInstance as any).history.undo(),
-            redo:    () => (quillInstance as any).history.redo(),
+            image:     () => { descImgInput.value?.click() },
+            video:     handleVideoEmbed,
+            divider:   insertDivider,
+            undo:      () => (quillInstance as any).history.undo(),
+            redo:      () => (quillInstance as any).history.redo(),
+            table:     insertTable,
+            fullscreen: toggleFullscreen,
+            'code-view': toggleCodeView,
           },
         },
         history: { delay: 1000, maxStack: 100, userOnly: true },
@@ -788,11 +828,59 @@ onMounted(async () => {
       },
     })
 
-    // Custom undo/redo SVG icons
+    // Custom toolbar icons — FA6 Pro sharp-solid style via <i> tags
     const icons = Quill.import('ui/icons')
-    icons['undo'] = `<svg viewBox="0 0 18 18"><polyline points="1 8 4 5 7 8"/><path d="M4 5v4a5 5 0 0 0 9.9 1"/></svg>`
-    icons['redo'] = `<svg viewBox="0 0 18 18"><polyline points="11 8 14 5 17 8"/><path d="M14 5v4a5 5 0 0 1-9.9 1"/></svg>`
-    icons['divider'] = `<svg viewBox="0 0 18 18"><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="16" y2="4" stroke="currentColor" stroke-width="1" opacity=".4"/><line x1="2" y1="14" x2="16" y2="14" stroke="currentColor" stroke-width="1" opacity=".4"/></svg>`
+    icons['undo']        = `<i class="fa-sharp fa-solid fa-rotate-left"></i>`
+    icons['redo']        = `<i class="fa-sharp fa-solid fa-rotate-right"></i>`
+    icons['divider']     = `<svg viewBox="0 0 18 18"><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="16" y2="4" stroke="currentColor" stroke-width="1" opacity=".4"/><line x1="2" y1="14" x2="16" y2="14" stroke="currentColor" stroke-width="1" opacity=".4"/></svg>`
+    icons['table']       = `<i class="fa-sharp fa-solid fa-table"></i>`
+    icons['fullscreen']  = `<i class="fa-sharp fa-solid fa-expand"></i>`
+    icons['code-view']   = `<i class="fa-sharp fa-solid fa-code"></i>`
+
+    // Add title tooltips to every toolbar button/picker
+    nextTick(() => {
+      const toolbarEl = quillContainer.value?.previousElementSibling ?? quillContainer.value?.closest('.quill-editor-wrap')?.querySelector('.ql-toolbar')
+      const titleMap: Record<string, string> = {
+        'ql-undo': 'Undo', 'ql-redo': 'Redo',
+        'ql-bold': 'Bold', 'ql-italic': 'Italic', 'ql-underline': 'Underline', 'ql-strike': 'Strikethrough',
+        'ql-blockquote': 'Blockquote', 'ql-code-block': 'Code Block', 'ql-code-view': 'Code View (HTML)',
+        'ql-link': 'Insert Link', 'ql-image': 'Insert Image', 'ql-video': 'Insert Video',
+        'ql-clean': 'Remove Formatting', 'ql-divider': 'Insert Divider',
+        'ql-table': 'Insert Table', 'ql-fullscreen': 'Fullscreen',
+        'ql-header': 'Heading', 'ql-font': 'Font Family', 'ql-size': 'Font Size',
+        'ql-color': 'Text Color', 'ql-background': 'Background Color',
+        'ql-align': 'Alignment', 'ql-indent': 'Indent', 'ql-list': 'List',
+        'ql-script': 'Script',
+      }
+      if (toolbarEl) {
+        toolbarEl.querySelectorAll('button, .ql-picker').forEach((el: Element) => {
+          const btn = el as HTMLElement
+          // Derive key from class list
+          const cls = Array.from(btn.classList).find(c => c.startsWith('ql-') && c !== 'ql-picker')
+          if (cls && titleMap[cls]) btn.title = titleMap[cls]
+          // Alignment variants
+          if (btn.classList.contains('ql-align')) {
+            const val = btn.getAttribute('value') || ''
+            const alignTitles: Record<string, string> = { '': 'Align Left', 'center': 'Align Center', 'right': 'Align Right', 'justify': 'Justify' }
+            if (alignTitles[val]) btn.title = alignTitles[val]
+          }
+          // Indent variants
+          if (btn.classList.contains('ql-indent')) {
+            btn.title = btn.getAttribute('value') === '+1' ? 'Indent' : 'Outdent'
+          }
+          // List variants
+          if (btn.classList.contains('ql-list')) {
+            const v = btn.getAttribute('value') || ''
+            const listTitles: Record<string, string> = { 'ordered': 'Ordered List', 'bullet': 'Bullet List', 'check': 'Checklist' }
+            if (listTitles[v]) btn.title = listTitles[v]
+          }
+          // Script variants
+          if (btn.classList.contains('ql-script')) {
+            btn.title = btn.getAttribute('value') === 'sub' ? 'Subscript' : 'Superscript'
+          }
+        })
+      }
+    })
 
     quillInstance.on('text-change', () => {
       form.description = quillInstance.getSemanticHTML()
