@@ -831,12 +831,12 @@ const vClickOutside = {
 ══════════════════════════════════════════════════════════════════════════ */
 .cmodal-overlay {
   position: fixed; inset: 0; z-index: 1000;
-  background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
 }
 .cmodal-box {
-  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
+  background: rgba(29, 29, 29, 0.8); border: 1px solid rgba(41, 41, 41, 0.6);
   border-radius: 16px; width: 100%; max-width: 760px;
   max-height: 86vh; display: flex; flex-direction: column;
   box-shadow: 0 24px 64px rgba(0,0,0,0.5);
