@@ -896,7 +896,60 @@ function fmtDateFull(d: string) {
 }
 
 function printInvoice() {
-  window.print()
+  const el = document.getElementById('invoice-print-area')
+  if (!el) return
+
+  // Collect all <style> and <link rel="stylesheet"> from the current page
+  const styleNodes = [...document.querySelectorAll('style, link[rel="stylesheet"]')]
+  const styleHTML  = styleNodes.map(n => n.outerHTML).join('\n')
+
+  const win = window.open('', '_blank', 'width=900,height=700')
+  if (!win) return
+
+  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Invoice — ${ordersModal.customer?.name ?? ''}</title>
+  ${styleHTML}
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #fff; }
+    /* force light-mode colours so the white invoice doc renders correctly */
+    :root {
+      --sidebar-bg: #ffffff;
+      --sidebar-border: #e5e7eb;
+      --surface: #f9fafb;
+      --surface-hover: #f3f4f6;
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --brand: #f97316;
+      --brand-dim: rgba(249,115,22,0.12);
+      --admin-bg: #f3f4f6;
+    }
+    /* strip modal chrome — only show the invoice doc */
+    .cmodal-overlay, .cmodal-box, .cmodal-header,
+    .invoice-toolbar, .cmodal-body { all: unset; display: block; }
+    .invoice-body { background: #f3f4f6; padding: 0; }
+  </style>
+</head>
+<body>
+  ${el.innerHTML}
+</body>
+</html>`)
+
+  win.document.close()
+
+  // Wait for resources then print
+  win.onload = () => {
+    win.focus()
+    win.print()
+    win.close()
+  }
+  // Fallback in case onload already fired
+  setTimeout(() => {
+    try { win.focus(); win.print(); win.close() } catch {}
+  }, 800)
 }
 
 // ── Load ─────────────────────────────────────────────────────────────────────
