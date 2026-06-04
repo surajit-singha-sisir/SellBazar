@@ -342,6 +342,184 @@
   </Teleport>
 
   <!-- ══════════════════════════════════════════════════════════════════════
+       ALL INVOICE MODAL
+  ══════════════════════════════════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="cmodal">
+      <div v-if="invoiceModal.open" class="cmodal-overlay" @click.self="invoiceModal.open = false">
+        <div class="cmodal-box invoice-modal-box">
+
+          <!-- Toolbar -->
+          <div class="cmodal-header invoice-toolbar">
+            <div>
+              <div class="cmodal-title">
+                <i class="fa-sharp fa-solid fa-file-invoice" style="color:var(--brand)"></i>
+                All Orders Invoice — {{ ordersModal.customer?.name }}
+              </div>
+              <div class="cmodal-sub">{{ ordersModal.orders.length }} order(s) · Grand Total: ৳{{ invoiceGrandTotal.toLocaleString() }}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="admin-btn primary" style="padding:7px 16px;font-size:12px" @click="printInvoice">
+                <i class="fa-sharp fa-solid fa-print"></i> Print
+              </button>
+              <button class="admin-btn ghost" style="padding:6px 10px" @click="invoiceModal.open = false">
+                <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Invoice document -->
+          <div class="cmodal-body invoice-body" id="invoice-print-area">
+            <div class="inv-doc">
+
+              <!-- Header -->
+              <div class="inv-head">
+                <div>
+                  <div class="inv-brand-name">SellBazar</div>
+                  <div class="inv-brand-sub">sellbazar.com · support@sellbazar.com</div>
+                </div>
+                <div class="inv-meta">
+                  <div class="inv-meta-title">INVOICE</div>
+                  <div class="inv-meta-row">
+                    <span>Date:</span>
+                    <strong>{{ fmtDateFull(new Date().toISOString()) }}</strong>
+                  </div>
+                  <div class="inv-meta-row">
+                    <span>Orders:</span>
+                    <strong>{{ ordersModal.orders.length }}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bill To + Summary -->
+              <div class="inv-bill-section">
+                <div>
+                  <div class="inv-section-label">BILL TO</div>
+                  <div class="inv-customer-name">{{ ordersModal.customer?.name }}</div>
+                  <div class="inv-customer-detail" v-if="ordersModal.customer?.email">
+                    <i class="fa-sharp fa-solid fa-envelope" style="color:#f97316;font-size:10px"></i>
+                    {{ ordersModal.customer.email }}
+                  </div>
+                  <div class="inv-customer-detail" v-if="ordersModal.customer?.phone">
+                    <i class="fa-sharp fa-solid fa-phone" style="color:#f97316;font-size:10px"></i>
+                    {{ ordersModal.customer.phone }}
+                  </div>
+                  <div class="inv-customer-detail" v-if="ordersModal.customer?.address">
+                    <i class="fa-sharp fa-solid fa-location-dot" style="color:#f97316;font-size:10px"></i>
+                    {{ ordersModal.customer.address }}
+                  </div>
+                </div>
+                <div class="inv-summary-box">
+                  <div class="inv-section-label">SUMMARY</div>
+                  <div class="inv-summary-row">
+                    <span>Total Orders</span>
+                    <strong>{{ ordersModal.orders.length }}</strong>
+                  </div>
+                  <div class="inv-summary-row">
+                    <span>Total Items</span>
+                    <strong>{{ invoiceTotalQty }}</strong>
+                  </div>
+                  <div class="inv-summary-row">
+                    <span>Subtotal</span>
+                    <strong>৳{{ ordersModal.orders.reduce((s,o) => s + (o.subtotal ?? o.total), 0).toLocaleString() }}</strong>
+                  </div>
+                  <div class="inv-summary-row">
+                    <span>Shipping</span>
+                    <strong>৳{{ ordersModal.orders.reduce((s,o) => s + (Number(o.shipping) || 0), 0).toLocaleString() }}</strong>
+                  </div>
+                  <div class="inv-summary-row inv-summary-total">
+                    <span>Grand Total</span>
+                    <strong>৳{{ invoiceGrandTotal.toLocaleString() }}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Per-order blocks -->
+              <div v-for="(ord, oi) in ordersModal.orders" :key="ord.id" class="inv-order-block">
+
+                <!-- Order header bar -->
+                <div class="inv-order-head">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span class="inv-order-num">#{{ ord.id.slice(-8).toUpperCase() }}</span>
+                    <span :class="['inv-status-dot', ord.status]">{{ ord.status }}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                    <span class="inv-date">{{ fmtDateFull(ord.createdAt) }}</span>
+                    <span style="font-size:11px;color:#555">Payment: <strong>{{ ord.paymentMethod }}</strong></span>
+                    <span style="font-size:11px;color:#555">Paid: <strong>{{ ord.paymentStatus }}</strong></span>
+                    <span style="font-size:13px;font-weight:800;color:#f97316">৳{{ ord.total.toLocaleString() }}</span>
+                  </div>
+                </div>
+
+                <!-- Items table -->
+                <table class="inv-items-table">
+                  <thead>
+                    <tr>
+                      <th style="width:28px">#</th>
+                      <th style="width:44px"></th>
+                      <th>Product</th>
+                      <th style="text-align:right">Unit Price</th>
+                      <th style="text-align:center">Qty</th>
+                      <th style="text-align:right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(item, ii) in ord.items" :key="item.name + ii">
+                      <td class="inv-item-num">{{ ii + 1 }}</td>
+                      <td>
+                        <img v-if="item.image" :src="item.image" :alt="item.name" class="inv-item-thumb" onerror="this.style.display='none'" />
+                        <div v-else style="width:32px;height:32px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center">
+                          <i class="fa-sharp fa-solid fa-box" style="font-size:11px;color:#bbb"></i>
+                        </div>
+                      </td>
+                      <td class="inv-item-name">{{ item.name }}</td>
+                      <td style="text-align:right">৳{{ item.price.toLocaleString() }}</td>
+                      <td style="text-align:center">{{ item.quantity }}</td>
+                      <td style="text-align:right;font-weight:700">৳{{ (item.price * item.quantity).toLocaleString() }}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="inv-subtotal-row">
+                      <td colspan="4"></td>
+                      <td style="text-align:right;font-weight:600;color:#555">Subtotal</td>
+                      <td style="text-align:right;font-weight:700">৳{{ (ord.subtotal ?? ord.total).toLocaleString() }}</td>
+                    </tr>
+                    <tr v-if="ord.shipping" class="inv-subtotal-row">
+                      <td colspan="4"></td>
+                      <td style="text-align:right;font-weight:600;color:#555">Shipping</td>
+                      <td style="text-align:right">৳{{ Number(ord.shipping).toLocaleString() }}</td>
+                    </tr>
+                    <tr class="inv-total-row">
+                      <td colspan="4"></td>
+                      <td style="text-align:right;font-weight:800;color:#f97316">Order Total</td>
+                      <td style="text-align:right;font-weight:900;color:#f97316">৳{{ ord.total.toLocaleString() }}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+
+              </div><!-- /per-order block -->
+
+              <!-- Grand total footer -->
+              <div class="inv-grand-footer">
+                <div class="inv-grand-left">
+                  <div style="font-weight:700;font-size:13px;color:#fff;margin-bottom:4px">Thank you for shopping with us!</div>
+                  <div class="inv-grand-note">This is a computer-generated invoice. No signature required.</div>
+                </div>
+                <div class="inv-grand-total">
+                  <div class="inv-grand-label">GRAND TOTAL</div>
+                  <div class="inv-grand-value">৳{{ invoiceGrandTotal.toLocaleString() }}</div>
+                </div>
+              </div>
+
+            </div><!-- /inv-doc -->
+          </div><!-- /invoice-body -->
+
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
        EDIT CUSTOMER MODAL
   ══════════════════════════════════════════════════════════════════════ -->
   <Teleport to="body">
