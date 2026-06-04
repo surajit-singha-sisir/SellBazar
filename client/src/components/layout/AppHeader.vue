@@ -39,7 +39,7 @@
               <!-- Category dropdown -->
               <select
                 v-model="searchCategory"
-                class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-8 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
+                class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-2 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
               >
                 <option value="">All</option>
                 <option v-for="cat in productStore.categoryNames.filter(c => c !== 'All')" :key="cat" :value="cat">{{ cat }}</option>
