@@ -17,26 +17,27 @@
               transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-// ── Admin Shell Variables ────────────────────────────────────────────────────
-.admin-shell {
-  --sidebar-w:           224px;
-  --sidebar-collapsed-w: 64px;
-  --topbar-h:            56px;
-  --admin-bg:            #0c0c0f;
-  --sidebar-bg:          #111116;
-  --sidebar-border:      rgba(255,255,255,0.06);
-  --surface:             #16161c;
-  --surface-hover:       #1e1e26;
-  --text-primary:        #f0f0f5;
-  --text-secondary:      #8888a0;
-  --brand:               #f97316;
-  --brand-dim:           rgba(249,115,22,0.12);
-  --active-bg:           rgba(249,115,22,0.14);
-  --active-border:       #f97316;
+// ── Admin CSS Variables ──────────────────────────────────────────────────────
+// Declared on :root so Teleport'd modals (outside .admin-shell) can resolve them.
+// Layout-only vars (sidebar widths, topbar height) stay on .admin-shell.
+
+:root {
+  // Dark mode defaults (admin is dark-first)
+  --admin-bg:       #0c0c0f;
+  --sidebar-bg:     #111116;
+  --sidebar-border: rgba(255,255,255,0.06);
+  --surface:        #16161c;
+  --surface-hover:  #1e1e26;
+  --text-primary:   #f0f0f5;
+  --text-secondary: #8888a0;
+  --brand:          #f97316;
+  --brand-dim:      rgba(249,115,22,0.12);
+  --active-bg:      rgba(249,115,22,0.14);
+  --active-border:  #f97316;
 }
 
 // Light mode overrides
-:root:not(.dark) .admin-shell {
+:root:not(.dark) {
   --admin-bg:       #f1f1f5;
   --sidebar-bg:     #ffffff;
   --sidebar-border: rgba(0,0,0,0.07);
@@ -46,6 +47,13 @@
   --text-secondary: #71717a;
   --brand-dim:      rgba(249,115,22,0.08);
   --active-bg:      rgba(249,115,22,0.1);
+}
+
+// ── Admin Shell Variables (layout-only) ──────────────────────────────────────
+.admin-shell {
+  --sidebar-w:           224px;
+  --sidebar-collapsed-w: 64px;
+  --topbar-h:            56px;
 }
 
 // ── Stat Cards ───────────────────────────────────────────────────────────────
