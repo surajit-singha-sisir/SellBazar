@@ -118,8 +118,6 @@
             <span v-if="product.salePrice" class="badge badge-red text-sm">{{ discountPct }}% OFF</span>
           </div>
 
-          <div class="product-description" v-html="product.description"></div>
-
           <div class="card p-4 space-y-3 bg-[var(--color-surface-2)]">
             <div class="flex items-center gap-3 text-sm">
               <i class="fa-sharp fa-solid fa-circle-check text-green-500"></i>
@@ -165,6 +163,14 @@
           <div class="flex flex-wrap gap-2">
             <span v-for="tag in product.tags" :key="tag" class="tag">#{{ tag }}</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Product Description (full width) -->
+      <div v-if="product.description" class="mt-12">
+        <h2 class="font-display font-bold text-2xl mb-5">Product Description</h2>
+        <div class="card p-6 sm:p-8">
+          <div class="product-description" v-html="product.description"></div>
         </div>
       </div>
 
