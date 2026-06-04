@@ -890,6 +890,31 @@ onMounted(async () => {
 
     // Initial word count
     updateWordCount()
+
+    // ── Y-axis drag resize ──────────────────────────────────────────────────
+    nextTick(() => {
+      const wrap = quillContainer.value?.closest('.quill-editor-wrap') as HTMLElement | null
+      const handle = wrap?.querySelector('.qe-resize-handle') as HTMLElement | null
+      if (!wrap || !handle) return
+      let startY = 0
+      let startH = 0
+      handle.addEventListener('mousedown', (e: MouseEvent) => {
+        if (isFullscreen.value) return
+        e.preventDefault()
+        startY = e.clientY
+        startH = wrap.offsetHeight
+        const onMove = (ev: MouseEvent) => {
+          const newH = Math.max(180, startH + (ev.clientY - startY))
+          wrap.style.height = `${newH}px`
+        }
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove)
+          document.removeEventListener('mouseup', onUp)
+        }
+        document.addEventListener('mousemove', onMove)
+        document.addEventListener('mouseup', onUp)
+      })
+    })
   }
 
   if (!adminStore.products.length) await adminStore.loadProducts()
