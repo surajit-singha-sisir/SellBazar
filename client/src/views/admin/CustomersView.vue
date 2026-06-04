@@ -903,7 +903,7 @@ function printInvoice() {
   const styleNodes = [...document.querySelectorAll('style, link[rel="stylesheet"]')]
   const styleHTML  = styleNodes.map(n => n.outerHTML).join('\n')
 
-  const win = window.open('', '_blank', 'width=900,height=700')
+  const win = window.open('', '_blank')
   if (!win) return
 
   win.document.write(`<!DOCTYPE html>
