@@ -421,3 +421,452 @@
     </Transition>
   </Teleport>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { useAdminStore } from '@/stores/useAdminStore'
+import { useExport } from '@/composables/useExport'
+import type { ApiCustomer, ApiOrder } from '@/composables/useAdminApi'
+
+const adminStore = useAdminStore()
+const exporter   = useExport()
+
+// ── Filter / sort state ──────────────────────────────────────────────────────
+const search        = ref('')
+const sortBy        = ref<string>('totalSpent')
+const loyaltyFilter = ref('')
+const page          = ref(1)
+const perPage       = 15
+const exportOpen    = ref(false)
+
+watch([search, sortBy, loyaltyFilter], () => { page.value = 1 })
+
+// ── Avatar helpers ───────────────────────────────────────────────────────────
+const COLORS = ['#f97316','#3b82f6','#a855f7','#22c55e','#ef4444','#06b6d4','#ec4899','#f59e0b']
+function hashIdx(s: string) {
+  let h = 0
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) % COLORS.length
+  return Math.abs(h) % COLORS.length
+}
+function avatarBg(id: string) { return COLORS[hashIdx(id)] + '22' }
+function avatarFg(id: string) { return COLORS[hashIdx(id)] }
+function initials(name: string) {
+  return (name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+}
+
+// ── Data helpers ─────────────────────────────────────────────────────────────
+const customers = computed(() => adminStore.customers)
+
+const repeatCount = computed(() => customers.value.filter(c => c.orderCount > 1).length)
+const avgLtv = computed(() => {
+  if (!customers.value.length) return 0
+  return Math.round(customers.value.reduce((s, c) => s + c.totalSpent, 0) / customers.value.length)
+})
+const topSpender = computed(() =>
+  customers.value.reduce((a, b) => b.totalSpent > (a?.totalSpent ?? -1) ? b : a, customers.value[0] ?? null)
+)
+
+// Phone: could be a comma/semicolon separated string or single value
+function phoneList(c: ApiCustomer): string[] {
+  if (!c.phone) return []
+  return c.phone.split(/[,;\/\s]+/).map(p => p.trim()).filter(Boolean)
+}
+
+// Address: same pattern
+function addressList(c: ApiCustomer): string[] {
+  if (!c.address) return []
+  // Try to split on common separators (pipe or double semicolon) but keep commas as part of address text
+  const raw = c.address.split(/\s*\|\s*/).map(a => a.trim()).filter(Boolean)
+  return raw.length > 1 ? raw : [c.address.trim()]
+}
+
+function googleMapsUrl(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ', Bangladesh')}`
+}
+
+// ── Date / time helpers ──────────────────────────────────────────────────────
+function fmtDate(d: string) {
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
+}
+
+function timeAgo(d: string): string {
+  if (!d) return ''
+  const diff = Date.now() - new Date(d).getTime()
+  const days = Math.floor(diff / 86400000)
+  if (days < 1)  return 'Today'
+  if (days < 7)  return `${days}d ago`
+  if (days < 30) return `${Math.floor(days / 7)}w ago`
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`
+  return `${Math.floor(days / 365)}y ago`
+}
+
+function accountAge(d: string): string {
+  if (!d) return '—'
+  const from = new Date(d)
+  if (isNaN(from.getTime())) return '—'
+  const now = new Date()
+  let y = now.getFullYear() - from.getFullYear()
+  let mo = now.getMonth() - from.getMonth()
+  let dy = now.getDate() - from.getDate()
+  if (dy < 0) { mo--; dy += new Date(now.getFullYear(), now.getMonth(), 0).getDate() }
+  if (mo < 0) { y--; mo += 12 }
+  const parts: string[] = []
+  if (y > 0)  parts.push(`${y}y`)
+  if (mo > 0) parts.push(`${mo}mo`)
+  if (dy > 0) parts.push(`${dy}d`)
+  return parts.join(' ') || 'Today'
+}
+
+function fmtNum(n: number) { return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toLocaleString() }
+
+// ── Filtered + sorted + paginated ────────────────────────────────────────────
+const filtered = computed(() => {
+  let list = [...customers.value]
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    list = list.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q) ||
+      c.address?.toLowerCase().includes(q) ||
+      c.phone?.includes(q)
+    )
+  }
+  if (loyaltyFilter.value === 'loyal') list = list.filter(c => c.orderCount > 1)
+  if (loyaltyFilter.value === 'new')   list = list.filter(c => c.orderCount === 1)
+  list.sort((a: any, b: any) => {
+    if (sortBy.value === 'name')      return (a.name || '').localeCompare(b.name || '')
+    if (sortBy.value === 'lastOrder') return (b.lastOrder || '').localeCompare(a.lastOrder || '')
+    return (b[sortBy.value] ?? 0) - (a[sortBy.value] ?? 0)
+  })
+  return list
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / perPage)))
+const paginated  = computed(() => filtered.value.slice((page.value - 1) * perPage, page.value * perPage))
+
+// ── Orders modal ─────────────────────────────────────────────────────────────
+const ordersModal = reactive({
+  open: false,
+  loading: false,
+  customer: null as ApiCustomer | null,
+  orders: [] as ApiOrder[],
+})
+
+async function openOrders(c: ApiCustomer) {
+  ordersModal.customer = c
+  ordersModal.orders   = []
+  ordersModal.open     = true
+  ordersModal.loading  = true
+  try {
+    // Match orders from the store by customer email/phone/name
+    const allOrders: ApiOrder[] = adminStore.orders
+    ordersModal.orders = allOrders.filter(o =>
+      (c.email && o.customer?.email === c.email) ||
+      (c.phone && o.customer?.phone === c.phone) ||
+      (c.name  && o.customer?.name  === c.name)
+    )
+    // If store is empty, try loading
+    if (!allOrders.length) {
+      await adminStore.loadOrders()
+      ordersModal.orders = adminStore.orders.filter(o =>
+        (c.email && o.customer?.email === c.email) ||
+        (c.phone && o.customer?.phone === c.phone) ||
+        (c.name  && o.customer?.name  === c.name)
+      )
+    }
+  } finally {
+    ordersModal.loading = false
+  }
+}
+
+// ── Edit modal ───────────────────────────────────────────────────────────────
+const editModal = reactive({
+  open: false,
+  saving: false,
+  customer: null as ApiCustomer | null,
+})
+const editForm = reactive({ name: '', email: '', phone: '', address: '' })
+
+function openEdit(c: ApiCustomer) {
+  editModal.customer = c
+  editForm.name    = c.name    ?? ''
+  editForm.email   = c.email   ?? ''
+  editForm.phone   = c.phone   ?? ''
+  editForm.address = c.address ?? ''
+  editModal.open   = true
+}
+
+async function saveEdit() {
+  if (!editModal.customer) return
+  editModal.saving = true
+  try {
+    // Patch every matching order's customer object in the store
+    adminStore.orders.forEach(o => {
+      if (
+        (editModal.customer!.email && o.customer?.email === editModal.customer!.email) ||
+        (editModal.customer!.phone && o.customer?.phone === editModal.customer!.phone)
+      ) {
+        o.customer = {
+          ...o.customer,
+          name:    editForm.name,
+          email:   editForm.email,
+          phone:   editForm.phone,
+          address: editForm.address,
+        }
+      }
+    })
+    // Patch the customer entry in adminStore.customers
+    const idx = adminStore.customers.findIndex(c => c.id === editModal.customer!.id)
+    if (idx !== -1) {
+      adminStore.customers[idx] = {
+        ...adminStore.customers[idx],
+        name:    editForm.name,
+        email:   editForm.email,
+        phone:   editForm.phone,
+        address: editForm.address,
+      }
+    }
+    editModal.open = false
+  } finally {
+    editModal.saving = false
+  }
+}
+
+// ── Delete modal ─────────────────────────────────────────────────────────────
+const deleteModal = reactive({
+  open: false,
+  deleting: false,
+  customer: null as ApiCustomer | null,
+})
+
+function confirmDelete(c: ApiCustomer) {
+  deleteModal.customer = c
+  deleteModal.open     = true
+}
+
+async function doDelete() {
+  if (!deleteModal.customer) return
+  deleteModal.deleting = true
+  try {
+    const c = deleteModal.customer
+    // Remove all matching orders via the store (which calls the API)
+    const matchingOrders = adminStore.orders.filter(o =>
+      (c.email && o.customer?.email === c.email) ||
+      (c.phone && o.customer?.phone === c.phone)
+    )
+    for (const o of matchingOrders) {
+      await adminStore.deleteOrder(o.id)
+    }
+    // Remove from customers list
+    adminStore.customers = adminStore.customers.filter(cu => cu.id !== c.id)
+    deleteModal.open = false
+  } finally {
+    deleteModal.deleting = false
+  }
+}
+
+// ── Export ───────────────────────────────────────────────────────────────────
+function doExport(fmt: 'excel' | 'pdf' | 'csv' | 'json') {
+  exportOpen.value = false
+  const data = filtered.value.map(c => ({
+    Name: c.name, Email: c.email, Phone: c.phone, Address: c.address,
+    Orders: c.orderCount, TotalSpent: c.totalSpent,
+    AvgOrder: Math.round(c.totalSpent / Math.max(c.orderCount, 1)),
+    LastOrder: fmtDate(c.lastOrder), FirstOrder: fmtDate(c.firstOrder),
+    AccountAge: accountAge(c.firstOrder),
+    Payment: c.paymentMethod, Loyalty: c.orderCount > 1 ? 'Loyal' : 'New',
+  }))
+  const filename = `customers_${new Date().toISOString().slice(0, 10)}`
+  if (fmt === 'excel') exporter.exportExcel(data, filename, 'Customers')
+  else if (fmt === 'csv')  exporter.exportCSV(data, filename)
+  else if (fmt === 'json') exporter.exportJSON(data, filename)
+  else exporter.exportPDF(
+    ['Name', 'Email', 'Phone', 'Orders', 'Total Spent', 'Account Age', 'Status'],
+    filtered.value.map(c => [
+      c.name, c.email || '—', c.phone || '—', c.orderCount,
+      `৳${c.totalSpent}`, accountAge(c.firstOrder), c.orderCount > 1 ? 'Loyal' : 'New',
+    ]),
+    filename, 'SellBazar — Customers Export'
+  )
+}
+
+// ── Load ─────────────────────────────────────────────────────────────────────
+async function load() { await adminStore.loadCustomers() }
+onMounted(load)
+
+// ── Click-outside directive ──────────────────────────────────────────────────
+const vClickOutside = {
+  mounted(el: any, binding: any) {
+    el._clickHandler = (e: Event) => { if (!el.contains(e.target)) binding.value(e) }
+    document.addEventListener('click', el._clickHandler)
+  },
+  unmounted(el: any) { document.removeEventListener('click', el._clickHandler) }
+}
+</script>
+
+<style scoped>
+/* ── Export dropdown ────────────────────────────────────────────────────── */
+.export-wrap { position: relative; }
+.export-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
+  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
+  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  min-width: 150px; overflow: hidden;
+}
+.export-dropdown button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 14px; background: none; border: none;
+  color: var(--text-primary); font-size: 13px; cursor: pointer;
+  text-align: left; transition: background 0.15s;
+}
+.export-dropdown button:hover { background: var(--surface-hover); }
+
+/* ── Column helpers ─────────────────────────────────────────────────────── */
+.col-index { color: var(--text-secondary); font-size: 12px; }
+.col-muted { color: var(--text-secondary); font-size: 11px; }
+
+/* ── Customer identity cell ─────────────────────────────────────────────── */
+.cust-identity { display: flex; align-items: flex-start; gap: 10px; }
+.customer-avatar {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800;
+}
+.cust-name  { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.cust-email { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+
+/* ── Phone chips ────────────────────────────────────────────────────────── */
+.phone-list  { display: flex; flex-direction: column; gap: 4px; }
+.phone-chip  {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 500; color: var(--text-primary);
+  text-decoration: none; white-space: nowrap;
+  transition: color 0.15s;
+  i { font-size: 10px; color: var(--brand); }
+}
+.phone-chip:hover { color: var(--brand); }
+
+/* ── Address rows ───────────────────────────────────────────────────────── */
+.address-list  { display: flex; flex-direction: column; gap: 5px; }
+.address-row   { display: flex; align-items: flex-start; gap: 5px; }
+.address-text  {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.4;
+  max-width: 180px; word-break: break-word;
+}
+.map-link {
+  flex-shrink: 0; display: inline-flex; align-items: center;
+  font-size: 12px; color: var(--brand); opacity: 0.7;
+  text-decoration: none; margin-top: 1px; transition: opacity 0.15s;
+}
+.map-link:hover { opacity: 1; }
+
+/* ── Orders count badge ─────────────────────────────────────────────────── */
+.orders-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 24px; padding: 0 8px;
+  background: var(--brand-dim); color: var(--brand);
+  border-radius: 20px; font-size: 12px; font-weight: 700;
+}
+
+/* ── Spent ──────────────────────────────────────────────────────────────── */
+.spent-value { font-size: 13px; font-weight: 700; color: var(--brand); }
+
+/* ── Account age pill ───────────────────────────────────────────────────── */
+.age-pill {
+  display: inline-block; margin-top: 3px;
+  padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600;
+  background: rgba(59,130,246,0.1); color: #3b82f6;
+}
+
+/* ── Action buttons ─────────────────────────────────────────────────────── */
+.action-btns { display: flex; gap: 6px; justify-content: center; }
+.action-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--sidebar-border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 13px; transition: all 0.15s;
+  background: var(--surface);
+}
+.action-btn.edit   { color: #3b82f6; }
+.action-btn.edit:hover   { background: rgba(59,130,246,0.12); border-color: #3b82f6; }
+.action-btn.delete { color: #ef4444; }
+.action-btn.delete:hover { background: rgba(239,68,68,0.12); border-color: #ef4444; }
+.action-btn:active { transform: scale(0.92); }
+
+/* ── Table min-width for horizontal scroll ──────────────────────────────── */
+.customers-table { min-width: 1100px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODAL SHARED STYLES
+══════════════════════════════════════════════════════════════════════════ */
+.cmodal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.cmodal-box {
+  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
+  border-radius: 16px; width: 100%; max-width: 760px;
+  max-height: 86vh; display: flex; flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+.cmodal-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--sidebar-border); flex-shrink: 0;
+}
+.cmodal-title { font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.cmodal-sub   { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+.cmodal-body  { overflow-y: auto; padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Order card inside modal ────────────────────────────────────────────── */
+.order-card {
+  background: var(--surface); border: 1px solid var(--sidebar-border);
+  border-radius: 12px; overflow: hidden;
+}
+.order-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--sidebar-border);
+  flex-wrap: wrap; gap: 8px;
+}
+.order-id    { font-size: 12px; font-weight: 700; color: var(--text-primary); font-family: monospace; }
+.order-total { font-size: 14px; font-weight: 800; color: var(--brand); }
+.order-items { display: flex; flex-direction: column; gap: 0; }
+.order-item  {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--sidebar-border);
+  &:last-child { border-bottom: none; }
+}
+.order-item-img {
+  width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+}
+.order-item-img-placeholder {
+  width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
+  background: var(--surface-hover); display: flex; align-items: center; justify-content: center;
+}
+.order-item-info { flex: 1; min-width: 0; }
+.order-item-name { font-size: 12px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.order-item-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.order-item-subtotal { font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; flex-shrink: 0; }
+.order-totals {
+  display: flex; flex-wrap: wrap; gap: 8px 14px;
+  padding: 8px 14px; font-size: 11px; border-top: 1px solid var(--sidebar-border);
+  background: var(--surface-hover);
+}
+
+/* ── Edit form ──────────────────────────────────────────────────────────── */
+.edit-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.edit-field label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+.edit-field textarea.admin-input { font-family: inherit; }
+
+/* ── Modal transition ───────────────────────────────────────────────────── */
+.cmodal-enter-active, .cmodal-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.cmodal-enter-from, .cmodal-leave-to { opacity: 0; }
+.cmodal-enter-from .cmodal-box, .cmodal-leave-to .cmodal-box { transform: translateY(12px) scale(0.98); }
+
+/* ── Sortable header ────────────────────────────────────────────────────── */
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { color: var(--brand); }
+</style>
