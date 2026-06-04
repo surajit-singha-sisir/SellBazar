@@ -108,7 +108,6 @@
             <th class="sortable" @click="sortBy='totalSpent'">Total Spent</th>
             <th class="sortable" @click="sortBy='lastOrder'">Last Order</th>
             <th>Account Age</th>
-            <th style="text-align:center">All Orders</th>
             <th style="text-align:center">Actions</th>
           </tr>
         </thead>
@@ -170,9 +169,12 @@
               </div>
             </td>
 
-            <!-- Total Orders -->
+            <!-- Total Orders — click opens orders modal -->
             <td style="text-align:center">
-              <span class="orders-badge">{{ c.orderCount }}</span>
+              <button class="orders-badge orders-badge-btn" :title="`View all orders for ${c.name}`" @click="openOrders(c)">
+                <i class="fa-sharp fa-solid fa-receipt" style="font-size:10px"></i>
+                {{ c.orderCount }}
+              </button>
             </td>
 
             <!-- Total Spent -->
@@ -198,14 +200,6 @@
               <div class="age-pill">{{ accountAge(c.firstOrder) }}</div>
             </td>
 
-            <!-- All Orders button -->
-            <td style="text-align:center">
-              <button class="admin-btn secondary" style="padding:5px 12px;font-size:11px" @click="openOrders(c)">
-                <i class="fa-sharp fa-solid fa-receipt"></i>
-                {{ c.orderCount }}
-              </button>
-            </td>
-
             <!-- Actions: Edit + Delete -->
             <td>
               <div class="action-btns">
@@ -220,7 +214,7 @@
           </tr>
 
           <tr v-if="!paginated.length">
-            <td colspan="10" style="text-align:center;padding:40px;color:var(--text-secondary)">
+            <td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary)">
               No customers found.
             </td>
           </tr>
@@ -264,9 +258,20 @@
               </div>
               <div class="cmodal-sub">{{ ordersModal.orders.length }} order(s) found</div>
             </div>
-            <button class="admin-btn ghost" style="padding:6px 10px" @click="ordersModal.open = false">
-              <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
-            </button>
+            <div style="display:flex;align-items:center;gap:8px">
+              <!-- All Invoice button: only show when orders exist -->
+              <button
+                v-if="ordersModal.orders.length"
+                class="admin-btn primary"
+                style="padding:7px 14px;font-size:12px"
+                @click="openInvoice"
+              >
+                <i class="fa-sharp fa-solid fa-file-invoice"></i> All Invoice
+              </button>
+              <button class="admin-btn ghost" style="padding:6px 10px" @click="ordersModal.open = false">
+                <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
+              </button>
+            </div>
           </div>
 
           <!-- Loading -->
