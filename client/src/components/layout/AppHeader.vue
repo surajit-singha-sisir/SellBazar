@@ -39,25 +39,24 @@
               <!-- Category dropdown -->
               <select
                 v-model="searchCategory"
-                class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-4 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
+                class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-8 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
               >
                 <option value="">All</option>
                 <option v-for="cat in productStore.categoryNames.filter(c => c !== 'All')" :key="cat" :value="cat">{{ cat }}</option>
               </select>
-              <i class="fa-sharp fa-regular fa-magnifying-glass text-[var(--color-text-muted)] text-sm"></i>
             </div>
-            <input
+            <input 
               v-model="searchQ"
               @keyup.enter="doSearch"
               @focus="showSuggestions = true"
               @blur="hideSuggestions"
               type="text"
               placeholder="Search products, brands, categories..."
-              class="w-full pl-20 sm:pl-28 pr-14 py-2.5 rounded-xl text-sm input-field"
+              class="w-full pl-20 sm:pl-32 pr-14 py-2.5 rounded-xl text-sm input-field"
             />
             <button
               @click="doSearch"
-              class="absolute right-1.5 top-1/2 -translate-y-1/2 btn-primary py-1.5 px-3 text-xs rounded-lg"
+              class="absolute right-1.5 top-1/2 -translate-y-1/2 btn-primary py-2.5 px-3 text-xs rounded-lg"
             >
               <i class="fa-sharp fa-solid fa-search"></i>
             </button>
