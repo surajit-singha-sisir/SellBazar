@@ -33,123 +33,160 @@
 
     <!-- ── Hero Section ──────────────────────────────────────────────── -->
     <section class="hero-section">
-      <!-- Decorative blobs -->
+      <!-- Background layers -->
+      <div class="hero-bg-grid"></div>
       <div class="hero-blob hero-blob--orange"></div>
       <div class="hero-blob hero-blob--violet"></div>
-      <div class="hero-blob hero-blob--blue"></div>
 
       <div class="hero-content max-w-7xl mx-auto">
-        <div class="grid lg:grid-cols-2 gap-10 xl:gap-16 items-center">
 
-          <!-- ── Left: Text ──────────────────────────────────────────── -->
-          <div class="flex flex-col gap-5 text-center lg:text-left items-center lg:items-start">
+        <!-- ── Badge ───────────────────────────────────────────────── -->
+        <div class="hero-top-row">
+          <span class="hero-badge">
+            <span class="pulse-dot"></span>
+            বাংলাদেশের সেরা মার্কেটপ্লেস · 2027
+          </span>
+        </div>
 
-            <!-- Pill badge -->
-            <span class="hero-badge">
-              <span class="pulse-dot"></span>
-              বাংলাদেশের সেরা মার্কেটপ্লেস · 2027
-            </span>
+        <!-- ── Main layout: stacked on mobile, side-by-side on lg ─── -->
+        <div class="hero-layout">
 
-            <!-- Headline -->
-            <h1 class="font-display font-extrabold leading-[1.1] text-[clamp(2.4rem,6vw,4rem)]">
-              <span class="gradient-text block">Shop Smart,</span>
-              <span class="text-[var(--color-text)]">Deliver Fast</span>
+          <!-- LEFT column: copy + search + trust -->
+          <div class="hero-left">
+
+            <h1 class="hero-headline">
+              <span class="gradient-text">Shop Smart,</span>
+              <br/>
+              <span>Deliver Fast</span>
             </h1>
 
-            <!-- Sub-copy -->
-            <p class="text-[var(--color-text-2)] text-base sm:text-lg leading-relaxed max-w-md">
+            <p class="hero-sub">
               From Dhaka to every district — millions of products,
-              instant <strong class="text-[var(--color-text)] font-semibold">bKash checkout</strong>,
-              and same-day delivery across Bangladesh.
+              instant <strong>bKash checkout</strong>, and same-day delivery.
             </p>
 
-            <!-- CTA buttons -->
-            <div class="flex flex-wrap gap-3 justify-center lg:justify-start">
-              <RouterLink to="/products" class="btn-primary text-base px-8 py-3.5">
+            <!-- Search bar (primary CTA on mobile) -->
+            <div class="hero-search-wrap">
+              <i class="fa-sharp fa-solid fa-magnifying-glass hero-search-icon"></i>
+              <input
+                v-model="heroSearch"
+                @keyup.enter="heroSearch.trim() && $router.push(`/products?q=${encodeURIComponent(heroSearch.trim())}`)"
+                type="text"
+                class="hero-search-input"
+                placeholder="Search products, brands…"
+              />
+              <button
+                class="hero-search-btn"
+                @click="heroSearch.trim() && $router.push(`/products?q=${encodeURIComponent(heroSearch.trim())}`)"
+              >
+                Search
+              </button>
+            </div>
+
+            <!-- Quick links -->
+            <div class="hero-quick">
+              <span class="hero-quick-label">Popular:</span>
+              <button v-for="tag in quickTags" :key="tag"
+                class="hero-quick-tag"
+                @click="$router.push(`/products?q=${encodeURIComponent(tag)}`)">
+                {{ tag }}
+              </button>
+            </div>
+
+            <!-- CTA row (secondary on mobile, both on desktop) -->
+            <div class="hero-cta-row">
+              <RouterLink to="/products" class="btn-primary hero-cta-main">
                 <i class="fa-sharp fa-solid fa-bolt"></i> Shop Now
               </RouterLink>
-              <RouterLink to="/deals" class="btn-secondary text-base px-8 py-3.5">
-                <i class="fa-sharp fa-solid fa-fire text-orange-400"></i> Today's Deals
+              <RouterLink to="/deals" class="btn-secondary hero-cta-ghost">
+                <i class="fa-sharp fa-solid fa-fire text-orange-400"></i> Deals
               </RouterLink>
             </div>
 
             <!-- Trust strip -->
             <div class="hero-trust">
-              <span class="trust-item">
-                <i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i> Secure Payment
-              </span>
-              <span class="trust-item">
-                <i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i> Fast Delivery
-              </span>
-              <span class="trust-item">
-                <i class="fa-sharp fa-solid fa-rotate-left text-orange-500"></i> Easy Returns
-              </span>
-              <span class="trust-item">
-                <i class="fa-sharp fa-solid fa-headset text-purple-500"></i> 24/7 Support
-              </span>
+              <span class="trust-item"><i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i> Secure</span>
+              <span class="trust-divider"></span>
+              <span class="trust-item"><i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i> Fast Delivery</span>
+              <span class="trust-divider"></span>
+              <span class="trust-item"><i class="fa-sharp fa-solid fa-rotate-left text-orange-500"></i> Easy Returns</span>
+              <span class="trust-divider"></span>
+              <span class="trust-item"><i class="fa-sharp fa-solid fa-headset text-purple-500"></i> 24/7</span>
             </div>
           </div>
 
-          <!-- ── Right: Floating product cards ──────────────────────── -->
-          <div class="hero-visual">
-            <div class="glow-ring"></div>
-
-            <!-- 2×2 grid, visible sm+ (hidden on tiny phones) -->
-            <div class="hidden sm:grid grid-cols-2 gap-3 sm:gap-4 relative">
-              <div
-                v-for="p in productStore.featured.slice(0, 4)"
-                :key="p.id"
-                class="hero-card"
-                @click="$router.push(`/products/${p.slug}`)"
-              >
-                <img
-                  :src="p.images[0]"
-                  :alt="p.name"
-                  onerror="this.src='https://placehold.co/280x210/f97316/fff?text=Product'"
-                />
-                <div class="hero-card-body">
-                  <p class="hero-card-name">{{ p.name }}</p>
-                  <p class="hero-card-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
+          <!-- RIGHT column: product mosaic — hidden on mobile, shown lg+ -->
+          <div class="hero-right">
+            <div class="hero-mosaic">
+              <!-- Top row: 1 tall card -->
+              <div class="hero-mosaic-tall"
+                v-if="productStore.featured[0]"
+                @click="$router.push(`/products/${productStore.featured[0].slug}`)">
+                <img :src="productStore.featured[0].images[0]" :alt="productStore.featured[0].name"
+                  onerror="this.src='https://placehold.co/320x400/f97316/fff?text=Product'" />
+                <div class="hero-mosaic-info">
+                  <p class="hero-mosaic-name">{{ productStore.featured[0].name }}</p>
+                  <p class="hero-mosaic-price">৳{{ (productStore.featured[0].salePrice ?? productStore.featured[0].price).toLocaleString() }}</p>
                 </div>
               </div>
+              <div v-else class="hero-mosaic-tall animate-pulse"><div class="w-full h-full bg-[var(--color-surface-2)] rounded-2xl"></div></div>
 
-              <!-- Skeleton placeholders if products not loaded yet -->
-              <template v-if="!productStore.featured.length">
-                <div
-                  v-for="n in 4" :key="'sk-' + n"
-                  class="hero-card animate-pulse"
-                >
-                  <div class="w-full aspect-[4/3] bg-[var(--color-surface-2)]"></div>
-                  <div class="hero-card-body space-y-1.5">
-                    <div class="h-2.5 w-3/4 rounded bg-[var(--color-surface-2)]"></div>
-                    <div class="h-2.5 w-1/2 rounded bg-[var(--color-surface-2)]"></div>
+              <!-- Right side: 3 smaller cards stacked -->
+              <div class="hero-mosaic-stack">
+                <div class="hero-mosaic-sm"
+                  v-for="p in productStore.featured.slice(1, 4)" :key="p.id"
+                  @click="$router.push(`/products/${p.slug}`)">
+                  <img :src="p.images[0]" :alt="p.name"
+                    onerror="this.src='https://placehold.co/200x140/f97316/fff?text=?'" />
+                  <div class="hero-mosaic-info">
+                    <p class="hero-mosaic-name">{{ p.name }}</p>
+                    <p class="hero-mosaic-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
                   </div>
                 </div>
-              </template>
-            </div>
+                <template v-if="productStore.featured.length < 2">
+                  <div v-for="n in 3" :key="'s'+n" class="hero-mosaic-sm animate-pulse">
+                    <div class="w-full h-full bg-[var(--color-surface-2)] rounded-xl"></div>
+                  </div>
+                </template>
+              </div>
 
-            <!-- Single scrollable row on mobile (< sm) -->
-            <div class="flex sm:hidden gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-              <div
-                v-for="p in productStore.featured.slice(0, 4)"
-                :key="p.id"
-                class="hero-card shrink-0 w-40"
-                @click="$router.push(`/products/${p.slug}`)"
-              >
-                <img
-                  :src="p.images[0]"
-                  :alt="p.name"
-                  onerror="this.src='https://placehold.co/160x120/f97316/fff?text=?'"
-                />
-                <div class="hero-card-body">
-                  <p class="hero-card-name">{{ p.name }}</p>
-                  <p class="hero-card-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
-                </div>
+              <!-- Floating stats chip -->
+              <div class="hero-stats-chip">
+                <i class="fa-sharp fa-solid fa-bolt text-orange-400 text-xs"></i>
+                <span>10M+ Products</span>
               </div>
             </div>
           </div>
 
         </div>
+
+        <!-- ── Mobile-only horizontal product scroller ─────────────── -->
+        <div class="hero-mobile-scroll">
+          <p class="hero-mobile-scroll-label">Featured picks</p>
+          <div class="hero-scroll-track">
+            <div
+              v-for="p in productStore.featured.slice(0, 6)" :key="p.id"
+              class="hero-scroll-card"
+              @click="$router.push(`/products/${p.slug}`)">
+              <img :src="p.images[0]" :alt="p.name"
+                onerror="this.src='https://placehold.co/160x120/f97316/fff?text=?'" />
+              <div class="hero-scroll-info">
+                <p class="hero-card-name">{{ p.name }}</p>
+                <p class="hero-card-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
+              </div>
+            </div>
+            <template v-if="!productStore.featured.length">
+              <div v-for="n in 4" :key="'sk'+n" class="hero-scroll-card animate-pulse">
+                <div class="w-full aspect-video bg-[var(--color-surface-2)] rounded-t-xl"></div>
+                <div class="p-2 space-y-1.5">
+                  <div class="h-2 w-3/4 rounded bg-[var(--color-surface-2)]"></div>
+                  <div class="h-2 w-1/2 rounded bg-[var(--color-surface-2)]"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -294,6 +331,10 @@ import { useProductStore } from '@/stores/useProductStore'
 import ProductCard from '@/components/product/ProductCard.vue'
 
 const productStore = useProductStore()
+
+// Hero search
+const heroSearch = ref('')
+const quickTags  = ['Samsung', 'Saree', 'Nike', 'Laptop', 'bKash Offer']
 
 onMounted(async () => {
   // Only fetch if store is empty (avoids redundant refetch on back-navigation)
