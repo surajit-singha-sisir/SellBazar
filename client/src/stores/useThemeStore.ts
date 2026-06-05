@@ -3,8 +3,8 @@ import { ref, watch } from 'vue'
 
 // Apply theme immediately on script parse (prevent FOUC)
 const stored = localStorage.getItem('sb-theme')
-// Default to dark if no preference set
-const initialDark = stored !== null ? stored === 'dark' : true
+// Default to light if no preference set
+const initialDark = stored !== null ? stored === 'dark' : false
 document.documentElement.classList.toggle('dark', initialDark)
 
 export const useThemeStore = defineStore('theme', () => {

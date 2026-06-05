@@ -104,15 +104,6 @@
         <!-- Right actions -->
         <div class="flex items-center gap-1.5 shrink-0">
 
-          <!-- Theme toggle -->
-          <button
-            @click="themeStore.toggle()"
-            class="btn-icon hidden sm:flex"
-            :title="themeStore.isDark ? 'Light mode' : 'Dark mode'"
-          >
-            <i :class="themeStore.isDark ? 'fa-sharp fa-solid fa-sun text-yellow-400' : 'fa-sharp fa-regular fa-moon text-slate-500'"></i>
-          </button>
-
           <!-- Wishlist -->
           <RouterLink to="/wishlist" class="btn-icon hidden sm:flex relative">
             <i class="fa-sharp fa-regular fa-heart"></i>
@@ -153,6 +144,24 @@
                   <RouterLink to="/account/orders"  class="menu-item" @click="showUserMenu = false"><i class="fa-sharp fa-regular fa-box"></i> My Orders</RouterLink>
                   <RouterLink to="/account/profile" class="menu-item" @click="showUserMenu = false"><i class="fa-sharp fa-regular fa-user-gear"></i> Profile</RouterLink>
                   <div class="divider my-1"></div>
+                  <!-- Dark mode toggle (logged in) -->
+                  <button @click="themeStore.toggle()" class="menu-item w-full justify-between">
+                    <span class="flex items-center gap-2.5">
+                      <i :class="themeStore.isDark ? 'fa-sharp fa-solid fa-sun text-yellow-400' : 'fa-sharp fa-regular fa-moon text-slate-400'"></i>
+                      {{ themeStore.isDark ? 'Light Mode' : 'Dark Mode' }}
+                    </span>
+                    <!-- pill toggle indicator -->
+                    <span
+                      class="relative inline-flex w-8 h-4 rounded-full transition-colors duration-300 shrink-0"
+                      :class="themeStore.isDark ? 'bg-orange-500' : 'bg-[var(--color-border)]'"
+                    >
+                      <span
+                        class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-300"
+                        :class="themeStore.isDark ? 'translate-x-4' : 'translate-x-0'"
+                      ></span>
+                    </span>
+                  </button>
+                  <div class="divider my-1"></div>
                   <button @click="handleLogout" class="menu-item text-red-500 w-full">
                     <i class="fa-sharp fa-regular fa-arrow-right-from-bracket"></i> Logout
                   </button>
@@ -160,6 +169,24 @@
                 <template v-else>
                   <RouterLink to="/login"    class="menu-item" @click="showUserMenu = false"><i class="fa-sharp fa-regular fa-right-to-bracket"></i> Login</RouterLink>
                   <RouterLink to="/register" class="menu-item" @click="showUserMenu = false"><i class="fa-sharp fa-regular fa-user-plus"></i> Register</RouterLink>
+                  <div class="divider my-1"></div>
+                  <!-- Dark mode toggle (guest) -->
+                  <button @click="themeStore.toggle()" class="menu-item w-full justify-between">
+                    <span class="flex items-center gap-2.5">
+                      <i :class="themeStore.isDark ? 'fa-sharp fa-solid fa-sun text-yellow-400' : 'fa-sharp fa-regular fa-moon text-slate-400'"></i>
+                      {{ themeStore.isDark ? 'Light Mode' : 'Dark Mode' }}
+                    </span>
+                    <!-- pill toggle indicator -->
+                    <span
+                      class="relative inline-flex w-8 h-4 rounded-full transition-colors duration-300 shrink-0"
+                      :class="themeStore.isDark ? 'bg-orange-500' : 'bg-[var(--color-border)]'"
+                    >
+                      <span
+                        class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-300"
+                        :class="themeStore.isDark ? 'translate-x-4' : 'translate-x-0'"
+                      ></span>
+                    </span>
+                  </button>
                 </template>
               </div>
             </Transition>
