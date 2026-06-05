@@ -224,11 +224,6 @@
           <i :class="cat.icon + ' w-5 text-center text-[var(--color-brand)]'"></i>
           {{ cat.label }}
         </RouterLink>
-        <div class="divider my-2"></div>
-        <button @click="themeStore.toggle(); showMobileMenu = false" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-[var(--color-surface-2)] transition w-full">
-          <i :class="themeStore.isDark ? 'fa-sharp fa-solid fa-sun text-yellow-400' : 'fa-sharp fa-regular fa-moon'"></i>
-          {{ themeStore.isDark ? 'Light Mode' : 'Dark Mode' }}
-        </button>
       </div>
     </Transition>
   </header>
