@@ -9,6 +9,13 @@ function stripFaPrefix(icon: string): string {
   return icon ? icon.replace(/^fa-/, '') : 'tag'
 }
 
+// Sort products by updatedAt DESC, falling back to createdAt DESC
+function byLatest(a: Product, b: Product): number {
+  const ta = new Date((a as any).updatedAt ?? (a as any).createdAt ?? 0).getTime()
+  const tb = new Date((b as any).updatedAt ?? (b as any).createdAt ?? 0).getTime()
+  return tb - ta
+}
+
 export const useProductStore = defineStore('products', () => {
   const products      = ref<Product[]>([])
   const categories    = ref<Category[]>([])
@@ -29,8 +36,9 @@ export const useProductStore = defineStore('products', () => {
     return cat?.subcategories ?? []
   })
 
+  // All products matching current filters, newest first
   const filtered = computed(() => {
-    let list = products.value
+    let list = [...products.value]
     if (activeCategory.value !== 'All')
       list = list.filter(p => p.category === activeCategory.value)
     if (activeSubcategory.value !== 'All')
@@ -43,11 +51,18 @@ export const useProductStore = defineStore('products', () => {
         p.tags.some(t => t.includes(q))
       )
     }
-    return list
+    return list.sort(byLatest)
   })
 
-  const featured = computed(() => products.value.filter(p => p.isFeatured))
-  const newArr   = computed(() => products.value.filter(p => p.isNew))
+  // Featured products — newest updatedAt first
+  const featured = computed(() =>
+    products.value.filter(p => p.isFeatured).sort(byLatest)
+  )
+
+  // New arrivals — newest updatedAt first
+  const newArr = computed(() =>
+    products.value.filter(p => p.isNew).sort(byLatest)
+  )
 
   // ── API calls ────────────────────────────────────────────────────────────
   async function fetchProducts(params: Record<string, string> = {}) {
