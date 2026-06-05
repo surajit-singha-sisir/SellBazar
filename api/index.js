@@ -308,6 +308,37 @@ async function getAllUsers() {
   return _mem.users
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Phone normalization helpers
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Strip to digits only */
+function digitsOnly(phone) { return (phone || '').replace(/\D/g, '') }
+
+/** Canonical form: always +8801XXXXXXXXX */
+function canonicalPhone(phone) {
+  const d = digitsOnly(phone)
+  if (d.startsWith('880'))  return '+' + d          // 8801648718101 → +8801648718101
+  if (d.startsWith('0'))    return '+880' + d.slice(1) // 01648718101  → +8801648718101
+  if (d.length === 10)      return '+880' + d          // 1648718101   → +8801648718101
+  return '+880' + d
+}
+
+/** Return every plausible format a phone might have been stored as */
+function normalizePhoneVariants(phone) {
+  const d   = digitsOnly(phone)
+  const set = new Set()
+  set.add(phone)                                     // exact as sent
+  set.add('+' + d)                                   // +88001648718101 or +8801648718101
+  set.add(d)                                         // digits only
+  if (d.startsWith('880'))  { set.add('+' + d); set.add('0' + d.slice(3)) }   // +880..., 0...
+  if (d.startsWith('00880')) set.add('+' + d.slice(2))                        // 00880...
+  if (d.startsWith('0'))    set.add('+880' + d.slice(1))                      // 0... → +880...
+  set.add('+880' + d.slice(-10))   // last 10 digits with +880
+  set.add('0'    + d.slice(-10))   // last 10 digits with 0
+  return [...set]
+}
+
 async function findUserByEmail(email) {
   if (KV_ENABLED) {
     const id = await kvGet(`sb:user_email:${email.toLowerCase()}`)
@@ -319,11 +350,17 @@ async function findUserByEmail(email) {
 
 async function findUserByPhone(phone) {
   if (KV_ENABLED) {
-    const id = await kvGet(`sb:user_phone:${phone}`)
-    if (!id) return null
-    return kvGet(`sb:user:${id}`)
+    // Try the exact phone string first, then common format variants
+    const variants = normalizePhoneVariants(phone)
+    for (const v of variants) {
+      const id = await kvGet('sb:user_phone:' + v)
+      if (id) return kvGet('sb:user:' + id)
+    }
+    return null
   }
-  return _mem.users.find(u => u.phone === phone) ?? null
+  // In-memory: normalize both sides for comparison
+  const norm = canonicalPhone(phone)
+  return _mem.users.find(u => canonicalPhone(u.phone) === norm) ?? null
 }
 
 async function saveUser(user) {
@@ -332,7 +369,12 @@ async function saveUser(user) {
     const ids = (await kvGet('sb:user_ids')) ?? []
     if (!ids.includes(user.id)) { ids.push(user.id); await kvSet('sb:user_ids', ids) }
     if (user.email) await kvSet(`sb:user_email:${user.email.toLowerCase()}`, user.id)
-    if (user.phone) await kvSet(`sb:user_phone:${user.phone}`, user.id)
+    // Store canonical phone key + all common variants as aliases so any format can find this user
+    if (user.phone) {
+      for (const v of normalizePhoneVariants(user.phone)) {
+        await kvSet('sb:user_phone:' + v, user.id)
+      }
+    }
   } else {
     const idx = _mem.users.findIndex(u => u.id === user.id)
     if (idx !== -1) _mem.users[idx] = user; else _mem.users.push(user)
@@ -1180,6 +1222,40 @@ app.post('/api/admin/upload', requireAdmin, (req, res) => {
     return res.json({ url: dataUrl, filename: req.body.filename || 'image', message: 'ok' })
   }
   res.status(422).json({ url: '', filename: '', message: 'Serverless environment has no persistent storage. Convert images to Base64 on the client instead.' })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// AUTH DEBUG (temporary — remove after fixing)
+// ──────────────────────────────────────────────────────────────────────────────
+
+app.post('/api/auth/login-debug', async (req, res) => {
+  const { phone, email } = req.body
+  const result = { kvEnabled: KV_ENABLED, queriedPhone: phone, queriedEmail: email }
+
+  // Check all known phone format variants
+  if (phone) {
+    const variants = [
+      phone,
+      phone.replace(/\D/g, ''),
+      '+880' + phone.replace(/\D/g, ''),
+      '0'   + phone.replace(/^.*880/, ''),
+    ]
+    result.phoneVariants = {}
+    for (const v of variants) {
+      result.phoneVariants[v] = await kvGet('sb:user_phone:' + v)
+    }
+  }
+
+  // Dump all user IDs and their stored phone field
+  const ids = (await kvGet('sb:user_ids')) ?? []
+  result.userCount = ids.length
+  result.users = []
+  for (const id of ids) {
+    const u = await kvGet('sb:user:' + id)
+    if (u) result.users.push({ id: u.id, name: u.name, phone: u.phone, email: u.email })
+  }
+
+  res.json(result)
 })
 
 // ──────────────────────────────────────────────────────────────────────────────
