@@ -7,6 +7,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'sellbazar-super-secret-key-2025'
 
 type User = { id: string; name: string; email: string; phone: string; division: string; password: string }
 
+/** Normalize phone to always be stored/compared as "+880XXXXXXXXXX" */
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '') // strip all non-digit chars
+  // If already has country code 880, keep; if starts with 0, strip the leading 0
+  if (digits.startsWith('880')) return '+' + digits
+  if (digits.startsWith('0'))   return '+880' + digits.slice(1)
+  return '+880' + digits
+}
+
 async function getUsers(): Promise<User[]> {
   return (await redis.get<User[]>(KEYS.users)) ?? []
 }
@@ -21,7 +30,11 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Phone/email and password are required' })
 
   const users = await getUsers()
-  const user = users.find(u => (phone && u.phone === phone) || (email && u.email === email))
+  const normalizedPhone = phone ? normalizePhone(phone) : null
+  const user = users.find(u =>
+    (normalizedPhone && normalizePhone(u.phone) === normalizedPhone) ||
+    (email && u.email === email.toLowerCase().trim())
+  )
 
   if (!user)
     return res.status(401).json({ error: 'No account found with that phone number. Please register first.' })
@@ -41,9 +54,9 @@ router.post('/login', async (req, res) => {
 router.post('/check', async (req, res) => {
   const { email, phone } = req.body
   const users = await getUsers()
-  if (email && users.find(u => u.email === email))
+  if (email && users.find(u => u.email === email.toLowerCase().trim()))
     return res.status(409).json({ field: 'email', error: 'This email is already registered' })
-  if (phone && users.find(u => u.phone === phone))
+  if (phone && users.find(u => normalizePhone(u.phone) === normalizePhone(phone)))
     return res.status(409).json({ field: 'phone', error: 'This phone number is already registered' })
   res.json({ available: true })
 })
@@ -55,16 +68,16 @@ router.post('/register', async (req, res) => {
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
 
   const users = await getUsers()
-  if (users.find(u => u.email === email))
+  if (users.find(u => u.email === email.toLowerCase().trim()))
     return res.status(409).json({ field: 'email', error: 'This email is already registered' })
-  if (users.find(u => u.phone === phone))
+  if (users.find(u => normalizePhone(u.phone) === normalizePhone(phone)))
     return res.status(409).json({ field: 'phone', error: 'This phone number is already registered' })
 
   const newUser: User = {
     id: Date.now().toString(),
     name: name.trim(),
     email: email.toLowerCase().trim(),
-    phone: phone.trim(),
+    phone: normalizePhone(phone),  // always store in canonical "+880XXXXXXXXXX" form
     division: division ?? 'Dhaka',
     password,
   }
