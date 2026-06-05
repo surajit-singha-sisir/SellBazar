@@ -21,4 +21,5 @@ export const KEYS = {
   seeded:        'sb:seeded',          // set once per collection to prevent re-seed
   cart:          (uid: string) => `sb:cart:${uid}`,
   wishlist:      (uid: string) => `sb:wishlist:${uid}`,
+  reviews:       'sb:reviews',
 }
