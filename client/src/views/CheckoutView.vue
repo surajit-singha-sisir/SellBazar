@@ -357,6 +357,14 @@
             <span class="gradient-text">{{ finalTotal.toLocaleString() }}</span>
           </div>
 
+          <Transition name="coupon-slide">
+            <div v-if="submitError"
+              class="flex items-start gap-2 text-xs text-red-600 bg-red-500/8 border border-red-400/25 rounded-xl px-3 py-2.5">
+              <i class="fa-sharp fa-solid fa-circle-exclamation mt-0.5 shrink-0"></i>
+              <span>{{ submitError }}</span>
+            </div>
+          </Transition>
+
           <button @click="placeOrder" :disabled="placing"
             class="btn-primary w-full justify-center py-3.5 text-base disabled:opacity-60">
             <i class="fa-sharp fa-solid fa-circle-check"></i>
@@ -411,23 +419,21 @@ const success    = ref(false)
 const orderId    = ref('')
 const showPw     = ref(false)
 const autoRegistered = ref(false)
+const submitError    = ref('')
 
 const serverErrors = ref<Record<string, string>>({})
 
 // ── Saved addresses ───────────────────────────────────────────────────────────
 const savedAddresses = computed<Address[]>(() => authStore.user?.addresses ?? [])
 
-// Track which address is selected (default to the isDefault one, else first)
 const selectedAddressId = ref<string>(
   savedAddresses.value.find(a => a.isDefault)?.id ?? savedAddresses.value[0]?.id ?? ''
 )
 
-// The currently active address object
 const activeAddress = computed<Address | null>(() =>
   savedAddresses.value.find(a => a.id === selectedAddressId.value) ?? savedAddresses.value[0] ?? null
 )
 
-// Whether profile already has name / phone (for partial-form logic)
 const prefillName  = computed(() => !!(authStore.user?.name?.trim()))
 const prefillPhone = computed(() => {
   const phones = authStore.user?.phones
@@ -480,16 +486,14 @@ const form = ref({
   payment: 'bkash', mobileNum: '',
 })
 
-// Pre-fill from logged-in user profile
 if (authStore.isLoggedIn && authStore.user) {
   const u = authStore.user
   form.value.name     = u.name  ?? ''
   form.value.email    = u.email ?? ''
-  form.value.phone    = u.phones?.find(p => p.isPrimary)?.number ?? u.phone ?? ''
+  form.value.phone    = u.phones?.find((p: any) => p.isPrimary)?.number ?? u.phone ?? ''
   form.value.division = u.division ?? ''
 }
 
-// When the selected address changes, sync form fields for order payload building
 watch(activeAddress, (addr) => {
   if (!addr) return
   form.value.name     = addr.recipientName || form.value.name
@@ -530,7 +534,6 @@ const errors = computed(() => {
     }
   }
 
-  // Skip address field validation when a saved address is selected
   if (authStore.isLoggedIn && activeAddress.value) return e
 
   if (touched.value.name) {
@@ -597,7 +600,6 @@ const paymentMethods = [
   { id: 'cod',    name: 'Cash on Delivery', icon: 'fa-sharp fa-solid fa-money-bill-wave',      color: '#22c55e' },
 ]
 
-// ── API base — works both locally (Vite proxy → :4000) and on Vercel ─────────
 const API = '/api'
 
 // ── Real-time duplicate check ─────────────────────────────────────────────────
@@ -624,7 +626,6 @@ async function checkDuplicate(field: 'email' | 'phone') {
 function touchAndCheck(field: 'email' | 'phone') { touch(field); checkDuplicate(field) }
 
 function validateAll(): boolean {
-  // If logged in with a saved address, only validate payment method
   if (authStore.isLoggedIn && activeAddress.value) {
     if (['bkash','nagad','rocket'].includes(form.value.payment)) {
       touched.value.mobileNum = true
@@ -643,6 +644,7 @@ function validateAll(): boolean {
 async function placeOrder() {
   if (!validateAll()) return
   placing.value = true
+  submitError.value = ''
   try {
     // Auto-register guest user
     if (!authStore.isLoggedIn) {
@@ -667,11 +669,12 @@ async function placeOrder() {
         return
       }
       if (!regRes.ok) {
-        alert(regData.error ?? 'Registration failed. Please try again.')
+        submitError.value = regData.error ?? 'Registration failed. Please try again.'
         placing.value = false
         return
       }
-      await authStore.login(regData.user)
+      // FIX: pass BOTH user and token — authStore.login(user, token) requires two arguments
+      await authStore.login(regData.user, regData.token)
       autoRegistered.value = true
     }
 
@@ -710,12 +713,20 @@ async function placeOrder() {
       notes:         '',
     }
 
+    const orderHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (authStore.token) orderHeaders['Authorization'] = `Bearer ${authStore.token}`
+
     const res = await fetch(`${API}/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: orderHeaders,
       body: JSON.stringify(payload),
     })
-    if (!res.ok) throw new Error('Order failed')
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      submitError.value = errData.error ?? `Server error ${res.status} — please try again.`
+      placing.value = false
+      return
+    }
     const order = await res.json()
     orderId.value = order.id
     const saved: string[] = JSON.parse(localStorage.getItem('sb-order-ids') ?? '[]')
@@ -723,8 +734,13 @@ async function placeOrder() {
     localStorage.setItem('sb-order-ids', JSON.stringify(saved))
     cartStore.clear()
     success.value = true
-  } catch {
-    alert('Could not place order. Please check your connection and try again.')
+  } catch (err: any) {
+    const msg: string = err?.message ?? ''
+    if (/fetch|failed to fetch/i.test(msg) || !msg) {
+      submitError.value = 'Could not reach the server. Please check your connection and try again.'
+    } else {
+      submitError.value = msg
+    }
   } finally {
     placing.value = false
   }
