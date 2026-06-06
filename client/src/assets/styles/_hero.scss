@@ -1,14 +1,13 @@
 // ── Hero Section ─────────────────────────────────────────────────────────────
-// Concept: mobile-first stacked layout with search as primary CTA.
-// Desktop: left copy column + right product mosaic side by side.
+// Concept: mobile-first centered layout. No product mosaic. Clean & fast.
 
 .hero-section {
   position: relative;
   overflow: hidden;
-  padding: 2.5rem 1rem 2rem;
+  padding: 3rem 1rem 2.5rem;
 
-  @media (min-width: 640px)  { padding: 3.5rem 1.5rem 2.5rem; }
-  @media (min-width: 1024px) { padding: 5rem 1.5rem 4rem; }
+  @media (min-width: 640px)  { padding: 4rem 1.5rem 3rem; }
+  @media (min-width: 1024px) { padding: 5.5rem 1.5rem 4.5rem; }
 }
 
 // ── Background: subtle dot grid ───────────────────────────────────────────────
@@ -53,11 +52,6 @@
   display: flex;
   justify-content: center;
   margin-bottom: 1.5rem;
-
-  @media (min-width: 1024px) {
-    justify-content: flex-start;
-    margin-bottom: 1.25rem;
-  }
 }
 
 // ── Pill badge ────────────────────────────────────────────────────────────────
@@ -87,33 +81,26 @@
   }
 }
 
-// ── Main layout ───────────────────────────────────────────────────────────────
-.hero-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 2.5rem;
-
-  @media (min-width: 1024px) {
-    flex-direction: row;
-    align-items: center;
-    gap: 4rem;
-  }
-}
-
-// ── Left column ───────────────────────────────────────────────────────────────
-.hero-left {
+// ── Centered single-column layout ────────────────────────────────────────────
+.hero-layout-center {
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 1.25rem;
-  flex: 1;
+}
 
-  @media (min-width: 1024px) {
-    align-items: flex-start;
-    text-align: left;
-    max-width: 560px;
-  }
+// ── Hero left (centered) ──────────────────────────────────────────────────────
+.hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.hero-left--center {
+  align-items: center;
+  text-align: center;
+  max-width: 680px;
+  margin-inline: auto;
 }
 
 // ── Headline ──────────────────────────────────────────────────────────────────
@@ -122,20 +109,20 @@
   font-weight: 900;
   line-height: 1.08;
   letter-spacing: -0.03em;
-  font-size: clamp(2.2rem, 9vw, 4rem);
+  font-size: clamp(2.4rem, 9vw, 4.2rem);
   color: var(--color-text);
 }
 
 // ── Sub-copy ──────────────────────────────────────────────────────────────────
 .hero-sub {
-  font-size: 0.95rem;
-  line-height: 1.65;
+  font-size: 1rem;
+  line-height: 1.7;
   color: var(--color-text-2, var(--color-text-muted));
-  max-width: 38ch;
+  max-width: 50ch;
 
   strong { color: var(--color-text); font-weight: 600; }
 
-  @media (min-width: 640px) { font-size: 1.05rem; }
+  @media (min-width: 640px) { font-size: 1.1rem; }
 }
 
 // ── Search bar ────────────────────────────────────────────────────────────────
@@ -143,7 +130,7 @@
   display: flex;
   align-items: center;
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   background: var(--color-surface);
   border: 1.5px solid var(--color-border);
   border-radius: 14px;
@@ -157,9 +144,7 @@
     box-shadow: 0 0 0 3px rgba(249,115,22,0.12);
   }
 
-  .dark & {
-    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-  }
+  .dark & { box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
 }
 
 .hero-search-icon {
@@ -173,15 +158,16 @@
   border: none;
   outline: none;
   background: transparent;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   color: var(--color-text);
-  padding: 0.55rem 0;
+  padding: 0.6rem 0;
+  min-width: 0; // prevents overflow on small screens
 
   &::placeholder { color: var(--color-text-muted); }
 }
 
 .hero-search-btn {
-  padding: 0.55rem 1.1rem;
+  padding: 0.6rem 1.1rem;
   background: var(--color-brand);
   color: white;
   border: none;
@@ -193,8 +179,8 @@
   flex-shrink: 0;
   transition: background 0.15s, transform 0.1s;
 
-  &:hover   { background: #ea580c; }
-  &:active  { transform: scale(0.96); }
+  &:hover  { background: #ea580c; }
+  &:active { transform: scale(0.96); }
 }
 
 // ── Quick tags row ────────────────────────────────────────────────────────────
@@ -204,8 +190,6 @@
   align-items: center;
   gap: 6px;
   justify-content: center;
-
-  @media (min-width: 1024px) { justify-content: flex-start; }
 }
 
 .hero-quick-label {
@@ -239,12 +223,10 @@
   align-items: center;
   flex-wrap: wrap;
   justify-content: center;
-
-  @media (min-width: 1024px) { justify-content: flex-start; }
 }
 
-.hero-cta-main  { padding: 0.8rem 2rem; font-size: 0.95rem; }
-.hero-cta-ghost { padding: 0.8rem 1.5rem; font-size: 0.95rem; }
+.hero-cta-main  { padding: 0.8rem 2.2rem; font-size: 0.95rem; }
+.hero-cta-ghost { padding: 0.8rem 1.6rem; font-size: 0.95rem; }
 
 // ── Trust strip ───────────────────────────────────────────────────────────────
 .hero-trust {
@@ -253,8 +235,6 @@
   align-items: center;
   gap: 0.5rem;
   justify-content: center;
-
-  @media (min-width: 1024px) { justify-content: flex-start; }
 
   .trust-item {
     display: flex;
@@ -274,188 +254,8 @@
   }
 }
 
-// ── Right column — desktop mosaic ─────────────────────────────────────────────
-.hero-right {
-  display: none;
-
-  @media (min-width: 1024px) {
-    display: block;
-    flex: 1;
-    max-width: 520px;
-  }
-}
-
-.hero-mosaic {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto;
-  gap: 12px;
-  position: relative;
-}
-
-// Tall left card
-.hero-mosaic-tall {
-  grid-row: span 1;
-  border-radius: 20px;
-  overflow: hidden;
-  cursor: pointer;
-  position: relative;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.08);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  animation: heroFloat 4.2s ease-in-out infinite;
-
-  .dark & { box-shadow: 0 8px 28px rgba(0,0,0,0.35); }
-  &:hover  { transform: translateY(-5px) scale(1.015); box-shadow: 0 16px 40px rgba(249,115,22,0.18); }
-
-  img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
-}
-
-// Right stack of 3 small cards
-.hero-mosaic-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.hero-mosaic-sm {
-  border-radius: 14px;
-  overflow: hidden;
-  cursor: pointer;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
-
-  .dark & { box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
-  &:hover  { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(249,115,22,0.15); }
-
-  img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
-
-  &:nth-child(1) { animation: heroFloat 3.8s ease-in-out 0.4s infinite; }
-  &:nth-child(2) { animation: heroFloat 4.4s ease-in-out 1.0s infinite; }
-  &:nth-child(3) { animation: heroFloat 3.6s ease-in-out 1.6s infinite; }
-}
-
-// Info overlay on cards
-.hero-mosaic-info {
-  padding: 8px 10px 10px;
-}
-.hero-mosaic-name {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-.hero-mosaic-price {
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--color-brand);
-  margin-top: 2px;
-}
-
-// Floating stats chip
-.hero-stats-chip {
-  position: absolute;
-  bottom: -14px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--color-text);
-  white-space: nowrap;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-// ── Mobile-only horizontal scroller ──────────────────────────────────────────
-.hero-mobile-scroll {
-  margin-top: 2rem;
-
-  @media (min-width: 1024px) { display: none; }
-}
-
-.hero-mobile-scroll-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-muted);
-  margin-bottom: 0.75rem;
-}
-
-.hero-scroll-track {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar { display: none; }
-
-  // Fade edges hint
-  mask-image: linear-gradient(to right, transparent 0, black 16px, black calc(100% - 24px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0, black 16px, black calc(100% - 24px), transparent 100%);
-  padding-left: 4px; padding-right: 4px;
-}
-
-.hero-scroll-card {
-  flex-shrink: 0;
-  width: 148px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 3px 12px rgba(0,0,0,0.05);
-
-  .dark & { box-shadow: 0 3px 12px rgba(0,0,0,0.2); }
-  &:active { transform: scale(0.96); }
-
-  img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
-}
-
-.hero-scroll-info {
-  padding: 6px 8px 8px;
-}
-
-// ── Re-use card name/price from old design ────────────────────────────────────
-.hero-card-name {
-  font-size: 0.68rem;
-  font-weight: 600;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  color: var(--color-text);
-}
-.hero-card-price {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--color-brand);
-  margin-top: 2px;
-}
-
 // ── Keyframes ─────────────────────────────────────────────────────────────────
 @keyframes heroPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.5; transform: scale(0.85); }
-}
-
-@keyframes heroFloat {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-7px); }
 }

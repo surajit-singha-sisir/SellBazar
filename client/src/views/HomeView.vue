@@ -4,18 +4,19 @@
        class="min-h-screen bg-[var(--color-bg)] animate-pulse">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-10">
       <!-- Hero skeleton -->
-      <div class="grid lg:grid-cols-2 gap-8 items-center">
-        <div class="space-y-4">
-          <div class="h-4 w-48 rounded-full bg-[var(--color-surface-2)]"></div>
-          <div class="h-12 w-3/4 rounded-xl bg-[var(--color-surface-2)]"></div>
-          <div class="h-12 w-1/2 rounded-xl bg-[var(--color-surface-2)]"></div>
-          <div class="h-4 w-full rounded bg-[var(--color-surface-2)]"></div>
-          <div class="flex gap-3">
-            <div class="h-11 w-32 rounded-2xl bg-[var(--color-surface-2)]"></div>
-            <div class="h-11 w-36 rounded-2xl bg-[var(--color-surface-2)]"></div>
-          </div>
+      <div class="flex flex-col items-center text-center space-y-4 py-10 px-4">
+        <div class="h-5 w-48 rounded-full bg-[var(--color-surface-2)]"></div>
+        <div class="h-10 w-3/4 max-w-md rounded-xl bg-[var(--color-surface-2)]"></div>
+        <div class="h-10 w-1/2 max-w-xs rounded-xl bg-[var(--color-surface-2)]"></div>
+        <div class="h-4 w-full max-w-lg rounded bg-[var(--color-surface-2)]"></div>
+        <div class="h-12 w-full max-w-lg rounded-2xl bg-[var(--color-surface-2)]"></div>
+        <div class="flex gap-3 justify-center">
+          <div class="h-11 w-32 rounded-2xl bg-[var(--color-surface-2)]"></div>
+          <div class="h-11 w-28 rounded-2xl bg-[var(--color-surface-2)]"></div>
         </div>
-        <div class="hidden lg:block h-80 rounded-3xl bg-[var(--color-surface-2)]"></div>
+        <div class="flex gap-4 justify-center mt-2">
+          <div v-for="n in 4" :key="n" class="h-4 w-20 rounded bg-[var(--color-surface-2)]"></div>
+        </div>
       </div>
       <!-- Category chips skeleton -->
       <div class="grid grid-cols-4 lg:grid-cols-8 gap-3">
@@ -48,11 +49,11 @@
           </span>
         </div>
 
-        <!-- ── Main layout: stacked on mobile, side-by-side on lg ─── -->
-        <div class="hero-layout">
+        <!-- ── Main layout: centered single column ───────────────── -->
+        <div class="hero-layout-center">
 
-          <!-- LEFT column: copy + search + trust -->
-          <div class="hero-left">
+          <!-- Center column: copy + search + trust -->
+          <div class="hero-left hero-left--center">
 
             <h1 class="hero-headline">
               <span class="gradient-text">Shop Smart,</span>
@@ -115,76 +116,6 @@
             </div>
           </div>
 
-          <!-- RIGHT column: product mosaic — hidden on mobile, shown lg+ -->
-          <div class="hero-right">
-            <div class="hero-mosaic">
-              <!-- Top row: 1 tall card -->
-              <div class="hero-mosaic-tall"
-                v-if="productStore.featured[0]"
-                @click="$router.push(`/products/${productStore.featured[0].slug}`)">
-                <img :src="productStore.featured[0].images[0]" :alt="productStore.featured[0].name"
-                  onerror="this.src='https://placehold.co/320x400/f97316/fff?text=Product'" />
-                <div class="hero-mosaic-info">
-                  <p class="hero-mosaic-name">{{ productStore.featured[0].name }}</p>
-                  <p class="hero-mosaic-price">৳{{ (productStore.featured[0].salePrice ?? productStore.featured[0].price).toLocaleString() }}</p>
-                </div>
-              </div>
-              <div v-else class="hero-mosaic-tall animate-pulse"><div class="w-full h-full bg-[var(--color-surface-2)] rounded-2xl"></div></div>
-
-              <!-- Right side: 3 smaller cards stacked -->
-              <div class="hero-mosaic-stack">
-                <div class="hero-mosaic-sm"
-                  v-for="p in productStore.featured.slice(1, 4)" :key="p.id"
-                  @click="$router.push(`/products/${p.slug}`)">
-                  <img :src="p.images[0]" :alt="p.name"
-                    onerror="this.src='https://placehold.co/200x140/f97316/fff?text=?'" />
-                  <div class="hero-mosaic-info">
-                    <p class="hero-mosaic-name">{{ p.name }}</p>
-                    <p class="hero-mosaic-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
-                  </div>
-                </div>
-                <template v-if="productStore.featured.length < 2">
-                  <div v-for="n in 3" :key="'s'+n" class="hero-mosaic-sm animate-pulse">
-                    <div class="w-full h-full bg-[var(--color-surface-2)] rounded-xl"></div>
-                  </div>
-                </template>
-              </div>
-
-              <!-- Floating stats chip -->
-              <div class="hero-stats-chip">
-                <i class="fa-sharp fa-solid fa-bolt text-orange-400 text-xs"></i>
-                <span>10M+ Products</span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- ── Mobile-only horizontal product scroller ─────────────── -->
-        <div class="hero-mobile-scroll">
-          <p class="hero-mobile-scroll-label">Featured picks</p>
-          <div class="hero-scroll-track">
-            <div
-              v-for="p in productStore.featured.slice(0, 6)" :key="p.id"
-              class="hero-scroll-card"
-              @click="$router.push(`/products/${p.slug}`)">
-              <img :src="p.images[0]" :alt="p.name"
-                onerror="this.src='https://placehold.co/160x120/f97316/fff?text=?'" />
-              <div class="hero-scroll-info">
-                <p class="hero-card-name">{{ p.name }}</p>
-                <p class="hero-card-price">৳{{ (p.salePrice ?? p.price).toLocaleString() }}</p>
-              </div>
-            </div>
-            <template v-if="!productStore.featured.length">
-              <div v-for="n in 4" :key="'sk'+n" class="hero-scroll-card animate-pulse">
-                <div class="w-full aspect-video bg-[var(--color-surface-2)] rounded-t-xl"></div>
-                <div class="p-2 space-y-1.5">
-                  <div class="h-2 w-3/4 rounded bg-[var(--color-surface-2)]"></div>
-                  <div class="h-2 w-1/2 rounded bg-[var(--color-surface-2)]"></div>
-                </div>
-              </div>
-            </template>
-          </div>
         </div>
 
       </div>
