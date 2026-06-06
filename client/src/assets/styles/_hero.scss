@@ -214,56 +214,31 @@
   &:hover { background: rgba(249,115,22,0.06); }
 }
 
-// ── Subcategory flyout panel ──────────────────────────────────────────────────
+// ── Subcategory flyout panel — teleported to <body>, positioned via JS ────────
 .hero-subcat-panel {
-  position: absolute;
-  left: calc(100% + 8px);
-  top: 0;
-  width: 260px;
+  // position + top + left + width come from inline :style (JS-calculated)
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.06);
-  z-index: 100;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.07);
   overflow: hidden;
 
   .dark & {
-    box-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.25);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
   }
 
-  // Arrow pointer on the left edge
+  // Left-side arrow pointer
   &::before {
     content: '';
     position: absolute;
     left: -6px;
-    top: 14px;
+    top: 16px;
     width: 12px; height: 12px;
     background: var(--color-surface);
     border-left: 1px solid var(--color-border);
     border-bottom: 1px solid var(--color-border);
     transform: rotate(45deg);
     border-radius: 2px;
-  }
-
-  // Flip upward for last items
-  &--up {
-    top: auto;
-    bottom: 0;
-
-    &::before {
-      top: auto;
-      bottom: 14px;
-    }
-  }
-
-  @media (max-width: 767px) {
-    position: static;
-    width: 100%;
-    box-shadow: none;
-    border-radius: 0 0 10px 10px;
-    border-top: none;
-
-    &::before { display: none; }
   }
 }
 
@@ -314,16 +289,11 @@
   span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
-// Subpanel transition
+// Subpanel transition (teleported — no mobile override needed)
 .subpanel-enter-active { transition: opacity 0.18s ease, transform 0.18s ease; }
 .subpanel-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
-.subpanel-enter-from   { opacity: 0; transform: translateX(-6px) scale(0.97); }
+.subpanel-enter-from   { opacity: 0; transform: translateX(-8px) scale(0.97); }
 .subpanel-leave-to     { opacity: 0; transform: translateX(-4px) scale(0.97); }
-
-@media (max-width: 767px) {
-  .subpanel-enter-from,
-  .subpanel-leave-to { transform: none; opacity: 0; }
-}
 
 // ── RIGHT: Carousel column ────────────────────────────────────────────────────
 .hero-carousel-col {
