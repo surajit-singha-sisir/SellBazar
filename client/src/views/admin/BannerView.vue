@@ -6,7 +6,7 @@
       <div style="display:flex;align-items:center;gap:12px">
         <div>
           <h1 class="page-title">Hero Carousel</h1>
-          <p class="page-subtitle">Manage homepage banner slides — images display at 4:1 ratio</p>
+          <p class="page-subtitle">Manage homepage banner slides — images display at 16:9 ratio</p>
         </div>
       </div>
       <button class="admin-btn primary" @click="openAdd">
@@ -115,7 +115,7 @@
               <div class="bm-field">
                 <label class="bm-label">
                   Banner Image <span class="req">*</span>
-                  <span class="bm-hint">4:1 ratio (e.g. 1200×300 px)</span>
+                  <span class="bm-hint">16:9 ratio (e.g. 1280×720 px)</span>
                 </label>
 
                 <div
@@ -153,7 +153,7 @@
                     <template v-else>
                       <i class="fa-sharp fa-solid fa-cloud-arrow-up"></i>
                       <span class="bup-title">Click or drag to upload</span>
-                      <span class="bup-sub">PNG, JPG, WEBP · Recommended: 1200×300 (4:1)</span>
+                      <span class="bup-sub">PNG, JPG, WEBP · Recommended: 1280×720 (16:9)</span>
                     </template>
                   </div>
                 </div>

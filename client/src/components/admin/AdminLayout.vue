@@ -194,11 +194,12 @@ const mainNav = computed(() => [
 ])
 
 const manageNav = [
-  { to: '/admin/categories', label: 'Categories', icon: 'fa-sharp-duotone fa-solid fa-layer-group'    },
-  { to: '/admin/customers',  label: 'Customers',  icon: 'fa-sharp-duotone fa-solid fa-users'          },
-  { to: '/admin/reports',    label: 'Reports',    icon: 'fa-sharp-duotone fa-solid fa-chart-bar'      },
-  { to: '/admin/settings',   label: 'Settings',   icon: 'fa-sharp-duotone fa-solid fa-gear'           },
-  { to: '/admin/icons',      label: 'Icon Browser', icon: 'fa-sharp-duotone fa-solid fa-icons'        },
+  { to: '/admin/categories', label: 'Categories',     icon: 'fa-sharp-duotone fa-solid fa-layer-group'    },
+  { to: '/admin/banners',    label: 'Hero Carousel',  icon: 'fa-sharp-duotone fa-solid fa-images'         },
+  { to: '/admin/customers',  label: 'Customers',      icon: 'fa-sharp-duotone fa-solid fa-users'          },
+  { to: '/admin/reports',    label: 'Reports',        icon: 'fa-sharp-duotone fa-solid fa-chart-bar'      },
+  { to: '/admin/settings',   label: 'Settings',       icon: 'fa-sharp-duotone fa-solid fa-gear'           },
+  { to: '/admin/icons',      label: 'Icon Browser',   icon: 'fa-sharp-duotone fa-solid fa-icons'          },
 ]
 
 const pageLabels: Record<string, string> = {
@@ -208,6 +209,7 @@ const pageLabels: Record<string, string> = {
   'admin-reviews':     'Reviews',
   'admin-analytics':   'Analytics',
   'admin-categories':  'Categories',
+  'admin-banners':     'Hero Carousel',
   'admin-customers':   'Customers',
   'admin-reports':     'Reports',
   'admin-settings':    'Settings',

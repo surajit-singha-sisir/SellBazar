@@ -48,6 +48,7 @@ const router = createRouter({
         { path: 'products/add',      name: 'admin-product-add',  component: () => import('@/views/admin/ProductFormView.vue') },
         { path: 'products/edit/:id', name: 'admin-product-edit', component: () => import('@/views/admin/ProductFormView.vue') },
         { path: 'categories',        name: 'admin-categories',   component: () => import('@/views/admin/CategoriesView.vue') },
+        { path: 'banners',           name: 'admin-banners',      component: () => import('@/views/admin/BannerView.vue') },
         { path: 'orders',            name: 'admin-orders',       component: () => import('@/views/admin/OrdersView.vue') },
         { path: 'reviews',           name: 'admin-reviews',      component: () => import('@/views/admin/ReviewsView.vue') },
         { path: 'analytics',         name: 'admin-analytics',    component: () => import('@/views/admin/AnalyticsView.vue') },
