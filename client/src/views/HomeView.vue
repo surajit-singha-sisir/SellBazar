@@ -130,33 +130,70 @@
       </div>
       <div class="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <div
-          v-for="cat in displayCategories" :key="cat.id"
-          class="relative group"
+          v-for="(cat, idx) in displayCategories" :key="cat.id"
+          class="relative cat-item"
+          @mouseenter="activeCat = cat.id"
+          @mouseleave="activeCat = null"
+          @click.stop="activeCat = activeCat === cat.id ? null : cat.id"
         >
           <RouterLink
             :to="`/products?cat=${encodeURIComponent(cat.name)}`"
             class="card flex flex-col items-center gap-2 py-4 px-2 hover:shadow-md hover:-translate-y-1 transition-all duration-200 text-center"
+            :class="{ 'ring-2 ring-[var(--color-brand)] ring-offset-1': activeCat === cat.id && cat.subcategories?.length }"
+            @click.prevent="cat.subcategories?.length ? (activeCat = activeCat === cat.id ? null : cat.id) : $router.push(`/products?cat=${encodeURIComponent(cat.name)}`)"
           >
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" :style="`background: ${cat.color}18`">
+            <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-200"
+              :class="activeCat === cat.id ? 'scale-110' : ''"
+              :style="`background: ${cat.color}18`">
               <i :class="'fa-sharp fa-solid fa-' + cat.icon + ' text-lg'" :style="`color: ${cat.color}`"></i>
             </div>
-            <span class="text-xs font-medium leading-tight text-[var(--color-text-2)] group-hover:text-[var(--color-text)]">{{ cat.name }}</span>
+            <span class="text-xs font-medium leading-tight text-[var(--color-text-2)]"
+              :class="activeCat === cat.id ? 'text-[var(--color-text)]' : ''">{{ cat.name }}</span>
             <span class="text-[10px] text-[var(--color-text-muted)]">{{ (cat.productCount ?? cat.count ?? 0).toLocaleString() }}+</span>
+            <!-- Chevron hint when subcats exist -->
+            <i v-if="cat.subcategories?.length"
+              class="fa-sharp fa-solid fa-chevron-down text-[9px] text-[var(--color-text-muted)] transition-transform duration-200"
+              :class="activeCat === cat.id ? 'rotate-180 text-[var(--color-brand)]' : ''"></i>
           </RouterLink>
-          <!-- Subcategory flyout on hover -->
-          <div
-            v-if="cat.subcategories && cat.subcategories.length"
-            class="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-30 hidden group-hover:block w-44 card shadow-xl p-2 rounded-xl"
-          >
-            <RouterLink
-              v-for="sub in cat.subcategories.slice(0, 6)" :key="sub.slug"
-              :to="`/products?cat=${encodeURIComponent(cat.name)}&sub=${sub.slug}`"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-[var(--color-surface-2)] text-[var(--color-text-2)] hover:text-[var(--color-text)] transition"
+
+          <!-- Subcategory flyout -->
+          <Transition name="subcat">
+            <div
+              v-if="cat.subcategories?.length && activeCat === cat.id"
+              class="subcat-flyout"
+              :class="{
+                'subcat-flyout--right': idx <= 1,
+                'subcat-flyout--left':  idx >= displayCategories.length - 2,
+                'subcat-flyout--center': idx > 1 && idx < displayCategories.length - 2
+              }"
+              @click.stop
             >
-              <i :class="'fa-sharp fa-solid fa-' + sub.icon + ' w-4 text-center opacity-60'"></i>
-              {{ sub.name }}
-            </RouterLink>
-          </div>
+              <!-- Header -->
+              <div class="px-3 pt-2.5 pb-1.5 border-b border-[var(--color-border)] flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" :style="`background:${cat.color}18`">
+                  <i :class="'fa-sharp fa-solid fa-' + cat.icon + ' text-[11px]'" :style="`color:${cat.color}`"></i>
+                </div>
+                <span class="text-xs font-bold text-[var(--color-text)]">{{ cat.name }}</span>
+                <RouterLink :to="`/products?cat=${encodeURIComponent(cat.name)}`"
+                  class="ml-auto text-[10px] text-orange-500 font-semibold hover:underline whitespace-nowrap"
+                  @click="activeCat = null">
+                  All →
+                </RouterLink>
+              </div>
+              <!-- Subcat grid -->
+              <div class="p-2 grid grid-cols-2 gap-0.5">
+                <RouterLink
+                  v-for="sub in cat.subcategories.slice(0, 8)" :key="sub.slug"
+                  :to="`/products?cat=${encodeURIComponent(cat.name)}&sub=${sub.slug}`"
+                  class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs hover:bg-[var(--color-surface-2)] text-[var(--color-text-2)] hover:text-[var(--color-text)] transition-colors"
+                  @click="activeCat = null"
+                >
+                  <i :class="'fa-sharp fa-solid fa-' + sub.icon + ' w-3.5 text-center shrink-0'" :style="`color:${cat.color};opacity:0.7`"></i>
+                  <span class="truncate">{{ sub.name }}</span>
+                </RouterLink>
+              </div>
+            </div>
+          </Transition>
         </div>
       </div>
     </section>
@@ -267,6 +304,10 @@ const productStore = useProductStore()
 const heroSearch = ref('')
 const quickTags  = ['Samsung', 'Saree', 'Nike', 'Laptop', 'bKash Offer']
 
+// Active category for subcat flyout
+const activeCat = ref<string | null>(null)
+function closeFlyout() { activeCat.value = null }
+
 onMounted(async () => {
   // Only fetch if store is empty (avoids redundant refetch on back-navigation)
   if (!productStore.products.length) {
@@ -277,6 +318,12 @@ onMounted(async () => {
   } else if (!productStore.categories.length) {
     await productStore.fetchCategories()
   }
+  // Close flyout on any outside click
+  document.addEventListener('click', closeFlyout)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeFlyout)
 })
 
 
