@@ -283,7 +283,7 @@ interface Slide {
   order: number
 }
 
-const { request } = useAdminApi()
+const { request, uploadImage } = useAdminApi()
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const slides       = ref<Slide[]>([])
@@ -399,11 +399,9 @@ async function moveSlide(idx: number, dir: -1 | 1) {
   if (target < 0 || target >= slides.value.length) return
   const arr = [...slides.value]
   ;[arr[idx], arr[target]] = [arr[target], arr[idx]]
-  // Update order values
   arr.forEach((s, i) => { s.order = i })
   slides.value = arr
   try {
-    // Persist new order to backend — send array of {id, order}
     await request('/banners/reorder', {
       method: 'PUT',
       body: JSON.stringify(arr.map(s => ({ id: s.id, order: s.order }))),
@@ -413,74 +411,19 @@ async function moveSlide(idx: number, dir: -1 | 1) {
   }
 }
 
-// ── ImgBB upload — 16:9 crop ──────────────────────────────────────────────────
-const IMGBB_KEY = 'f3c12080238055cf04e5a657a47ee058'
-const MAX_PX    = 1280
-const QUALITY   = 0.88
-
-function compressTo16x9(file: File): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const img  = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      const targetRatio = 16 / 9
-      const srcRatio    = img.naturalWidth / img.naturalHeight
-
-      let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight
-      if (srcRatio > targetRatio) {
-        sw = Math.round(img.naturalHeight * targetRatio)
-        sx = Math.round((img.naturalWidth - sw) / 2)
-      } else if (srcRatio < targetRatio) {
-        sh = Math.round(img.naturalWidth / targetRatio)
-        sy = Math.round((img.naturalHeight - sh) / 2)
-      }
-
-      let dw = sw, dh = sh
-      if (dw > MAX_PX) { dh = Math.round((dh / dw) * MAX_PX); dw = MAX_PX }
-
-      const canvas = document.createElement('canvas')
-      canvas.width  = dw
-      canvas.height = dh
-      const ctx = canvas.getContext('2d')!
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, dw, dh)
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh)
-
-      canvas.toBlob(
-        blob => blob ? resolve(blob) : reject(new Error('toBlob failed')),
-        'image/webp', QUALITY
-      )
-    }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Load failed')) }
-    img.src = url
-  })
-}
-
-async function uploadToImgBB(file: File): Promise<string> {
+// ── Image upload — delegates entirely to useAdminApi.uploadImage ──────────────
+async function handleUpload(file: File) {
+  uploading.value = true
   uploadProgress.value = 10
-  const blob     = await compressTo16x9(file)
-  uploadProgress.value = 40
-  const webpFile = new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: blob.type })
-  const fd       = new FormData()
-  fd.append('image', webpFile)
-
-  uploadProgress.value = 60
-  const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: fd })
-  uploadProgress.value = 90
-  const json = await res.json()
-  if (!json.success) throw new Error(json?.error?.message ?? 'ImgBB upload failed')
-  uploadProgress.value = 100
-  return json.data.display_url as string
-}
-
-async function onFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
   try {
-    uploading.value = true
-    uploadProgress.value = 0
-    form.image = await uploadToImgBB(file)
+    // Simulate progress ticks while waiting (uploadImage is opaque)
+    const ticker = setInterval(() => {
+      if (uploadProgress.value < 85) uploadProgress.value += 15
+    }, 300)
+    const { url } = await uploadImage(file)
+    clearInterval(ticker)
+    uploadProgress.value = 100
+    form.image = url
     showToast('Image uploaded', 'success')
   } catch (err: any) {
     showToast(err.message ?? 'Upload failed', 'error')
@@ -491,20 +434,14 @@ async function onFileChange(e: Event) {
   }
 }
 
+async function onFileChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) await handleUpload(file)
+}
+
 async function onDrop(e: DragEvent) {
   const file = e.dataTransfer?.files?.[0]
-  if (!file || !file.type.startsWith('image/')) return
-  try {
-    uploading.value = true
-    uploadProgress.value = 0
-    form.image = await uploadToImgBB(file)
-    showToast('Image uploaded', 'success')
-  } catch (err: any) {
-    showToast(err.message ?? 'Upload failed', 'error')
-  } finally {
-    uploading.value = false
-    uploadProgress.value = 0
-  }
+  if (file && file.type.startsWith('image/')) await handleUpload(file)
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
