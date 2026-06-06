@@ -107,12 +107,13 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 16px;
-  overflow: visible;
   box-shadow: var(--shadow-sm);
   flex-direction: column;
   position: relative;
   z-index: 20;
-  // No max-height / overflow-y here — flyout must escape freely
+  // Match carousel height — stretch via flex parent
+  align-self: stretch;
+  overflow: hidden; // clip the panel itself
 
   @media (max-width: 767px) {
     width: 100%;
@@ -136,7 +137,18 @@
   margin: 0;
   padding: 0.3rem 0;
   flex: 1;
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: visible; // flyout must escape sideways
+  // Custom thin scrollbar
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 99px;
+  }
 }
 
 .hero-cat-item {
