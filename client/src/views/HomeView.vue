@@ -30,7 +30,7 @@
         <div class="hero-two-col">
 
           <!-- LEFT: Dynamic Category List -->
-          <aside class="hero-cat-panel">
+          <aside class="hidden md:flex hero-cat-panel">
             <div class="hero-cat-header">
               <i class="fa-sharp fa-solid fa-grid-2 text-[var(--color-brand)]"></i>
               <span>All Categories</span>

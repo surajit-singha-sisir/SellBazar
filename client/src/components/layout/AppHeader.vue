@@ -204,7 +204,7 @@
       <!-- end Row 1 -->
 
       <!-- ── Row 2: Category nav (left) · Search bar (right, scroll-revealed) ── -->
-      <div class="flex items-center gap-3 border-t border-[var(--color-border)]/50 py-1.5">
+      <div class="flex items-center gap-3 border-t border-[var(--color-border)]/50 py-4 md:hidden">
 
         <!-- Category nav links -->
         <nav class="flex items-center gap-0.5 overflow-x-auto scrollbar-hide flex-1 min-w-0">
