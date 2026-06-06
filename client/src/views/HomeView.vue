@@ -282,14 +282,14 @@ onMounted(async () => {
 
 // Static fallback — icons are bare names (no fa- prefix); the template prepends "fa-sharp fa-solid fa-"
 const staticCategories = [
-  { id: '1', slug: 'electronics', name: 'Electronics', icon: 'microchip',       color: '#3b82f6', count: 45000, subcategories: [] },
-  { id: '2', slug: 'fashion',     name: 'Fashion',     icon: 'shirt',           color: '#ec4899', count: 80000, subcategories: [] },
-  { id: '3', slug: 'grocery',     name: 'Grocery',     icon: 'basket-shopping', color: '#22c55e', count: 12000, subcategories: [] },
-  { id: '4', slug: 'beauty',      name: 'Beauty',      icon: 'pump-soap',       color: '#a78bfa', count: 8000,  subcategories: [] },
-  { id: '5', slug: 'home',        name: 'Home',        icon: 'couch',           color: '#f97316', count: 25000, subcategories: [] },
-  { id: '6', slug: 'sports',      name: 'Sports',      icon: 'dumbbell',        color: '#0ea5e9', count: 15000, subcategories: [] },
-  { id: '7', slug: 'business',    name: 'Business',    icon: 'briefcase',       color: '#8b5cf6', count: 5000,  subcategories: [] },
-  { id: '8', slug: 'books',       name: 'Books',       icon: 'book-open',       color: '#fbbf24', count: 30000, subcategories: [] },
+  { id: '1', slug: 'electronics', name: 'Electronics', icon: 'microchip',       color: '#3b82f6', count: 45000, productCount: 45000, subcategories: [] },
+  { id: '2', slug: 'fashion',     name: 'Fashion',     icon: 'shirt',           color: '#ec4899', count: 80000, productCount: 80000, subcategories: [] },
+  { id: '3', slug: 'grocery',     name: 'Grocery',     icon: 'basket-shopping', color: '#22c55e', count: 12000, productCount: 12000, subcategories: [] },
+  { id: '4', slug: 'beauty',      name: 'Beauty',      icon: 'pump-soap',       color: '#a78bfa', count: 8000,  productCount: 8000,  subcategories: [] },
+  { id: '5', slug: 'home',        name: 'Home',        icon: 'couch',           color: '#f97316', count: 25000, productCount: 25000, subcategories: [] },
+  { id: '6', slug: 'sports',      name: 'Sports',      icon: 'dumbbell',        color: '#0ea5e9', count: 15000, productCount: 15000, subcategories: [] },
+  { id: '7', slug: 'business',    name: 'Business',    icon: 'briefcase',       color: '#8b5cf6', count: 5000,  productCount: 5000,  subcategories: [] },
+  { id: '8', slug: 'books',       name: 'Books',       icon: 'book-open',       color: '#fbbf24', count: 30000, productCount: 30000, subcategories: [] },
 ]
 const displayCategories = computed(() =>
   productStore.categories.length ? productStore.categories : staticCategories
