@@ -72,7 +72,7 @@
                 <div
                   v-for="slide in heroSlides" :key="slide.id"
                   class="swiper-slide hero-slide"
-                  :style="`background: ${slide.bg}`"
+                  :style="`background-image: url('${slide.image}')`"
                 >
                   <div class="hero-slide-content">
                     <span class="hero-slide-tag">{{ slide.tag }}</span>
@@ -82,9 +82,6 @@
                       <i class="fa-sharp fa-solid fa-bolt"></i>
                       {{ slide.cta }}
                     </RouterLink>
-                  </div>
-                  <div class="hero-slide-img-wrap">
-                    <img :src="slide.image" :alt="slide.title" class="hero-slide-img" />
                   </div>
                 </div>
               </div>
@@ -321,8 +318,7 @@ const heroSlides = [
     subtitle: 'From Dhaka to every district — same-day delivery & bKash checkout.',
     cta: 'Shop Now',
     link: '/products',
-    bg: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
-    image: 'https://placehold.co/480x320/f97316/fff?text=Eid+Sale',
+    image: 'https://placehold.co/1280x720/f97316/fff?text=Eid+Sale',
   },
   {
     id: 2,
@@ -331,8 +327,7 @@ const heroSlides = [
     subtitle: 'Smartphones, laptops, gadgets — up to 40% off this week only.',
     cta: 'Explore Electronics',
     link: '/products?cat=Electronics',
-    bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-    image: 'https://placehold.co/480x320/3b82f6/fff?text=Electronics',
+    image: 'https://placehold.co/1280x720/3b82f6/fff?text=Electronics',
   },
   {
     id: 3,
@@ -341,8 +336,7 @@ const heroSlides = [
     subtitle: 'Trendy styles for every occasion. Free returns on fashion items.',
     cta: 'Explore Fashion',
     link: '/products?cat=Fashion',
-    bg: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)',
-    image: 'https://placehold.co/480x320/d946ef/fff?text=Fashion',
+    image: 'https://placehold.co/1280x720/d946ef/fff?text=Fashion',
   },
   {
     id: 4,
@@ -351,8 +345,7 @@ const heroSlides = [
     subtitle: 'Fresh groceries from top brands. Order before noon, get today.',
     cta: 'Order Groceries',
     link: '/products?cat=Grocery',
-    bg: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-    image: 'https://placehold.co/480x320/22c55e/fff?text=Grocery',
+    image: 'https://placehold.co/1280x720/22c55e/fff?text=Grocery',
   },
 ]
 
