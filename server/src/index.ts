@@ -11,6 +11,7 @@ import userdataRouter from './routes/userdata.js'
 import categoriesRouter from './routes/categories.js'
 import eventsRouter from './routes/events.js'
 import reviewsRouter from './routes/reviews.js'
+import bannersRouter from './routes/banners.js'
 import { redis, KEYS } from './lib/redis.js'
 
 const app = express()
@@ -47,6 +48,7 @@ app.use('/api/user', userdataRouter)
 app.use('/api/categories', categoriesRouter)
 app.use('/api/events', eventsRouter)
 app.use('/api/reviews', reviewsRouter)
+app.use('/api/banners', bannersRouter)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'SellBazar API', time: new Date().toISOString() })

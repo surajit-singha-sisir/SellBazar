@@ -22,4 +22,5 @@ export const KEYS = {
   cart:          (uid: string) => `sb:cart:${uid}`,
   wishlist:      (uid: string) => `sb:wishlist:${uid}`,
   reviews:       'sb:reviews',
+  banners:       'sb:banners',
 }
