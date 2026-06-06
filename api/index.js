@@ -86,6 +86,7 @@ const _mem = {
   categories:      null,   // null = use SEED_CATEGORIES
   admins:          null,   // null = use SEED_ADMINS
   users:           [],     // registered users (in-memory fallback)
+  banners:         [],     // banner slides
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1222,6 +1223,98 @@ app.post('/api/admin/upload', requireAdmin, (req, res) => {
     return res.json({ url: dataUrl, filename: req.body.filename || 'image', message: 'ok' })
   }
   res.status(422).json({ url: '', filename: '', message: 'Serverless environment has no persistent storage. Convert images to Base64 on the client instead.' })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BANNERS
+// ──────────────────────────────────────────────────────────────────────────────
+// KV key: "sb:banners" → JSON array of banner objects
+
+async function getBanners() {
+  if (KV_ENABLED) return (await kvGet('sb:banners')) ?? []
+  return _mem.banners ?? []
+}
+
+async function saveBanners(banners) {
+  if (KV_ENABLED) await kvSet('sb:banners', banners)
+  else _mem.banners = banners
+}
+
+// Public: GET /api/banners — sorted by order
+app.get('/api/banners', async (_, res) => {
+  try {
+    const banners = await getBanners()
+    res.json(banners.slice().sort((a, b) => a.order - b.order))
+  } catch (e) { res.status(500).json({ error: 'Failed to fetch banners' }) }
+})
+
+// Admin: GET /api/banners/all
+app.get('/api/banners/all', requireAdmin, async (_, res) => {
+  try {
+    const banners = await getBanners()
+    res.json(banners.slice().sort((a, b) => a.order - b.order))
+  } catch (e) { res.status(500).json({ error: 'Failed to fetch banners' }) }
+})
+
+// Admin: POST /api/banners — create
+app.post('/api/banners', requireAdmin, async (req, res) => {
+  try {
+    const { tag, title, subtitle, cta, link, image, active, order } = req.body
+    if (!title || !image) return res.status(400).json({ error: 'title and image are required' })
+    const banners = await getBanners()
+    const crypto  = require('crypto')
+    const banner  = {
+      id:       crypto.randomBytes(8).toString('hex'),
+      tag:      tag      ?? '',
+      title:    title.trim(),
+      subtitle: subtitle ?? '',
+      cta:      cta      ?? 'Shop Now',
+      link:     link     ?? '/',
+      image:    image.trim(),
+      active:   active   ?? true,
+      order:    typeof order === 'number' ? order : banners.length,
+    }
+    banners.push(banner)
+    await saveBanners(banners)
+    res.status(201).json(banner)
+  } catch (e) { res.status(500).json({ error: 'Failed to create banner' }) }
+})
+
+// Admin: PUT /api/banners/reorder — bulk reorder (must be before /:id)
+app.put('/api/banners/reorder', requireAdmin, async (req, res) => {
+  try {
+    const updates = req.body
+    if (!Array.isArray(updates)) return res.status(400).json({ error: 'Expected array of { id, order }' })
+    const banners = await getBanners()
+    const map = new Map(updates.map(u => [u.id, u.order]))
+    for (const b of banners) { if (map.has(b.id)) b.order = map.get(b.id) }
+    banners.sort((a, b) => a.order - b.order)
+    await saveBanners(banners)
+    res.json(banners)
+  } catch (e) { res.status(500).json({ error: 'Failed to reorder banners' }) }
+})
+
+// Admin: PUT /api/banners/:id — update
+app.put('/api/banners/:id', requireAdmin, async (req, res) => {
+  try {
+    const banners = await getBanners()
+    const idx = banners.findIndex(b => b.id === req.params.id)
+    if (idx === -1) return res.status(404).json({ error: 'Banner not found' })
+    banners[idx] = { ...banners[idx], ...req.body, id: req.params.id }
+    await saveBanners(banners)
+    res.json(banners[idx])
+  } catch (e) { res.status(500).json({ error: 'Failed to update banner' }) }
+})
+
+// Admin: DELETE /api/banners/:id
+app.delete('/api/banners/:id', requireAdmin, async (req, res) => {
+  try {
+    const banners = await getBanners()
+    const filtered = banners.filter(b => b.id !== req.params.id)
+    if (filtered.length === banners.length) return res.status(404).json({ error: 'Banner not found' })
+    await saveBanners(filtered)
+    res.json({ success: true })
+  } catch (e) { res.status(500).json({ error: 'Failed to delete banner' }) }
 })
 
 // ──────────────────────────────────────────────────────────────────────────────
