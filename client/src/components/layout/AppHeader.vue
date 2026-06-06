@@ -32,15 +32,6 @@
         <!-- Center: Search bar — always visible -->
         <div class="hidden sm:flex flex-1 max-w-xl relative mx-3" ref="searchWrap">
             <div class="relative flex items-center w-full">
-              <div class="absolute left-0 pl-3 flex items-center gap-2 z-10">
-                <select
-                  v-model="searchCategory"
-                  class="hidden lg:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-4 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
-                >
-                  <option value="">All</option>
-                  <option v-for="cat in productStore.categoryNames.filter(c => c !== 'All')" :key="cat" :value="cat">{{ cat }}</option>
-                </select>
-              </div>
               <input
                 v-model="searchQ"
                 @keyup.enter="doSearch"
@@ -48,7 +39,7 @@
                 @blur="hideSuggestions"
                 type="text"
                 placeholder="Search products, brands…"
-                class="w-full pl-4 lg:pl-36 pr-12 py-2.5 rounded-xl text-sm input-field"
+                class="w-full pl-4 pr-12 py-2.5 rounded-xl text-sm input-field"
               />
               <button
                 @click="doSearch"
@@ -285,19 +276,18 @@ import { useRouter } from 'vue-router'
 import { useThemeStore }    from '@/stores/useThemeStore'
 import { useCartStore }     from '@/stores/useCartStore'
 import { useAuthStore }     from '@/stores/useAuthStore'
-import { useProductStore }  from '@/stores/useProductStore'
 import { useWishlistStore } from '@/stores/useWishlistStore'
 
 const router        = useRouter()
 const themeStore    = useThemeStore()
 const cartStore     = useCartStore()
 const authStore     = useAuthStore()
-const productStore  = useProductStore()
 const wishlistStore = useWishlistStore()
 
 const searchQ        = ref('')
-const searchCategory = ref('')
 const showSuggestions  = ref(false)
+const suggestions      = ref<Array<{ id: number|string; name: string; brand: string; category: string; price: number; salePrice?: number; image: string; slug: string }>>([]
+)
 const showUserMenu     = ref(false)
 const showMobileMenu   = ref(false)
 const showMobileSearch = ref(false)
@@ -319,35 +309,39 @@ const navCategories = [
   { label: 'Deals',         to: '/deals',                     icon: 'fa-sharp fa-solid fa-fire' },
 ]
 
-const suggestions = computed(() => {
-  if (!searchQ.value.trim()) return []
-  const q = searchQ.value.toLowerCase()
-  return productStore.products
-    .filter(p => {
-      const catMatch = !searchCategory.value || p.category === searchCategory.value
-      const textMatch =
-        p.name.toLowerCase().includes(q) ||
-        p.brand.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q) ||
-        p.tags.some(t => t.toLowerCase().includes(q))
-      return catMatch && textMatch
-    })
-    .slice(0, 6)
-    .map(p => ({
-      id: p.id,
-      name: p.name,
-      brand: p.brand,
-      category: p.category,
-      price: p.price,
-      salePrice: p.salePrice,
-      image: p.images?.[0] ?? '',
-      slug: p.slug,
-    }))
+let suggestDebounce: ReturnType<typeof setTimeout> | null = null
+
+watch(searchQ, (val) => {
+  if (suggestDebounce) clearTimeout(suggestDebounce)
+  if (!val.trim() || val.trim().length < 2) { suggestions.value = []; return }
+  suggestDebounce = setTimeout(() => fetchSuggestions(val.trim()), 300)
 })
+
+async function fetchSuggestions(q: string) {
+  try {
+    const res = await fetch(`/api/products/search?q=${encodeURIComponent(q)}&limit=6`)
+    if (!res.ok) return
+    const data = await res.json()
+    // Normalise — backend may return { data: [] } or a plain array
+    const list: any[] = Array.isArray(data) ? data : (data.data ?? [])
+    suggestions.value = list.map((p: any) => ({
+      id: p.id ?? p._id,
+      name: p.name,
+      brand: p.brand ?? '',
+      category: p.category ?? '',
+      price: p.price,
+      salePrice: p.salePrice ?? p.sale_price,
+      image: p.images?.[0] ?? p.image ?? '',
+      slug: p.slug ?? '',
+    }))
+  } catch {
+    suggestions.value = []
+  }
+}
 
 function doSearch() {
   if (searchQ.value.trim()) {
-    router.push({ path: '/products', query: { q: searchQ.value.trim(), cat: searchCategory.value || undefined } })
+    router.push({ path: '/products', query: { q: searchQ.value.trim() } })
     showSuggestions.value = false
     showMobileMenu.value = false
   }
