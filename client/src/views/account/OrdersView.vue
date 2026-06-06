@@ -123,6 +123,119 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
+         INVOICE MODAL
+    ══════════════════════════════════════════════════════════════ -->
+    <Teleport to="body">
+      <Transition name="review-fade">
+        <div v-if="invoiceOrder" class="rv-backdrop" @click.self="invoiceOrder = null">
+          <div class="inv-box">
+
+            <!-- Header -->
+            <div class="inv-modal-header">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="inv-modal-icon"><i class="fa-sharp fa-solid fa-receipt"></i></div>
+                <div>
+                  <div class="inv-modal-title">Order #{{ invoiceOrder.id.slice(-8).toUpperCase() }}</div>
+                  <div class="inv-modal-sub">{{ formatDate(invoiceOrder.createdAt) }}</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="inv-print-btn" @click="printInvoice(invoiceOrder)">
+                  <i class="fa-sharp fa-solid fa-print"></i> Print
+                </button>
+                <button class="rv-close" @click="invoiceOrder = null">
+                  <i class="fa-sharp fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Body -->
+            <div class="inv-modal-body">
+
+              <!-- Customer + Payment grid -->
+              <div class="inv-grid-2">
+                <div class="inv-info-card">
+                  <div class="inv-info-label"><i class="fa-sharp fa-solid fa-user"></i> Customer</div>
+                  <div class="inv-info-name">{{ invoiceOrder.customer?.name ?? '—' }}</div>
+                  <div class="inv-info-row" v-if="invoiceOrder.customer?.email">
+                    <i class="fa-sharp fa-solid fa-envelope"></i>{{ invoiceOrder.customer.email }}
+                  </div>
+                  <div class="inv-info-row" v-if="invoiceOrder.customer?.phone">
+                    <i class="fa-sharp fa-solid fa-phone"></i>{{ invoiceOrder.customer.phone }}
+                  </div>
+                  <div class="inv-info-row" v-if="invoiceOrder.customer?.address">
+                    <i class="fa-sharp fa-solid fa-location-dot"></i>{{ invoiceOrder.customer.address }}
+                  </div>
+                </div>
+                <div class="inv-info-card">
+                  <div class="inv-info-label"><i class="fa-sharp fa-solid fa-credit-card"></i> Payment & Status</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                    <span class="inv-badge inv-badge--orange" style="text-transform:capitalize">{{ invoiceOrder.paymentMethod }}</span>
+                    <span class="inv-badge" :class="invoiceOrder.paymentStatus==='paid' ? 'inv-badge--green' : 'inv-badge--yellow'">{{ invoiceOrder.paymentStatus }}</span>
+                    <span class="inv-badge" :class="statusInvClass(invoiceOrder.status)" style="text-transform:capitalize">{{ invoiceOrder.status }}</span>
+                  </div>
+                  <div class="inv-info-row" v-if="invoiceOrder.trackingNumber">
+                    <i class="fa-sharp fa-solid fa-truck" style="color:#f97316"></i>
+                    <span class="font-mono font-bold text-orange-500">{{ invoiceOrder.trackingNumber }}</span>
+                  </div>
+                  <div class="inv-info-row" v-if="invoiceOrder.notes" style="font-style:italic;opacity:0.7">
+                    <i class="fa-sharp fa-solid fa-note-sticky"></i>{{ invoiceOrder.notes }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Items table -->
+              <div class="inv-items-card">
+                <div class="inv-info-label"><i class="fa-sharp fa-solid fa-box"></i> Items</div>
+                <table class="inv-table">
+                  <thead>
+                    <tr>
+                      <th style="width:36px"></th>
+                      <th>Product</th>
+                      <th style="text-align:right">Price</th>
+                      <th style="text-align:center">Qty</th>
+                      <th style="text-align:right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in invoiceOrder.items" :key="item.productId + item.name">
+                      <td>
+                        <img v-if="item.image" :src="item.image" :alt="item.name" class="inv-item-img" />
+                        <div v-else class="inv-item-img-ph"><i class="fa-sharp fa-regular fa-box"></i></div>
+                      </td>
+                      <td class="inv-item-name">{{ item.name }}</td>
+                      <td style="text-align:right;font-size:13px">৳{{ item.price.toLocaleString() }}</td>
+                      <td style="text-align:center;font-weight:700">{{ item.quantity }}</td>
+                      <td style="text-align:right;font-weight:700;color:#f97316">৳{{ (item.price * item.quantity).toLocaleString() }}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colspan="3"></td>
+                      <td class="inv-tfoot-label">Subtotal</td>
+                      <td class="inv-tfoot-val">৳{{ (invoiceOrder.subtotal ?? invoiceOrder.total).toLocaleString() }}</td>
+                    </tr>
+                    <tr v-if="invoiceOrder.shipping">
+                      <td colspan="3"></td>
+                      <td class="inv-tfoot-label">Shipping</td>
+                      <td class="inv-tfoot-val">৳{{ Number(invoiceOrder.shipping).toLocaleString() }}</td>
+                    </tr>
+                    <tr class="inv-total-row">
+                      <td colspan="3"></td>
+                      <td class="inv-tfoot-label" style="font-weight:800;color:#f97316">Total</td>
+                      <td class="inv-tfoot-val" style="font-weight:900;font-size:16px;color:#f97316">৳{{ invoiceOrder.total.toLocaleString() }}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+            </div><!-- /body -->
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ══════════════════════════════════════════════════════════════
          REVIEW MODAL
     ══════════════════════════════════════════════════════════════ -->
     <Teleport to="body">
@@ -285,6 +398,103 @@ async function fetchOrders() {
 
 onMounted(fetchOrders)
 
+// ── Invoice modal ─────────────────────────────────────────────────────────────
+const invoiceOrder = ref<Order | null>(null)
+
+function openInvoice(order: Order) {
+  invoiceOrder.value = order
+}
+
+function statusInvClass(status: string) {
+  const map: Record<string, string> = {
+    delivered: 'inv-badge--green', shipped: 'inv-badge--blue',
+    processing: 'inv-badge--purple', pending: 'inv-badge--yellow', cancelled: 'inv-badge--red',
+  }
+  return map[status] ?? 'inv-badge--orange'
+}
+
+function printInvoice(o: Order) {
+  const win = window.open('', '_blank')
+  if (!win) return
+  const itemRows = o.items.map((item, i) => `
+    <tr>
+      <td style="color:#aaa;font-size:11px">${i + 1}</td>
+      <td>${item.name}</td>
+      <td style="text-align:right">৳${item.price.toLocaleString()}</td>
+      <td style="text-align:center;font-weight:700">${item.quantity}</td>
+      <td style="text-align:right;font-weight:700;color:#f97316">৳${(item.price * item.quantity).toLocaleString()}</td>
+    </tr>`).join('')
+  win.document.write(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>Invoice #${o.id.slice(-8).toUpperCase()}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:#f3f4f6;padding:32px;color:#111}
+  .inv{background:#fff;border-radius:12px;overflow:hidden;max-width:780px;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,.1)}
+  .inv-head{background:linear-gradient(135deg,#f97316,#d946ef);color:#fff;padding:28px;display:flex;justify-content:space-between;align-items:flex-start}
+  .brand{font-size:22px;font-weight:900;letter-spacing:-.03em}.brand-sub{font-size:11px;opacity:.8;margin-top:3px}
+  .inv-no{text-align:right}.inv-no-label{font-size:13px;font-weight:800;letter-spacing:.1em;opacity:.9}
+  .inv-no-val{font-size:11px;opacity:.8;margin-top:4px}
+  .inv-body{padding:24px 28px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+  .info-block h4{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#888;margin-bottom:8px}
+  .info-block p{font-size:13px;color:#444;line-height:1.6}
+  .info-block .name{font-size:15px;font-weight:700;color:#111;margin-bottom:4px}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase}
+  .badge-orange{background:#fff7ed;color:#c2410c}.badge-green{background:#f0fdf4;color:#15803d}.badge-yellow{background:#fefce8;color:#a16207}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#888;background:#f8f8f8;border-bottom:1px solid #eee}
+  tbody td{padding:11px 12px;border-bottom:1px solid #f0f0f0;color:#333}
+  tfoot td{padding:7px 12px;font-size:13px;color:#555;background:#fafafa}
+  .grand td{font-size:15px;font-weight:900;color:#f97316;border-top:2px solid #f97316}
+  .inv-foot{background:#111;color:rgba(255,255,255,.7);padding:16px 28px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+  .inv-foot .total{font-size:24px;font-weight:900;color:#f97316}
+  @media print{body{padding:0;background:#fff}.inv{box-shadow:none;border-radius:0}}
+</style></head>
+<body><div class="inv">
+  <div class="inv-head">
+    <div><div class="brand">SellBazar</div><div class="brand-sub">sellbazar.com</div></div>
+    <div class="inv-no">
+      <div class="inv-no-label">INVOICE</div>
+      <div class="inv-no-val">#${o.id.slice(-8).toUpperCase()}</div>
+      <div class="inv-no-val">${formatDate(o.createdAt)}</div>
+    </div>
+  </div>
+  <div class="inv-body">
+    <div class="grid2">
+      <div class="info-block">
+        <h4>Bill To</h4>
+        <div class="name">${o.customer?.name ?? '—'}</div>
+        ${o.customer?.email ? `<p>${o.customer.email}</p>` : ''}
+        ${o.customer?.phone ? `<p>${o.customer.phone}</p>` : ''}
+        ${o.customer?.address ? `<p style="margin-top:4px">${o.customer.address}</p>` : ''}
+      </div>
+      <div class="info-block">
+        <h4>Order Info</h4>
+        <p><strong>Payment:</strong> ${o.paymentMethod}</p>
+        <p style="margin-top:4px">
+          <span class="badge ${o.paymentStatus === 'paid' ? 'badge-green' : 'badge-yellow'}">${o.paymentStatus}</span>
+          <span class="badge badge-orange" style="margin-left:6px">${o.status}</span>
+        </p>
+        ${o.trackingNumber ? `<p style="margin-top:8px">🚚 ${o.trackingNumber}</p>` : ''}
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Unit Price</th><th style="text-align:center">Qty</th><th style="text-align:right">Subtotal</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+      <tfoot>
+        <tr><td colspan="3"></td><td style="text-align:right">Subtotal</td><td style="text-align:right;font-weight:700">৳${(o.subtotal ?? o.total).toLocaleString()}</td></tr>
+        ${o.shipping ? `<tr><td colspan="3"></td><td style="text-align:right">Shipping</td><td style="text-align:right">৳${Number(o.shipping).toLocaleString()}</td></tr>` : ''}
+        <tr class="grand"><td colspan="3"></td><td style="text-align:right">Total</td><td style="text-align:right">৳${o.total.toLocaleString()}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+  <div class="inv-foot"><span>Thank you for shopping with SellBazar!</span><div class="total">৳${o.total.toLocaleString()}</div></div>
+</div></body></html>`)
+  win.document.close()
+  win.onload = () => { win.focus(); win.print() }
+  setTimeout(() => { try { win.focus(); win.print() } catch {} }, 800)
+}
+
 // ── Already-reviewed set ──────────────────────────────────────────────────────
 // Primary source: server eligibility check. localStorage is the fast cache.
 const reviewedKeys = ref<Set<string>>(
@@ -423,6 +633,113 @@ function formatDate(d: string) {
 </script>
 
 <style scoped>
+/* ── Clickable order card ────────────────────────────────────────────────── */
+.order-card-clickable {
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+.order-card-clickable:hover {
+  box-shadow: 0 6px 24px rgba(249,115,22,0.12);
+  transform: translateY(-1px);
+}
+
+/* ── Invoice modal ───────────────────────────────────────────────────────── */
+.inv-box {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+.inv-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0; gap: 10px; flex-wrap: wrap;
+}
+.inv-modal-icon {
+  width: 38px; height: 38px; border-radius: 10px;
+  background: rgba(249,115,22,0.12); color: #f97316;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.inv-modal-title { font-size: 15px; font-weight: 800; color: var(--color-text); }
+.inv-modal-sub   { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+.inv-print-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer;
+  background: #f97316; color: #fff; font-size: 12px; font-weight: 700;
+  transition: background 0.15s;
+}
+.inv-print-btn:hover { background: #ea580c; }
+.inv-modal-body { overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+
+.inv-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .inv-grid-2 { grid-template-columns: 1fr; } }
+
+.inv-info-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px; padding: 14px;
+}
+.inv-info-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--color-text-muted);
+  display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+  i { color: #f97316; font-size: 11px; }
+}
+.inv-info-name { font-size: 14px; font-weight: 700; color: var(--color-text); margin-bottom: 6px; }
+.inv-info-row {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 12px; color: var(--color-text-muted); margin-top: 4px; line-height: 1.5;
+  i { font-size: 10px; flex-shrink: 0; margin-top: 2px; }
+}
+.inv-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+}
+.inv-badge--orange { background: rgba(249,115,22,0.10); color: #c2410c; }
+.inv-badge--green  { background: rgba(34,197,94,0.10);  color: #15803d; }
+.inv-badge--yellow { background: rgba(234,179,8,0.10);  color: #a16207; }
+.inv-badge--blue   { background: rgba(59,130,246,0.10); color: #1d4ed8; }
+.inv-badge--purple { background: rgba(168,85,247,0.10); color: #7e22ce; }
+.inv-badge--red    { background: rgba(239,68,68,0.10);  color: #b91c1c; }
+
+.inv-items-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px; padding: 14px;
+}
+.inv-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;
+}
+.inv-table thead th {
+  padding: 7px 10px; text-align: left; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--color-text-muted);
+  background: var(--color-surface-2); border-bottom: 1px solid var(--color-border);
+}
+.inv-table tbody td {
+  padding: 9px 10px; border-bottom: 1px solid var(--color-border);
+  color: var(--color-text); vertical-align: middle;
+}
+.inv-table tfoot td { padding: 5px 10px; }
+.inv-total-row td  { border-top: 2px solid #f97316; }
+.inv-tfoot-label   { text-align: right; font-size: 12px; color: var(--color-text-muted); }
+.inv-tfoot-val     { text-align: right; font-weight: 700; color: var(--color-text); }
+.inv-item-img {
+  width: 34px; height: 34px; border-radius: 7px; object-fit: cover; display: block;
+}
+.inv-item-img-ph {
+  width: 34px; height: 34px; border-radius: 7px;
+  background: var(--color-surface-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--color-text-muted);
+}
+.inv-item-name { font-weight: 500; max-width: 220px; }
+
 /* ── Timeline (unchanged from before) ────────────────────────────────────── */
 .timeline { display:flex; align-items:flex-start; gap:0; position:relative; overflow-x:auto; padding-bottom:4px; }
 .timeline-step { display:flex; flex-direction:column; align-items:center; flex:1; min-width:56px; position:relative; }
