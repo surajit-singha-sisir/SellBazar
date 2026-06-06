@@ -26,7 +26,6 @@
               <span class="gradient-text">Sell</span><span class="text-[var(--color-text)]">Bazar</span>
             </div>
           </RouterLink>
-
         </div>
 
         <!-- Center: Search bar — always visible -->
