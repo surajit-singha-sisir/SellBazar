@@ -268,6 +268,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useAdminApi } from '@/composables/useAdminApi'
 
 // ── Slide type ────────────────────────────────────────────────────────────────
 interface Slide {
@@ -282,69 +283,39 @@ interface Slide {
   order: number
 }
 
-const STORAGE_KEY = 'sb-banner-slides'
-
-// ── Default slides (used when nothing in storage) ─────────────────────────────
-const defaultSlides: Slide[] = [
-  {
-    id: '1', tag: '🔥 Eid Special', title: 'Shop Smart, Deliver Fast',
-    subtitle: 'From Dhaka to every district — same-day delivery & bKash checkout.',
-    cta: 'Shop Now', link: '/products',
-    image: 'https://placehold.co/1200x300/f97316/fff?text=Eid+Sale',
-    active: true, order: 0,
-  },
-  {
-    id: '2', tag: '⚡ Flash Deal', title: 'Electronics at Best Prices',
-    subtitle: 'Smartphones, laptops, gadgets — up to 40% off this week only.',
-    cta: 'Explore Electronics', link: '/products?cat=Electronics',
-    image: 'https://placehold.co/1200x300/3b82f6/fff?text=Electronics',
-    active: true, order: 1,
-  },
-  {
-    id: '3', tag: '👗 New Season', title: 'Fresh Fashion Drops Daily',
-    subtitle: 'Trendy styles for every occasion. Free returns on fashion items.',
-    cta: 'Explore Fashion', link: '/products?cat=Fashion',
-    image: 'https://placehold.co/1200x300/d946ef/fff?text=Fashion',
-    active: true, order: 2,
-  },
-  {
-    id: '4', tag: '🛒 Grocery', title: 'Daily Essentials Delivered Fast',
-    subtitle: 'Fresh groceries from top brands. Order before noon, get today.',
-    cta: 'Order Groceries', link: '/products?cat=Grocery',
-    image: 'https://placehold.co/1200x300/22c55e/fff?text=Grocery',
-    active: true, order: 3,
-  },
-]
+const { request } = useAdminApi()
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const slides      = ref<Slide[]>([])
-const modalOpen   = ref(false)
+const slides       = ref<Slide[]>([])
+const loading      = ref(false)
+const modalOpen    = ref(false)
 const editingSlide = ref<Slide | null>(null)
 const deleteTarget = ref<Slide | null>(null)
-const uploading   = ref(false)
+const uploading    = ref(false)
 const uploadProgress = ref(0)
-const fileInput   = ref<HTMLInputElement | null>(null)
-const toast       = reactive({ show: false, message: '', type: 'success' as 'success' | 'error' })
-let toastTimer    = 0
+const fileInput    = ref<HTMLInputElement | null>(null)
+const toast        = reactive({ show: false, message: '', type: 'success' as 'success' | 'error' })
+let toastTimer     = 0
 
 const form = reactive<Slide>({
   id: '', tag: '', title: '', subtitle: '', cta: 'Shop Now',
   link: '/', image: '', active: true, order: 0,
 })
 
-// ── Persistence ───────────────────────────────────────────────────────────────
-function loadSlides() {
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function loadSlides() {
+  loading.value = true
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    slides.value = raw ? JSON.parse(raw) : [...defaultSlides]
-  } catch {
-    slides.value = [...defaultSlides]
+    const data = await request<Slide[] | { data: Slide[] }>('/banners', {
+      cache: 'no-store', headers: { 'Cache-Control': 'no-cache' },
+    })
+    slides.value = (Array.isArray(data) ? data : (data as any).data ?? [])
+      .sort((a: Slide, b: Slide) => a.order - b.order)
+  } catch (e: any) {
+    showToast(e.message ?? 'Failed to load slides', 'error')
+  } finally {
+    loading.value = false
   }
-}
-
-function persist() {
-  slides.value.forEach((s, i) => { s.order = i })
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(slides.value))
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -368,79 +339,103 @@ function closeModal() {
   editingSlide.value = null
 }
 
-function saveSlide() {
+async function saveSlide() {
   if (!form.image || !form.title) return
-
-  if (editingSlide.value) {
-    const idx = slides.value.findIndex(s => s.id === editingSlide.value!.id)
-    if (idx > -1) Object.assign(slides.value[idx], { ...form })
-    showToast('Slide updated', 'success')
-  } else {
-    slides.value.push({
-      ...form,
-      id: Date.now().toString(),
-      order: slides.value.length,
-    })
-    showToast('Slide added', 'success')
+  try {
+    if (editingSlide.value) {
+      const updated = await request<Slide>(`/banners/${editingSlide.value.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...form }),
+      })
+      const idx = slides.value.findIndex(s => s.id === editingSlide.value!.id)
+      if (idx > -1) slides.value[idx] = updated
+      showToast('Slide updated', 'success')
+    } else {
+      const created = await request<Slide>('/banners', {
+        method: 'POST',
+        body: JSON.stringify({ ...form, order: slides.value.length }),
+      })
+      slides.value.push(created)
+      showToast('Slide added', 'success')
+    }
+    closeModal()
+  } catch (e: any) {
+    showToast(e.message ?? 'Save failed', 'error')
   }
-
-  persist()
-  closeModal()
 }
 
 function confirmDelete(slide: Slide) {
   deleteTarget.value = slide
 }
 
-function doDelete() {
+async function doDelete() {
   if (!deleteTarget.value) return
-  slides.value = slides.value.filter(s => s.id !== deleteTarget.value!.id)
-  persist()
-  showToast('Slide deleted', 'success')
-  deleteTarget.value = null
+  try {
+    await request(`/banners/${deleteTarget.value.id}`, { method: 'DELETE' })
+    slides.value = slides.value.filter(s => s.id !== deleteTarget.value!.id)
+    showToast('Slide deleted', 'success')
+  } catch (e: any) {
+    showToast(e.message ?? 'Delete failed', 'error')
+  } finally {
+    deleteTarget.value = null
+  }
 }
 
-function toggleActive(slide: Slide) {
-  slide.active = !slide.active
-  persist()
+async function toggleActive(slide: Slide) {
+  try {
+    const updated = await request<Slide>(`/banners/${slide.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ ...slide, active: !slide.active }),
+    })
+    const idx = slides.value.findIndex(s => s.id === slide.id)
+    if (idx > -1) slides.value[idx] = updated
+  } catch (e: any) {
+    showToast(e.message ?? 'Update failed', 'error')
+  }
 }
 
-function moveSlide(idx: number, dir: -1 | 1) {
+async function moveSlide(idx: number, dir: -1 | 1) {
   const target = idx + dir
   if (target < 0 || target >= slides.value.length) return
   const arr = [...slides.value]
   ;[arr[idx], arr[target]] = [arr[target], arr[idx]]
+  // Update order values
+  arr.forEach((s, i) => { s.order = i })
   slides.value = arr
-  persist()
+  try {
+    // Persist new order to backend — send array of {id, order}
+    await request('/banners/reorder', {
+      method: 'PUT',
+      body: JSON.stringify(arr.map(s => ({ id: s.id, order: s.order }))),
+    })
+  } catch (e: any) {
+    showToast(e.message ?? 'Reorder failed', 'error')
+  }
 }
 
-// ── ImgBB upload — same API key as ProductFormView ────────────────────────────
+// ── ImgBB upload — 16:9 crop ──────────────────────────────────────────────────
 const IMGBB_KEY = 'f3c12080238055cf04e5a657a47ee058'
-const MAX_PX    = 1920
-const QUALITY   = 0.85
+const MAX_PX    = 1280
+const QUALITY   = 0.88
 
-function compressTo4x1(file: File): Promise<Blob> {
+function compressTo16x9(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const img  = new Image()
     img.onload = () => {
       URL.revokeObjectURL(url)
-      // Enforce 4:1 aspect ratio by cropping center
-      const targetRatio = 4 / 1
+      const targetRatio = 16 / 9
       const srcRatio    = img.naturalWidth / img.naturalHeight
 
       let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight
       if (srcRatio > targetRatio) {
-        // Too wide — crop sides
         sw = Math.round(img.naturalHeight * targetRatio)
         sx = Math.round((img.naturalWidth - sw) / 2)
       } else if (srcRatio < targetRatio) {
-        // Too tall — crop top/bottom
         sh = Math.round(img.naturalWidth / targetRatio)
         sy = Math.round((img.naturalHeight - sh) / 2)
       }
 
-      // Scale down if too large
       let dw = sw, dh = sh
       if (dw > MAX_PX) { dh = Math.round((dh / dw) * MAX_PX); dw = MAX_PX }
 
@@ -464,7 +459,7 @@ function compressTo4x1(file: File): Promise<Blob> {
 
 async function uploadToImgBB(file: File): Promise<string> {
   uploadProgress.value = 10
-  const blob     = await compressTo4x1(file)
+  const blob     = await compressTo16x9(file)
   uploadProgress.value = 40
   const webpFile = new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: blob.type })
   const fd       = new FormData()
@@ -499,7 +494,6 @@ async function onFileChange(e: Event) {
 async function onDrop(e: DragEvent) {
   const file = e.dataTransfer?.files?.[0]
   if (!file || !file.type.startsWith('image/')) return
-  // Re-use file input flow via a synthetic change event simulation
   try {
     uploading.value = true
     uploadProgress.value = 0
@@ -547,11 +541,11 @@ onMounted(loadSlides)
 .banner-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.10); }
 .banner-card--inactive { opacity: 0.6; }
 
-/* 4:1 image container */
+/* 16:9 image container */
 .banner-img-wrap {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 1;
+  aspect-ratio: 16 / 9;
   background: var(--admin-bg);
   overflow: hidden;
 }
@@ -705,9 +699,9 @@ onMounted(loadSlides)
 .banner-upload-zone:hover:not(.is-uploading) { border-color: var(--brand); }
 .banner-upload-zone.has-image { border-style: solid; cursor: default; }
 
-/* 4:1 preview */
+/* 16:9 preview in modal */
 .banner-preview-wrap {
-  position: relative; width: 100%; aspect-ratio: 4 / 1; overflow: hidden;
+  position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden;
 }
 .banner-preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .banner-preview-actions {

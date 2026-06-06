@@ -240,6 +240,22 @@ import 'swiper/css/pagination'
 const router       = useRouter()
 const productStore = useProductStore()
 
+// ── Hero slides — fetched from API ────────────────────────────────────────────
+interface HeroSlide { id: string; tag: string; title: string; subtitle: string; cta: string; link: string; image: string; active: boolean; order: number }
+const heroSlides = ref<HeroSlide[]>([])
+
+async function fetchBanners() {
+  try {
+    const res = await fetch('/api/banners', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+    if (!res.ok) return
+    const data = await res.json()
+    const list: HeroSlide[] = Array.isArray(data) ? data : (data.data ?? [])
+    heroSlides.value = list.filter(s => s.active).sort((a, b) => a.order - b.order)
+  } catch {
+    // silently fall through — carousel stays empty
+  }
+}
+
 // ── Flyout state ──────────────────────────────────────────────────────────────
 const activeCat  = ref<string | null>(null)
 const flyoutCat  = ref<any>(null)
@@ -309,45 +325,6 @@ const displayCategories = computed(() => productStore.categories)
 // ── Swiper ────────────────────────────────────────────────────────────────────
 const swiperEl = ref<HTMLElement | null>(null)
 let swiperInstance: InstanceType<typeof Swiper> | null = null
-
-const heroSlides = [
-  {
-    id: 1,
-    tag: '🔥 Eid Special',
-    title: 'Shop Smart,\nDeliver Fast',
-    subtitle: 'From Dhaka to every district — same-day delivery & bKash checkout.',
-    cta: 'Shop Now',
-    link: '/products',
-    image: 'https://placehold.co/1280x720/f97316/fff?text=Eid+Sale',
-  },
-  {
-    id: 2,
-    tag: '⚡ Flash Deal',
-    title: 'Electronics\nat Best Prices',
-    subtitle: 'Smartphones, laptops, gadgets — up to 40% off this week only.',
-    cta: 'Explore Electronics',
-    link: '/products?cat=Electronics',
-    image: 'https://placehold.co/1280x720/3b82f6/fff?text=Electronics',
-  },
-  {
-    id: 3,
-    tag: '👗 New Season',
-    title: 'Fresh Fashion\nDrops Daily',
-    subtitle: 'Trendy styles for every occasion. Free returns on fashion items.',
-    cta: 'Explore Fashion',
-    link: '/products?cat=Fashion',
-    image: 'https://placehold.co/1280x720/d946ef/fff?text=Fashion',
-  },
-  {
-    id: 4,
-    tag: '🛒 Grocery',
-    title: 'Daily Essentials\nDelivered Fast',
-    subtitle: 'Fresh groceries from top brands. Order before noon, get today.',
-    cta: 'Order Groceries',
-    link: '/products?cat=Grocery',
-    image: 'https://placehold.co/1280x720/22c55e/fff?text=Grocery',
-  },
-]
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
