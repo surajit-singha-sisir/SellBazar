@@ -331,6 +331,7 @@ onMounted(async () => {
   const fetches: Promise<any>[] = []
   if (!productStore.products.length)   fetches.push(productStore.fetchProducts())
   if (!productStore.categories.length) fetches.push(productStore.fetchCategories())
+  fetches.push(fetchBanners())
   if (fetches.length) await Promise.all(fetches)
 
   // Close flyout on outside click
