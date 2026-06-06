@@ -23,56 +23,60 @@
       </button>
     </div>
 
-    <!-- ── Slides grid ──────────────────────────────────────────────────── -->
-    <div v-else class="banner-grid">
+    <!-- ── Slides list ──────────────────────────────────────────────────── -->
+    <div v-else class="banner-list">
       <div
         v-for="(slide, idx) in slides"
         :key="slide.id"
-        class="banner-card"
-        :class="{ 'banner-card--inactive': !slide.active }"
+        class="banner-row"
+        :class="{ 'banner-row--inactive': !slide.active }"
       >
-        <!-- 4:1 image preview -->
-        <div class="banner-img-wrap">
+        <!-- Order badge -->
+        <div class="banner-row-index">
+          <span class="banner-order-badge">#{{ idx + 1 }}</span>
+        </div>
+
+        <!-- Thumbnail — fixed width, 16:9 ratio -->
+        <div class="banner-thumb-wrap">
           <img
             :src="slide.image || 'https://placehold.co/1200x300/f97316/fff?text=No+Image'"
             :alt="slide.title"
-            class="banner-img"
+            class="banner-thumb"
             onerror="this.src='https://placehold.co/1200x300/f97316/fff?text=No+Image'"
           />
-          <div class="banner-img-overlay">
-            <span class="banner-order-badge">#{{ idx + 1 }}</span>
-            <span v-if="!slide.active" class="banner-inactive-badge">
-              <i class="fa-sharp fa-solid fa-eye-slash"></i> Hidden
-            </span>
-          </div>
+          <span v-if="!slide.active" class="banner-hidden-badge">
+            <i class="fa-sharp fa-solid fa-eye-slash"></i> Hidden
+          </span>
         </div>
 
-        <!-- Slide info -->
-        <div class="banner-card-body">
-          <div class="banner-card-meta">
-            <span class="banner-tag-pill">{{ slide.tag }}</span>
+        <!-- Content — stretches to fill -->
+        <div class="banner-row-content">
+          <div class="banner-row-meta">
+            <span v-if="slide.tag" class="banner-tag-pill">{{ slide.tag }}</span>
             <span class="banner-link-label">
-              <i class="fa-sharp fa-solid fa-link text-[10px]"></i>
+              <i class="fa-sharp fa-solid fa-link"></i>
               {{ slide.link || '/' }}
             </span>
+            <span class="banner-cta-label">
+              <i class="fa-sharp fa-solid fa-arrow-pointer"></i>
+              {{ slide.cta }}
+            </span>
           </div>
-          <h3 class="banner-card-title">{{ slide.title }}</h3>
-          <p class="banner-card-sub">{{ slide.subtitle }}</p>
-          <div class="banner-card-cta-preview">CTA: <strong>{{ slide.cta }}</strong></div>
+          <h3 class="banner-row-title">{{ slide.title }}</h3>
+          <p class="banner-row-sub">{{ slide.subtitle }}</p>
         </div>
 
-        <!-- Actions -->
-        <div class="banner-card-actions">
+        <!-- Actions — fixed right column -->
+        <div class="banner-row-actions">
           <!-- Reorder -->
           <div class="banner-reorder">
             <button :disabled="idx === 0" @click="moveSlide(idx, -1)" class="admin-btn ghost icon-btn" title="Move up">
-              <i class="fa-sharp fa-solid fa-chevron-left"></i>
+              <i class="fa-sharp fa-solid fa-chevron-up"></i>
             </button>
             <button :disabled="idx === slides.length - 1" @click="moveSlide(idx, 1)" class="admin-btn ghost icon-btn" title="Move down">
-              <i class="fa-sharp fa-solid fa-chevron-right"></i>
+              <i class="fa-sharp fa-solid fa-chevron-down"></i>
             </button>
           </div>
-
           <!-- Toggle active -->
           <button
             class="admin-btn ghost icon-btn"
@@ -82,12 +86,10 @@
           >
             <i :class="slide.active ? 'fa-sharp fa-solid fa-eye' : 'fa-sharp fa-solid fa-eye-slash'"></i>
           </button>
-
           <!-- Edit -->
           <button class="admin-btn ghost icon-btn" title="Edit" @click="openEdit(slide)">
             <i class="fa-sharp fa-solid fa-pen"></i>
           </button>
-
           <!-- Delete -->
           <button class="admin-btn ghost icon-btn text-red-500" title="Delete" @click="confirmDelete(slide)">
             <i class="fa-sharp fa-solid fa-trash"></i>
@@ -463,91 +465,117 @@ onMounted(loadSlides)
 }
 .banner-empty i { font-size: 3rem; opacity: 0.3; }
 
-/* ── Cards grid ─────────────────────────────────────────────────────────── */
-.banner-grid {
-  display: flex; flex-direction: column; gap: 1rem;
+/* ── Slides list (column rows) ──────────────────────────────────────────── */
+.banner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
-.banner-card {
+.banner-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   background: var(--sidebar-bg);
   border: 1px solid var(--sidebar-border);
   border-radius: 14px;
-  overflow: hidden;
+  padding: 0.75rem 1rem;
   transition: box-shadow 0.15s, opacity 0.15s;
 }
-.banner-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.10); }
-.banner-card--inactive { opacity: 0.6; }
+.banner-row:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+.banner-row--inactive { opacity: 0.55; }
 
-/* 16:9 image container */
-.banner-img-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: var(--admin-bg);
-  overflow: hidden;
-}
-.banner-img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-}
-.banner-img-overlay {
-  position: absolute; inset: 0;
-  display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 0.5rem;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 50%);
+/* Index column */
+.banner-row-index {
+  flex-shrink: 0;
+  width: 28px;
+  display: flex;
+  justify-content: center;
 }
 .banner-order-badge {
-  background: rgba(0,0,0,0.6); color: #fff;
-  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
-}
-.banner-inactive-badge {
-  background: rgba(239,68,68,0.85); color: #fff;
-  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
-  display: flex; align-items: center; gap: 4px;
+  background: var(--admin-bg);
+  border: 1px solid var(--sidebar-border);
+  color: var(--text-secondary);
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 20px;
+  white-space: nowrap;
 }
 
-/* Card body */
-.banner-card-body {
-  padding: 0.85rem 1rem 0.6rem;
+/* Thumbnail column */
+.banner-thumb-wrap {
+  flex-shrink: 0;
+  position: relative;
+  width: 180px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--admin-bg);
 }
-.banner-card-meta {
-  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;
+.banner-thumb {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.banner-hidden-badge {
+  position: absolute; bottom: 4px; left: 4px;
+  background: rgba(239,68,68,0.88); color: #fff;
+  font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px;
+  display: flex; align-items: center; gap: 3px;
+}
+
+/* Content column */
+.banner-row-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.banner-row-meta {
+  display: flex; align-items: center; gap: 0.5rem;
   flex-wrap: wrap;
 }
 .banner-tag-pill {
-  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
-  background: rgba(249,115,22,0.12); color: var(--brand);
-  border: 1px solid rgba(249,115,22,0.25);
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px;
+  background: rgba(249,115,22,0.1); color: var(--brand);
+  border: 1px solid rgba(249,115,22,0.22);
+  white-space: nowrap;
 }
-.banner-link-label {
-  font-size: 11px; color: var(--text-secondary);
+.banner-link-label,
+.banner-cta-label {
+  font-size: 10px; color: var(--text-secondary);
   display: flex; align-items: center; gap: 3px;
+  white-space: nowrap;
 }
-.banner-card-title {
-  font-size: 0.95rem; font-weight: 700; color: var(--text-primary);
-  margin: 0 0 0.2rem; line-height: 1.3;
+.banner-link-label i,
+.banner-cta-label i { font-size: 9px; }
+.banner-row-title {
+  font-size: 0.9rem; font-weight: 700;
+  color: var(--text-primary); margin: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.banner-card-sub {
-  font-size: 0.78rem; color: var(--text-secondary); margin: 0 0 0.35rem;
-  line-height: 1.4;
-  overflow: hidden; text-overflow: ellipsis;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-}
-.banner-card-cta-preview {
+.banner-row-sub {
   font-size: 0.75rem; color: var(--text-secondary);
+  margin: 0; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
 }
 
-/* Card actions */
-.banner-card-actions {
-  display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.6rem 1rem; border-top: 1px solid var(--sidebar-border);
-  flex-wrap: wrap;
+/* Actions column */
+.banner-row-actions {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 0.25rem;
 }
-.banner-reorder { display: flex; gap: 0.25rem; }
+.banner-reorder {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-right: 0.25rem;
+}
 .icon-btn {
-  width: 32px !important; height: 32px !important;
+  width: 30px !important; height: 30px !important;
   padding: 0 !important; border-radius: 8px !important;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* ── Modal ───────────────────────────────────────────────────────────────── */
@@ -706,8 +734,12 @@ onMounted(loadSlides)
 .req { color: #ef4444; }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .banner-modal { max-width: 100%; border-radius: 12px; }
-  .banner-card-actions { gap: 0.25rem; }
+  .banner-row { flex-wrap: wrap; gap: 0.6rem; }
+  .banner-row-index { display: none; }
+  .banner-thumb-wrap { width: 100%; aspect-ratio: 16 / 9; }
+  .banner-row-actions { width: 100%; justify-content: flex-end; border-top: 1px solid var(--sidebar-border); padding-top: 0.5rem; }
+  .banner-reorder { flex-direction: row; }
 }
 </style>
