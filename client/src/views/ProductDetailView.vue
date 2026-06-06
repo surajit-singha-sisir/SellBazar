@@ -597,8 +597,7 @@ async function onReviewImagePick(e: Event) {
   uploadingImage.value = true
   reviewError.value = ''
   try {
-    // Compress via canvas then upload directly to ImgBB (same key as admin)
-    const IMGBB_KEY = 'f3c12080238055cf04e5a657a47ee058'
+    // Compress via canvas (max 1600px, webp 0.82)
     const blob = await new Promise<Blob>((resolve, reject) => {
       const url = URL.createObjectURL(file)
       const img = new Image()
@@ -620,14 +619,22 @@ async function onReviewImagePick(e: Event) {
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')) }
       img.src = url
     })
+    // Convert to base64 and upload via server proxy (keeps API key server-side)
+    const base64 = await new Promise<string>((res, rej) => {
+      const reader = new FileReader()
+      reader.onload = () => res((reader.result as string).split(',')[1])
+      reader.onerror = () => rej(new Error('Failed to read file'))
+      reader.readAsDataURL(blob)
+    })
     const baseName = file.name.replace(/\.[^.]+$/, '')
-    const form = new FormData()
-    form.append('image', new File([blob], `${baseName}.webp`, { type: blob.type }))
-    form.append('name', baseName)
-    const res  = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, { method: 'POST', body: form })
+    const res  = await fetch('/api/upload/imgbb', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64, name: baseName }),
+    })
     const data = await res.json()
-    if (!res.ok || !data.success) throw new Error(data?.error?.message ?? 'Upload failed')
-    newReview.images.push(data.data.display_url as string)
+    if (!res.ok || !data.url) throw new Error(data?.error ?? 'Upload failed')
+    newReview.images.push(data.url as string)
   } catch (err: any) {
     reviewError.value = err.message ?? 'Image upload failed'
   } finally {

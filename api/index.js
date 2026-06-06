@@ -717,6 +717,17 @@ app.get('/api/orders/by-id/:id', async (req, res) => {
   res.json(o)
 })
 
+// Public: get orders by customer email (for profile "My Reviews" pending list)
+app.get('/api/orders/by-email', async (req, res) => {
+  const email = req.query.email
+  if (!email) return res.status(400).json({ error: 'email query param required' })
+  const orders = await getAllOrders()
+  const data = orders
+    .filter(o => o.customer?.email?.toLowerCase() === email.toLowerCase())
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  res.json({ data, total: data.length })
+})
+
 app.get('/api/orders', requireAdmin, async (req, res) => {
   let r = await getAllOrders()
   if (req.query.status && req.query.status !== 'all') r = r.filter(o => o.status === req.query.status)
