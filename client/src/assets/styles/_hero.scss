@@ -102,6 +102,7 @@
   flex-direction: column;
   position: relative;
   z-index: 20;
+  // No max-height / overflow-y here — flyout must escape freely
 
   @media (max-width: 767px) {
     width: 100%;
@@ -125,12 +126,7 @@
   margin: 0;
   padding: 0.3rem 0;
   flex: 1;
-  overflow-y: auto;
-  overflow-x: visible;
-  max-height: 420px;
-
-  &::-webkit-scrollbar { width: 3px; }
-  &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 99px; }
+  overflow: visible;
 }
 
 .hero-cat-item {
@@ -315,7 +311,7 @@
   }
 
   i { font-size: 0.7rem; flex-shrink: 0; width: 14px; text-align: center; }
-  span { truncate; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 // Subpanel transition
