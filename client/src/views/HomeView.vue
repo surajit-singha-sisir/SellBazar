@@ -86,8 +86,6 @@
                 </div>
               </div>
               <div class="swiper-pagination hero-swiper-pagination"></div>
-              <div class="swiper-button-prev hero-swiper-prev"></div>
-              <div class="swiper-button-next hero-swiper-next"></div>
             </div>
 
           </div>
