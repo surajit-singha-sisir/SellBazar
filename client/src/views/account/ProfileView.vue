@@ -297,49 +297,181 @@
           <div v-else-if="activeTab === 'reviews'" key="reviews" class="panel">
             <div class="panel-header">
               <h2><i class="fa-sharp-duotone fa-solid fa-star"></i> My Reviews</h2>
-              <p>Products you've reviewed after purchase</p>
+              <p>Write reviews for purchased products. They'll appear on the product page.</p>
             </div>
             <div class="panel-body">
+
+              <!-- Loading -->
               <div v-if="reviewsLoading" class="reviews-loading">
                 <i class="fa-sharp fa-solid fa-spinner fa-spin text-2xl text-orange-500 block mb-2"></i>
                 Loading reviews…
               </div>
-              <div v-else-if="userReviews.length === 0" class="reviews-empty">
-                <i class="fa-sharp fa-regular fa-star text-4xl opacity-20 block mb-3"></i>
-                <p class="font-medium text-[var(--color-text-muted)]">No reviews yet</p>
-                <p class="text-sm text-[var(--color-text-muted)]">Purchase and receive products to write reviews.</p>
-              </div>
-              <div v-else class="user-reviews-list">
-                <div v-for="review in userReviews" :key="review.id" class="user-review-card">
-                  <div class="user-review-top">
-                    <RouterLink :to="`/products/${review.productSlug}`" class="user-review-product">
-                      <i class="fa-sharp fa-regular fa-box text-orange-400"></i>
-                      {{ review.productName || review.productSlug }}
-                    </RouterLink>
-                    <div class="review-stars-sm">
-                      <i v-for="n in 5" :key="n"
-                        :class="n <= review.rating ? 'fa-sharp fa-solid fa-star' : 'fa-sharp fa-regular fa-star'"
-                        class="text-xs text-amber-400"></i>
+
+              <template v-else>
+                <!-- ── Pending reviews (products eligible to review) ── -->
+                <div v-if="pendingReviewProducts.length > 0" class="pending-section">
+                  <h3 class="pending-title">
+                    <i class="fa-sharp fa-regular fa-pen-to-square text-orange-500"></i>
+                    Awaiting Your Review
+                    <span class="pending-badge">{{ pendingReviewProducts.length }}</span>
+                  </h3>
+                  <div class="pending-list">
+                    <div v-for="item in pendingReviewProducts" :key="item.productSlug" class="pending-card">
+                      <div class="pending-card-info">
+                        <RouterLink :to="`/products/${item.productSlug}`" class="pending-product-name">
+                          <i class="fa-sharp fa-regular fa-box text-orange-400"></i>
+                          {{ item.productName }}
+                        </RouterLink>
+                        <span class="pending-order-note">
+                          <i class="fa-sharp fa-solid fa-circle-check text-green-500 text-xs"></i>
+                          Delivered · Order {{ item.orderId }}
+                        </span>
+                      </div>
+                      <button class="btn-primary text-sm px-4 py-2" @click="openReviewForm(item)">
+                        <i class="fa-sharp fa-regular fa-star"></i> Write Review
+                      </button>
                     </div>
-                    <span class="user-review-date">{{ formatReviewDate(review.createdAt) }}</span>
-                  </div>
-                  <p v-if="review.title" class="user-review-title">{{ review.title }}</p>
-                  <p class="user-review-body">{{ review.body }}</p>
-                  <div v-if="review.images?.length" class="user-review-images">
-                    <img v-for="(img, i) in review.images" :key="i" :src="img"
-                      class="w-14 h-14 object-cover rounded-lg border border-[var(--color-border)]" />
-                  </div>
-                  <div class="user-review-meta">
-                    <span class="review-status" :class="review.status">
-                      <i :class="review.status === 'approved' ? 'fa-sharp fa-solid fa-circle-check' : 'fa-sharp fa-regular fa-clock'"></i>
-                      {{ review.status }}
-                    </span>
-                    <span v-if="review.helpful > 0" class="text-xs text-[var(--color-text-muted)]">
-                      <i class="fa-sharp fa-regular fa-thumbs-up"></i> {{ review.helpful }} found helpful
-                    </span>
                   </div>
                 </div>
-              </div>
+
+                <!-- ── Review form modal ── -->
+                <Transition name="review-form">
+                  <div v-if="activeReviewForm" class="review-form-card">
+                    <div class="review-form-header">
+                      <div>
+                        <p class="review-form-label">Reviewing</p>
+                        <h4 class="review-form-product">{{ activeReviewForm.productName }}</h4>
+                      </div>
+                      <button class="review-form-close" @click="closeReviewForm">
+                        <i class="fa-sharp fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+
+                    <!-- Star picker -->
+                    <div class="rf-field">
+                      <label>Your Rating <span class="req">*</span></label>
+                      <div class="star-picker">
+                        <button v-for="n in 5" :key="n"
+                          @click="newReview.rating = n"
+                          @mouseover="hoverRating = n"
+                          @mouseleave="hoverRating = 0"
+                          class="star-btn">
+                          <i :class="n <= (hoverRating || newReview.rating)
+                            ? 'fa-sharp fa-solid fa-star text-amber-400'
+                            : 'fa-sharp fa-regular fa-star text-[var(--color-border)]'"></i>
+                        </button>
+                        <span class="rating-label">{{ ratingLabel(newReview.rating) }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Title -->
+                    <div class="rf-field">
+                      <label>Review Title</label>
+                      <input v-model="newReview.title" class="input-field" placeholder="Summarise your experience…" maxlength="100" />
+                    </div>
+
+                    <!-- Body -->
+                    <div class="rf-field">
+                      <label>Your Review <span class="req">*</span></label>
+                      <textarea v-model="newReview.body" class="input-field resize-none" rows="4"
+                        placeholder="Share details about quality, delivery, packaging…" maxlength="1000"></textarea>
+                      <div class="char-count">{{ newReview.body.length }}/1000</div>
+                    </div>
+
+                    <!-- Image upload -->
+                    <div class="rf-field">
+                      <label>
+                        Photos
+                        <span class="label-hint">(up to 5)</span>
+                      </label>
+                      <div class="image-upload-row">
+                        <div v-for="(img, i) in newReview.images" :key="i" class="review-img-thumb group">
+                          <img :src="img" class="w-full h-full object-cover" />
+                          <button @click="removeReviewImage(i)"
+                            class="review-img-remove opacity-0 group-hover:opacity-100">
+                            <i class="fa-sharp fa-solid fa-xmark text-xs"></i>
+                          </button>
+                        </div>
+                        <label v-if="newReview.images.length < 5"
+                          class="review-img-add"
+                          :class="{ 'opacity-50 cursor-not-allowed': uploadingImage }">
+                          <i v-if="uploadingImage" class="fa-sharp fa-solid fa-spinner fa-spin text-orange-500"></i>
+                          <template v-else>
+                            <i class="fa-sharp fa-regular fa-camera text-lg text-[var(--color-text-muted)]"></i>
+                            <span class="text-[9px] text-[var(--color-text-muted)] mt-0.5">{{ uploadingImage ? 'Uploading…' : 'Add Photo' }}</span>
+                          </template>
+                          <input type="file" accept="image/*" class="hidden" :disabled="uploadingImage" @change="onReviewImagePick" />
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="rf-actions">
+                      <button
+                        @click="submitReview"
+                        :disabled="submittingReview || !newReview.rating || !newReview.body.trim()"
+                        class="btn-primary px-6 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i :class="submittingReview ? 'fa-sharp fa-solid fa-spinner fa-spin' : 'fa-sharp fa-regular fa-paper-plane-top'"></i>
+                        {{ submittingReview ? 'Submitting…' : 'Submit Review' }}
+                      </button>
+                      <button @click="closeReviewForm" class="btn-ghost text-sm">Cancel</button>
+                      <span v-if="reviewFormError" class="review-form-error">
+                        <i class="fa-sharp fa-regular fa-circle-exclamation"></i> {{ reviewFormError }}
+                      </span>
+                    </div>
+                  </div>
+                </Transition>
+
+                <!-- ── Submitted reviews ── -->
+                <div v-if="userReviews.length === 0 && pendingReviewProducts.length === 0" class="reviews-empty">
+                  <i class="fa-sharp fa-regular fa-star text-4xl opacity-20 block mb-3"></i>
+                  <p class="font-medium text-[var(--color-text-muted)]">No reviews yet</p>
+                  <p class="text-sm text-[var(--color-text-muted)]">Purchase and receive products to write reviews.</p>
+                </div>
+
+                <div v-if="userReviews.length > 0">
+                  <h3 class="submitted-title">
+                    <i class="fa-sharp fa-solid fa-star text-amber-400"></i>
+                    Your Reviews
+                    <span class="pending-badge">{{ userReviews.length }}</span>
+                  </h3>
+                  <div class="user-reviews-list">
+                    <div v-for="review in userReviews" :key="review.id" class="user-review-card">
+                      <div class="user-review-top">
+                        <RouterLink :to="`/products/${review.productSlug}`" class="user-review-product">
+                          <i class="fa-sharp fa-regular fa-box text-orange-400"></i>
+                          {{ review.productName || review.productSlug }}
+                        </RouterLink>
+                        <div class="review-stars-sm">
+                          <i v-for="n in 5" :key="n"
+                            :class="n <= review.rating ? 'fa-sharp fa-solid fa-star' : 'fa-sharp fa-regular fa-star'"
+                            class="text-xs text-amber-400"></i>
+                        </div>
+                        <span class="user-review-date">{{ formatReviewDate(review.createdAt) }}</span>
+                      </div>
+                      <p v-if="review.title" class="user-review-title">{{ review.title }}</p>
+                      <p class="user-review-body">{{ review.body }}</p>
+                      <div v-if="review.images?.length" class="user-review-images">
+                        <img v-for="(img, i) in review.images" :key="i" :src="img"
+                          class="w-14 h-14 object-cover rounded-lg border border-[var(--color-border)] cursor-pointer hover:opacity-80 transition"
+                          @click="openReviewLightbox(review.images!, i)" />
+                      </div>
+                      <div class="user-review-meta">
+                        <span class="review-status" :class="review.status">
+                          <i :class="review.status === 'approved' ? 'fa-sharp fa-solid fa-circle-check' : 'fa-sharp fa-regular fa-clock'"></i>
+                          {{ review.status }}
+                        </span>
+                        <span v-if="review.helpful > 0" class="text-xs text-[var(--color-text-muted)]">
+                          <i class="fa-sharp fa-regular fa-thumbs-up"></i> {{ review.helpful }} found helpful
+                        </span>
+                        <RouterLink :to="`/products/${review.productSlug}#reviews`" class="view-on-product">
+                          <i class="fa-sharp fa-regular fa-arrow-up-right-from-square"></i> View on product
+                        </RouterLink>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -389,581 +521,29 @@
       </div>
     </template>
   </div>
+
+  <!-- ── Review image lightbox ── -->
+  <Teleport to="body">
+    <Transition name="lb">
+      <div v-if="reviewLightbox.open"
+        class="fixed inset-0 z-[210] flex items-center justify-center bg-black/92 backdrop-blur-sm"
+        @click.self="reviewLightbox.open = false">
+        <button @click="reviewLightbox.open = false"
+          class="absolute top-4 right-4 text-white/80 hover:text-white w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition z-10">
+          <i class="fa-sharp fa-solid fa-xmark text-lg"></i>
+        </button>
+        <img v-if="reviewLightbox.images[reviewLightbox.index]"
+          :src="reviewLightbox.images[reviewLightbox.index]"
+          class="max-h-[85vh] max-w-[90vw] object-contain rounded-xl" />
+        <button v-if="reviewLightbox.index > 0" @click="reviewLightbox.index--"
+          class="absolute left-3 text-white/80 hover:text-white w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition z-10">
+          <i class="fa-sharp fa-solid fa-chevron-left"></i>
+        </button>
+        <button v-if="reviewLightbox.index < reviewLightbox.images.length - 1" @click="reviewLightbox.index++"
+          class="absolute right-3 text-white/80 hover:text-white w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition z-10">
+          <i class="fa-sharp fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
-
-<script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
-import { useAuthStore } from '@/stores/useAuthStore'
-import type { Address, PhoneEntry, User, Review } from '@/types'
-
-const authStore = useAuthStore()
-
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-const tabs = [
-  { id: 'personal',  label: 'Personal Info',  icon: 'fa-sharp-duotone fa-solid fa-id-card'          },
-  { id: 'phones',    label: 'Phone Numbers',  icon: 'fa-sharp-duotone fa-solid fa-mobile-screen'     },
-  { id: 'addresses', label: 'Addresses',      icon: 'fa-sharp-duotone fa-solid fa-map-location-dot'  },
-  { id: 'reviews',   label: 'My Reviews',     icon: 'fa-sharp-duotone fa-solid fa-star'              },
-  { id: 'security',  label: 'Security',       icon: 'fa-sharp-duotone fa-solid fa-shield-keyhole'    },
-]
-const activeTab = ref('personal')
-
-const user = computed(() => authStore.user!)
-
-const primaryPhone = computed(() => {
-  const ph = user.value?.phones?.find(p => p.isPrimary)
-  return ph ? `+880 ${ph.number}` : user.value?.phone ?? '—'
-})
-
-// ── Personal form ─────────────────────────────────────────────────────────────
-const form = reactive({
-  name:        user.value?.name        ?? '',
-  email:       user.value?.email       ?? '',
-  gender:      (user.value?.gender     ?? '') as User['gender'],
-  dateOfBirth: user.value?.dateOfBirth ?? '',
-  division:    user.value?.division    ?? '',
-})
-
-// ── Phone numbers ─────────────────────────────────────────────────────────────
-function uid() { return Math.random().toString(36).slice(2, 9) }
-
-function initPhones(): PhoneEntry[] {
-  if (user.value?.phones?.length) return user.value.phones.map(p => ({ ...p }))
-  return [{ id: uid(), number: user.value?.phone ?? '', label: 'Primary', isPrimary: true }]
-}
-const phones = ref<PhoneEntry[]>(initPhones())
-
-function addPhone() {
-  if (phones.value.length >= 3) return
-  phones.value.push({ id: uid(), number: '', label: 'Secondary', isPrimary: false })
-}
-function removePhone(idx: number) {
-  const wasPrimary = phones.value[idx].isPrimary
-  phones.value.splice(idx, 1)
-  if (wasPrimary && phones.value.length) phones.value[0].isPrimary = true
-}
-function setPrimaryPhone(idx: number) {
-  phones.value.forEach((p, i) => { p.isPrimary = i === idx })
-}
-
-// ── Addresses ─────────────────────────────────────────────────────────────────
-function initAddresses(): Address[] {
-  if (user.value?.addresses?.length) return user.value.addresses.map(a => ({ ...a }))
-  return [{
-    id: uid(), label: 'Home', recipientName: user.value?.name ?? '',
-    phone: user.value?.phone ?? '', division: user.value?.division ?? '',
-    district: '', upazila: '', addressLine: '', postalCode: '', isDefault: true,
-  }]
-}
-const addresses = ref<Address[]>(initAddresses())
-
-function addAddress() {
-  if (addresses.value.length >= 2) return
-  addresses.value.push({
-    id: uid(), label: 'Home', recipientName: '', phone: '',
-    division: '', district: '', upazila: '', addressLine: '', postalCode: '', isDefault: false,
-  })
-}
-function removeAddr(idx: number) {
-  const wasDef = addresses.value[idx].isDefault
-  addresses.value.splice(idx, 1)
-  if (wasDef && addresses.value.length) addresses.value[0].isDefault = true
-}
-function setDefaultAddr(idx: number) {
-  addresses.value.forEach((a, i) => { a.isDefault = i === idx })
-}
-function addrTypeIcon(type: string) {
-  return type === 'Home' ? 'fa-sharp fa-regular fa-house'
-       : type === 'Work' ? 'fa-sharp fa-regular fa-building'
-       : 'fa-sharp fa-regular fa-location-dot'
-}
-
-// ── Geo data ──────────────────────────────────────────────────────────────────
-const divisions = ['Dhaka','Chittagong','Rajshahi','Khulna','Barisal','Sylhet','Rangpur','Mymensingh']
-
-const districtMap: Record<string, string[]> = {
-  Dhaka:      ['Dhaka','Gazipur','Narayanganj','Narsingdi','Manikganj','Munshiganj','Faridpur','Gopalganj','Madaripur','Shariatpur','Rajbari','Kishoreganj','Tangail'],
-  Chittagong: ['Chittagong',"Cox's Bazar",'Comilla','Feni','Brahmanbaria','Rangamati','Noakhali','Chandpur','Lakshmipur','Bandarban','Khagrachhari'],
-  Rajshahi:   ['Rajshahi','Bogra','Pabna','Natore','Sirajganj','Joypurhat','Naogaon','Chapainawabganj'],
-  Khulna:     ['Khulna','Bagerhat','Satkhira','Jessore','Narail','Magura','Jhenaidah','Kushtia','Chuadanga','Meherpur'],
-  Barisal:    ['Barisal','Bhola','Patuakhali','Pirojpur','Barguna','Jhalokathi'],
-  Sylhet:     ['Sylhet','Moulvibazar','Habiganj','Sunamganj'],
-  Rangpur:    ['Rangpur','Dinajpur','Gaibandha','Kurigram','Lalmonirhat','Nilphamari','Panchagarh','Thakurgaon'],
-  Mymensingh: ['Mymensingh','Jamalpur','Netrokona','Sherpur'],
-}
-function getDistricts(div: string) { return districtMap[div] ?? [] }
-
-// ── Save ──────────────────────────────────────────────────────────────────────
-const saving = reactive({ personal: false, phones: false, addresses: false })
-const saved  = reactive({ personal: false, phones: false, addresses: false })
-
-function flash(k: keyof typeof saved) {
-  saved[k] = true; setTimeout(() => { saved[k] = false }, 2500)
-}
-
-async function savePersonal() {
-  saving.personal = true
-  await new Promise(r => setTimeout(r, 600))
-  authStore.login({ ...user.value, ...form })
-  saving.personal = false; flash('personal')
-}
-async function savePhones() {
-  saving.phones = true
-  await new Promise(r => setTimeout(r, 600))
-  if (!phones.value.some(p => p.isPrimary) && phones.value.length) phones.value[0].isPrimary = true
-  authStore.login({ ...user.value, phones: phones.value.map(p => ({ ...p })) })
-  saving.phones = false; flash('phones')
-}
-async function saveAddresses() {
-  saving.addresses = true
-  await new Promise(r => setTimeout(r, 600))
-  authStore.login({ ...user.value, addresses: addresses.value.map(a => ({ ...a })) })
-  saving.addresses = false; flash('addresses')
-}
-async function handleLogout() { await authStore.logout() }
-
-// ── My Reviews ────────────────────────────────────────────────────────────────
-const userReviews   = ref<Review[]>([])
-const reviewsLoading = ref(false)
-
-function formatReviewDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-BD', { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
-async function loadUserReviews() {
-  const email = authStore.user?.email
-  if (!email) return
-  reviewsLoading.value = true
-  try {
-    const res = await fetch(`/api/user/reviews?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
-    if (res.ok) {
-      const data = await res.json()
-      userReviews.value = data.data ?? []
-    }
-  } catch {}
-  finally { reviewsLoading.value = false }
-}
-
-// Lazy-load reviews when the tab is activated
-watch(activeTab, (tab) => {
-  if (tab === 'reviews' && userReviews.value.length === 0) loadUserReviews()
-})
-</script>
-
-<style scoped lang="scss">
-/* ── Page shell ───────────────────────────────────────────────────────────── */
-.profile-page {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: 28px 16px 64px;
-}
-
-/* ── Not logged in ────────────────────────────────────────────────────────── */
-.nli-wrap {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 16px; padding: 80px 24px; text-align: center;
-
-  .nli-icon {
-    width: 72px; height: 72px; border-radius: 20px;
-    background: rgba(249,115,22,.12);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 30px; color: var(--color-brand);
-  }
-  h2 { font-size: 1.4rem; font-weight: 700; }
-  p  { color: var(--color-text-muted); max-width: 340px; }
-}
-
-/* ── Hero ────────────────────────────────────────────────────────────────── */
-.profile-hero {
-  position: relative;
-  border-radius: 20px;
-  overflow: hidden;
-  margin-bottom: 24px;
-  border: 1px solid var(--color-border);
-}
-.hero-bg {
-  position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(249,115,22,.18) 0%, rgba(217,70,239,.10) 60%, transparent 100%);
-  background-color: var(--color-surface);
-}
-.hero-inner {
-  position: relative;
-  display: flex; align-items: center; gap: 20px;
-  padding: 28px 28px;
-  flex-wrap: wrap;
-}
-.avatar-wrap { position: relative; flex-shrink: 0; }
-.avatar {
-  width: 72px; height: 72px; border-radius: 20px;
-  background: linear-gradient(135deg, #f97316, #c026d3);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 800; color: white;
-  box-shadow: 0 8px 24px rgba(249,115,22,.35);
-}
-.avatar-verified {
-  position: absolute; bottom: -4px; right: -4px;
-  width: 22px; height: 22px; border-radius: 50%;
-  background: #22c55e; color: white;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; border: 2px solid var(--color-bg);
-}
-.hero-info { flex: 1; min-width: 0;
-  h1 { font-size: 1.35rem; font-weight: 800; margin: 0 0 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
-  p  { font-size: .875rem; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-}
-.hero-badge { margin-left: auto; }
-.verified-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px; border-radius: 99px;
-  background: rgba(34,197,94,.12); color: #22c55e;
-  font-size: .75rem; font-weight: 600; border: 1px solid rgba(34,197,94,.25);
-  white-space: nowrap;
-}
-
-/* ── Tab nav ──────────────────────────────────────────────────────────────── */
-.tab-nav {
-  display: flex; gap: 4px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  padding: 5px;
-  margin-bottom: 20px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
-}
-.tab-btn {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 16px; border-radius: 10px;
-  font-size: .835rem; font-weight: 500;
-  color: var(--color-text-muted);
-  background: transparent; border: none; cursor: pointer;
-  transition: all .18s; white-space: nowrap;
-
-  i { font-size: 14px; }
-
-  &:hover { background: var(--color-surface-2); color: var(--color-text); }
-  &.active {
-    background: var(--color-brand);
-    color: white;
-    box-shadow: 0 4px 12px rgba(249,115,22,.35);
-  }
-}
-
-/* ── Panels ──────────────────────────────────────────────────────────────── */
-.tab-panels { min-height: 420px; }
-
-.panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 18px;
-  overflow: hidden;
-}
-.panel-header {
-  padding: 22px 24px 18px;
-  border-bottom: 1px solid var(--color-border);
-  h2 {
-    font-size: 1.05rem; font-weight: 700;
-    display: flex; align-items: center; gap: 9px; margin: 0 0 4px;
-    i { color: var(--color-brand); font-size: 17px; }
-  }
-  p { font-size: .82rem; color: var(--color-text-muted); margin: 0; }
-}
-.panel-footer {
-  padding: 20px 24px;
-  border-top: 1px solid var(--color-border);
-  display: flex; align-items: center; gap: 14px;
-  background: var(--color-surface);
-}
-.save-toast {
-  display: inline-flex; align-items: center; gap: 6px;
-  color: #22c55e; font-size: .85rem; font-weight: 600;
-  i { font-size: 14px; }
-}
-
-/* ── Form grid ────────────────────────────────────────────────────────────── */
-.form-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
-  padding: 24px;
-}
-.field { display: flex; flex-direction: column; gap: 7px;
-  label { font-size: .78rem; font-weight: 600; color: var(--color-text-muted); letter-spacing: .02em; }
-  &.full { grid-column: 1 / -1; }
-}
-.req { color: var(--color-brand); margin-left: 2px; }
-
-/* Input with icon */
-.iw {
-  position: relative;
-  > i {
-    position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
-    font-size: 13px; color: var(--color-text-muted); pointer-events: none; z-index: 1;
-  }
-  .input-field { padding-left: 36px; }
-}
-
-/* ── Entries list (phones / addresses) ───────────────────────────────────── */
-.entries-list {
-  padding: 20px 24px;
-  display: flex; flex-direction: column; gap: 14px;
-}
-.entry-card {
-  border: 1.5px solid var(--color-border);
-  border-radius: 14px;
-  overflow: hidden;
-  transition: border-color .2s;
-  &.is-primary { border-color: rgba(249,115,22,.45); }
-}
-.entry-top {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px 0;
-  gap: 10px; flex-wrap: wrap;
-}
-
-/* Label select */
-.label-select {
-  padding: 5px 10px; border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-2);
-  color: var(--color-text); font-size: .8rem; font-weight: 500;
-  cursor: pointer;
-  &:focus { outline: none; border-color: var(--color-brand); }
-}
-
-.primary-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 10px; border-radius: 99px;
-  background: rgba(249,115,22,.12); color: var(--color-brand);
-  font-size: .72rem; font-weight: 700;
-  border: 1px solid rgba(249,115,22,.25);
-  white-space: nowrap;
-}
-
-/* Phone row */
-.phone-row {
-  display: flex; align-items: center;
-  padding: 10px 16px 0;
-}
-.bd-prefix {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border); border-right: none;
-  border-radius: 12px 0 0 12px;
-  padding: 0 12px; height: 44px;
-  display: flex; align-items: center;
-  font-size: .82rem; font-weight: 600; color: var(--color-text-muted);
-  white-space: nowrap; flex-shrink: 0;
-}
-.phone-input {
-  border-radius: 0 12px 12px 0 !important;
-  border-left: none !important;
-  padding-left: 12px !important;
-}
-
-/* Entry actions */
-.entry-actions {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 16px 14px;
-}
-.act-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px; border-radius: 8px;
-  font-size: .78rem; font-weight: 500; cursor: pointer;
-  border: 1px solid transparent; transition: all .15s;
-  &.star {
-    background: rgba(249,115,22,.08);
-    border-color: rgba(249,115,22,.2);
-    color: var(--color-brand);
-    &:hover { background: rgba(249,115,22,.15); }
-  }
-  &.del {
-    background: rgba(239,68,68,.07);
-    border-color: rgba(239,68,68,.2);
-    color: #ef4444;
-    &:hover { background: rgba(239,68,68,.14); }
-  }
-}
-
-/* Add entry button */
-.add-entry-btn {
-  display: flex; align-items: center; gap: 10px;
-  padding: 13px 18px; border-radius: 14px;
-  border: 1.5px dashed var(--color-border);
-  background: transparent; color: var(--color-text-muted);
-  font-size: .85rem; font-weight: 500; cursor: pointer;
-  width: 100%; transition: all .18s;
-  &:hover { border-color: var(--color-brand); color: var(--color-brand); background: rgba(249,115,22,.04); }
-  i { font-size: 14px; }
-  .add-hint { font-size: .75rem; opacity: .6; margin-left: auto; }
-}
-.limit-note {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 16px; border-radius: 10px;
-  background: rgba(249,115,22,.07); color: var(--color-text-muted);
-  font-size: .82rem; border: 1px solid rgba(249,115,22,.15);
-}
-
-/* Address-card extras */
-.addr-card { }
-.addr-form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  padding: 16px !important;
-  .field.full { grid-column: 1 / -1; }
-}
-.type-pills {
-  display: flex; gap: 6px; flex-wrap: wrap;
-}
-.type-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px; border-radius: 99px;
-  font-size: .78rem; font-weight: 500;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-2);
-  color: var(--color-text-muted);
-  cursor: pointer; transition: all .15s;
-  &.active {
-    background: rgba(249,115,22,.12); border-color: rgba(249,115,22,.35);
-    color: var(--color-brand);
-  }
-}
-.entry-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.addr-form-grid { padding: 16px 0 0; border-top: 1px solid var(--color-border); margin: 12px 0 0; }
-
-/* ── Security ────────────────────────────────────────────────────────────── */
-.security-items { padding: 8px 0; }
-.security-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 24px; gap: 16px; flex-wrap: wrap;
-  border-bottom: 1px solid var(--color-border);
-  &:last-child { border-bottom: none; }
-}
-.sec-info {
-  display: flex; align-items: center; gap: 14px;
-  .sec-icon {
-    width: 42px; height: 42px; border-radius: 11px;
-    background: rgba(249,115,22,.1);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; color: var(--color-brand); flex-shrink: 0;
-    &.text-green-500 { background: rgba(34,197,94,.1); color: #22c55e; }
-  }
-  strong { font-size: .9rem; font-weight: 600; display: block; }
-  p { font-size: .78rem; color: var(--color-text-muted); margin: 2px 0 0; }
-}
-.sec-action { font-size: .82rem !important; padding: 7px 14px !important; opacity: .5; }
-
-.danger-zone {
-  margin: 0 24px 24px;
-  padding: 18px 20px;
-  border-radius: 12px;
-  border: 1.5px solid rgba(239,68,68,.25);
-  background: rgba(239,68,68,.04);
-  .dz-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
-    i { color: #ef4444; } h3 { font-size: .9rem; font-weight: 700; color: #ef4444; margin: 0; }
-  }
-  p { font-size: .82rem; color: var(--color-text-muted); margin: 0 0 14px; }
-}
-.btn-danger {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 9px 20px; border-radius: 10px;
-  background: rgba(239,68,68,.1); color: #ef4444;
-  border: 1.5px solid rgba(239,68,68,.25);
-  font-size: .85rem; font-weight: 600; cursor: pointer;
-  transition: all .15s;
-  &:hover { background: #ef4444; color: white; }
-}
-
-/* ── Transitions ─────────────────────────────────────────────────────────── */
-.tab-slide-enter-active, .tab-slide-leave-active { transition: opacity .18s ease, transform .18s ease; }
-.tab-slide-enter-from { opacity: 0; transform: translateY(8px); }
-.tab-slide-leave-to   { opacity: 0; transform: translateY(-8px); }
-
-.toast-enter-active, .toast-leave-active { transition: opacity .25s ease, transform .25s ease; }
-.toast-enter-from { opacity: 0; transform: translateX(8px); }
-.toast-leave-to   { opacity: 0; transform: translateX(8px); }
-
-.list-item-enter-active { transition: all .25s ease; }
-.list-item-leave-active { transition: all .2s ease; }
-.list-item-enter-from   { opacity: 0; transform: translateY(-10px); }
-.list-item-leave-to     { opacity: 0; transform: translateY(10px); }
-
-/* ── Responsive ──────────────────────────────────────────────────────────── */
-@media (max-width: 560px) {
-  .profile-page { padding: 16px 12px 48px; }
-  .hero-inner   { padding: 20px 16px; gap: 14px; }
-  .avatar       { width: 56px; height: 56px; font-size: 20px; }
-  .hero-badge   { width: 100%; }
-  .form-grid    { grid-template-columns: 1fr; padding: 16px; }
-  .field.full   { grid-column: 1; }
-  .tab-btn span { display: none; }
-  .tab-btn      { padding: 9px 13px; }
-  .entries-list { padding: 14px 12px; }
-  .entry-top    { padding: 10px 12px 0; }
-  .phone-row    { padding: 8px 12px 0; }
-  .entry-actions { padding: 8px 12px 12px; }
-  .addr-form-grid { grid-template-columns: 1fr !important; padding: 12px !important; }
-  .security-row { padding: 14px 16px; }
-  .danger-zone  { margin: 0 16px 16px; }
-  .panel-footer { padding: 14px 16px; }
-  .panel-header { padding: 16px 16px 12px; }
-}
-
-/* ── My Reviews panel ────────────────────────────────────────────────────── */
-.panel-body { padding: 20px 24px; }
-
-.reviews-loading, .reviews-empty {
-  text-align: center; padding: 40px 20px;
-  color: var(--color-text-muted);
-}
-
-.user-reviews-list { display: flex; flex-direction: column; gap: 14px; }
-
-.user-review-card {
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  padding: 16px;
-  background: var(--color-surface-2);
-  transition: border-color .2s;
-  &:hover { border-color: rgba(249,115,22,.3); }
-}
-.user-review-top {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;
-}
-.user-review-product {
-  font-weight: 600; font-size: .85rem;
-  color: var(--color-text); display: flex; align-items: center; gap: 6px;
-  text-decoration: none;
-  &:hover { color: var(--color-brand); }
-}
-.user-review-date {
-  font-size: .75rem; color: var(--color-text-muted);
-  margin-left: auto;
-}
-.review-stars-sm { display: flex; gap: 2px; }
-.user-review-title { font-weight: 600; font-size: .87rem; margin: 0 0 4px; }
-.user-review-body {
-  font-size: .83rem; color: var(--color-text-muted);
-  line-height: 1.6; white-space: pre-line; margin: 0 0 10px;
-}
-.user-review-images { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.user-review-meta {
-  display: flex; align-items: center; gap: 10px;
-}
-.review-status {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 99px;
-  &.approved {
-    background: rgba(34,197,94,.1); color: #22c55e;
-    border: 1px solid rgba(34,197,94,.2);
-  }
-  &.pending {
-    background: rgba(249,115,22,.1); color: var(--color-brand);
-    border: 1px solid rgba(249,115,22,.2);
-  }
-  &.rejected {
-    background: rgba(239,68,68,.1); color: #ef4444;
-    border: 1px solid rgba(239,68,68,.2);
-  }
-}
-
-</style>
