@@ -16,8 +16,13 @@
       <button @click="fetchOrders" class="btn-ghost mt-4">Retry</button>
     </div>
 
-    <div v-else class="space-y-6">
-      <div v-for="order in orders" :key="order.id" class="card overflow-hidden">
+    <div v-else class="space-y-4">
+      <div
+        v-for="order in orders"
+        :key="order.id"
+        class="card overflow-hidden order-card-clickable"
+        @click="openInvoice(order)"
+      >
 
         <!-- ── Order header ────────────────────────────────────────────── -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 pb-4">
@@ -36,6 +41,9 @@
             <p class="font-bold text-orange-500 text-lg">৳{{ order.total.toLocaleString() }}</p>
             <p class="text-xs text-[var(--color-text-muted)] capitalize">
               <i class="fa-sharp fa-regular fa-credit-card mr-1"></i>{{ order.paymentMethod }}
+            </p>
+            <p class="text-[10px] text-[var(--color-text-muted)] mt-1 opacity-60">
+              <i class="fa-sharp fa-regular fa-file-lines mr-1"></i>Click for invoice
             </p>
           </div>
         </div>
@@ -83,8 +91,8 @@
               <p class="text-xs text-[var(--color-text-muted)]">×{{ item.quantity }} · ৳{{ (item.price * item.quantity).toLocaleString() }}</p>
             </div>
 
-            <!-- Review button (delivered orders only, if productId known) -->
-            <template v-if="order.status === 'delivered' && item.productId">
+            <!-- Review button (shipped or delivered, if productId known) -->
+            <template v-if="(order.status === 'shipped' || order.status === 'delivered') && item.productId">
               <!-- Already reviewed -->
               <span v-if="reviewedKey(order.id, item.productId)"
                 class="shrink-0 inline-flex items-center gap-1.5 text-xs text-green-600 bg-green-500/8 border border-green-500/20 rounded-lg px-2.5 py-1.5 font-medium">
@@ -93,7 +101,7 @@
               <!-- Write review -->
               <button v-else
                 class="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-orange-600 bg-orange-500/8 border border-orange-400/30 rounded-lg px-2.5 py-1.5 hover:bg-orange-500/15 hover:border-orange-500/50 transition"
-                @click="openReviewModal(order, item)">
+                @click.stop="openReviewModal(order, item)">
                 <i class="fa-sharp fa-regular fa-star text-[11px]"></i>
                 Write a Review
               </button>
