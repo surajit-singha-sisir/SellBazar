@@ -13,10 +13,10 @@
   >
     <div class="max-w-7xl mx-auto px-4 sm:px-6">
 
-      <!-- ── Row 1: Logo / Location  ←→  Actions ──────────────────────── -->
+      <!-- ── Row 1: Logo  ←→  Search (on scroll)  ←→  Actions ─────────── -->
       <div class="flex items-center justify-between gap-3 h-14">
 
-        <!-- Left: Logo + Location -->
+        <!-- Left: Logo -->
         <div class="flex items-center gap-3 shrink-0">
           <RouterLink to="/" class="flex items-center gap-2.5 group">
             <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-fuchsia-600 flex items-center justify-center shadow-[0_4px_12px_rgba(249,115,22,0.4)] group-hover:scale-105 transition-transform">
@@ -28,6 +28,73 @@
           </RouterLink>
 
         </div>
+
+        <!-- Center: Search bar — hidden at top, slides in on scroll -->
+        <Transition name="header-search">
+          <div v-show="searchVisible" class="hidden sm:flex flex-1 max-w-xl relative mx-3" ref="searchWrap">
+            <div class="relative flex items-center w-full">
+              <div class="absolute left-0 pl-3 flex items-center gap-2 z-10">
+                <select
+                  v-model="searchCategory"
+                  class="hidden lg:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-2 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
+                >
+                  <option value="">All</option>
+                  <option v-for="cat in productStore.categoryNames.filter(c => c !== 'All')" :key="cat" :value="cat">{{ cat }}</option>
+                </select>
+              </div>
+              <input
+                v-model="searchQ"
+                @keyup.enter="doSearch"
+                @focus="showSuggestions = true"
+                @blur="hideSuggestions"
+                type="text"
+                placeholder="Search products, brands…"
+                class="w-full pl-4 lg:pl-20 pr-12 py-2.5 rounded-xl text-sm input-field"
+              />
+              <button
+                @click="doSearch"
+                class="absolute right-1.5 top-1/2 -translate-y-1/2 btn-primary py-2 px-3 text-xs rounded-lg"
+              >
+                <i class="fa-sharp fa-solid fa-search"></i>
+              </button>
+            </div>
+            <!-- Suggestions dropdown -->
+            <Transition name="fade">
+              <div
+                v-if="showSuggestions && searchQ.length > 1"
+                class="absolute top-full mt-2 w-full card shadow-lg z-50 py-2 animate-slide-in-up max-h-80 overflow-y-auto"
+              >
+                <div
+                  v-for="s in suggestions" :key="s.id"
+                  class="px-3 py-2 hover:bg-[var(--color-surface-2)] cursor-pointer flex items-center gap-3 transition"
+                  @mousedown="selectSuggestion(s.name)"
+                >
+                  <img :src="s.image" :alt="s.name"
+                    class="w-9 h-9 rounded-lg object-cover shrink-0 bg-[var(--color-surface-2)]"
+                    onerror="this.src='https://placehold.co/36x36/f97316/fff?text=?'" />
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium leading-snug truncate">{{ s.name }}</p>
+                    <p class="text-xs text-[var(--color-text-muted)] truncate">{{ s.category }} · {{ s.brand }}</p>
+                  </div>
+                  <span class="text-xs font-bold text-orange-500 shrink-0">৳{{ (s.salePrice ?? s.price).toLocaleString() }}</span>
+                </div>
+                <div v-if="!suggestions.length" class="px-4 py-3 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
+                  <i class="fa-sharp fa-regular fa-magnifying-glass opacity-50"></i>
+                  No results for "{{ searchQ }}"
+                </div>
+                <div v-if="suggestions.length" class="border-t border-[var(--color-border)] mt-1 pt-1">
+                  <button
+                    @mousedown="doSearch"
+                    class="w-full px-4 py-2 text-xs text-orange-500 font-semibold hover:bg-[var(--color-surface-2)] transition flex items-center justify-center gap-2"
+                  >
+                    <i class="fa-sharp fa-regular fa-magnifying-glass"></i>
+                    View all results for "{{ searchQ }}"
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
+        </Transition>
 
         <!-- Right: Wishlist · Cart · Account · Mobile toggle -->
         <div class="flex items-center gap-1.5 shrink-0">
@@ -157,74 +224,6 @@
             {{ cat.label }}
           </RouterLink>
         </nav>
-
-        <!-- Search bar — hidden at top, slides in on scroll -->
-        <Transition name="header-search">
-          <div v-show="searchVisible" class="relative shrink-0 w-64 lg:w-80" ref="searchWrap">
-            <div class="relative flex items-center">
-              <div class="absolute left-0 pl-3 flex items-center gap-2 z-10">
-                <select
-                  v-model="searchCategory"
-                  class="hidden sm:block text-xs font-medium bg-transparent border-r border-[var(--color-border)] pr-2 mr-1 focus:outline-none text-[var(--color-text-2)] cursor-pointer"
-                >
-                  <option value="">All</option>
-                  <option v-for="cat in productStore.categoryNames.filter(c => c !== 'All')" :key="cat" :value="cat">{{ cat }}</option>
-                </select>
-              </div>
-              <input
-                v-model="searchQ"
-                @keyup.enter="doSearch"
-                @focus="showSuggestions = true"
-                @blur="hideSuggestions"
-                type="text"
-                placeholder="Search…"
-                class="w-full pl-4 sm:pl-14 pr-10 py-2 rounded-xl text-xs input-field"
-              />
-              <button
-                @click="doSearch"
-                class="absolute right-1.5 top-1/2 -translate-y-1/2 btn-primary py-1.5 px-2.5 text-xs rounded-lg"
-              >
-                <i class="fa-sharp fa-solid fa-search"></i>
-              </button>
-            </div>
-
-            <!-- Suggestions dropdown -->
-            <Transition name="fade">
-              <div
-                v-if="showSuggestions && searchQ.length > 1"
-                class="absolute top-full mt-2 w-96 card shadow-lg z-50 py-2 animate-slide-in-up max-h-80 overflow-y-auto right-0"
-              >
-                <div
-                  v-for="s in suggestions" :key="s.id"
-                  class="px-3 py-2 hover:bg-[var(--color-surface-2)] cursor-pointer flex items-center gap-3 transition"
-                  @mousedown="selectSuggestion(s.name)"
-                >
-                  <img :src="s.image" :alt="s.name"
-                    class="w-9 h-9 rounded-lg object-cover shrink-0 bg-[var(--color-surface-2)]"
-                    onerror="this.src='https://placehold.co/36x36/f97316/fff?text=?'" />
-                  <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium leading-snug truncate">{{ s.name }}</p>
-                    <p class="text-xs text-[var(--color-text-muted)] truncate">{{ s.category }} · {{ s.brand }}</p>
-                  </div>
-                  <span class="text-xs font-bold text-orange-500 shrink-0">৳{{ (s.salePrice ?? s.price).toLocaleString() }}</span>
-                </div>
-                <div v-if="!suggestions.length" class="px-4 py-3 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
-                  <i class="fa-sharp fa-regular fa-magnifying-glass opacity-50"></i>
-                  No results for "{{ searchQ }}"
-                </div>
-                <div v-if="suggestions.length" class="border-t border-[var(--color-border)] mt-1 pt-1">
-                  <button
-                    @mousedown="doSearch"
-                    class="w-full px-4 py-2 text-xs text-orange-500 font-semibold hover:bg-[var(--color-surface-2)] transition flex items-center justify-center gap-2"
-                  >
-                    <i class="fa-sharp fa-regular fa-magnifying-glass"></i>
-                    View all results for "{{ searchQ }}"
-                  </button>
-                </div>
-              </div>
-            </Transition>
-          </div>
-        </Transition>
 
       </div>
       <!-- end Row 2 -->
