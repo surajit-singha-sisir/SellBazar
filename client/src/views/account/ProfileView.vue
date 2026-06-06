@@ -547,3 +547,327 @@
     </Transition>
   </Teleport>
 </template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, watch } from 'vue'
+import { useAuthStore } from '@/stores/useAuthStore'
+import type { Address, PhoneEntry, User, Review } from '@/types'
+
+const authStore = useAuthStore()
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+const tabs = [
+  { id: 'personal',  label: 'Personal Info',  icon: 'fa-sharp-duotone fa-solid fa-id-card'          },
+  { id: 'phones',    label: 'Phone Numbers',  icon: 'fa-sharp-duotone fa-solid fa-mobile-screen'     },
+  { id: 'addresses', label: 'Addresses',      icon: 'fa-sharp-duotone fa-solid fa-map-location-dot'  },
+  { id: 'reviews',   label: 'My Reviews',     icon: 'fa-sharp-duotone fa-solid fa-star'              },
+  { id: 'security',  label: 'Security',       icon: 'fa-sharp-duotone fa-solid fa-shield-keyhole'    },
+]
+const activeTab = ref('personal')
+
+const user = computed(() => authStore.user!)
+
+const primaryPhone = computed(() => {
+  const ph = user.value?.phones?.find(p => p.isPrimary)
+  return ph ? `+880 ${ph.number}` : user.value?.phone ?? '—'
+})
+
+// ── Personal form ─────────────────────────────────────────────────────────────
+const form = reactive({
+  name:        user.value?.name        ?? '',
+  email:       user.value?.email       ?? '',
+  gender:      (user.value?.gender     ?? '') as User['gender'],
+  dateOfBirth: user.value?.dateOfBirth ?? '',
+  division:    user.value?.division    ?? '',
+})
+
+// ── Phone numbers ─────────────────────────────────────────────────────────────
+function uid() { return Math.random().toString(36).slice(2, 9) }
+
+function initPhones(): PhoneEntry[] {
+  if (user.value?.phones?.length) return user.value.phones.map(p => ({ ...p }))
+  return [{ id: uid(), number: user.value?.phone ?? '', label: 'Primary', isPrimary: true }]
+}
+const phones = ref<PhoneEntry[]>(initPhones())
+
+function addPhone() {
+  if (phones.value.length >= 3) return
+  phones.value.push({ id: uid(), number: '', label: 'Secondary', isPrimary: false })
+}
+function removePhone(idx: number) {
+  const wasPrimary = phones.value[idx].isPrimary
+  phones.value.splice(idx, 1)
+  if (wasPrimary && phones.value.length) phones.value[0].isPrimary = true
+}
+function setPrimaryPhone(idx: number) {
+  phones.value.forEach((p, i) => { p.isPrimary = i === idx })
+}
+
+// ── Addresses ─────────────────────────────────────────────────────────────────
+function initAddresses(): Address[] {
+  if (user.value?.addresses?.length) return user.value.addresses.map(a => ({ ...a }))
+  return [{
+    id: uid(), label: 'Home', recipientName: user.value?.name ?? '',
+    phone: user.value?.phone ?? '', division: user.value?.division ?? '',
+    district: '', upazila: '', addressLine: '', postalCode: '', isDefault: true,
+  }]
+}
+const addresses = ref<Address[]>(initAddresses())
+
+function addAddress() {
+  if (addresses.value.length >= 2) return
+  addresses.value.push({
+    id: uid(), label: 'Home', recipientName: '', phone: '',
+    division: '', district: '', upazila: '', addressLine: '', postalCode: '', isDefault: false,
+  })
+}
+function removeAddr(idx: number) {
+  const wasDef = addresses.value[idx].isDefault
+  addresses.value.splice(idx, 1)
+  if (wasDef && addresses.value.length) addresses.value[0].isDefault = true
+}
+function setDefaultAddr(idx: number) {
+  addresses.value.forEach((a, i) => { a.isDefault = i === idx })
+}
+function addrTypeIcon(type: string) {
+  return type === 'Home' ? 'fa-sharp fa-regular fa-house'
+       : type === 'Work' ? 'fa-sharp fa-regular fa-building'
+       : 'fa-sharp fa-regular fa-location-dot'
+}
+
+// ── Geo data ──────────────────────────────────────────────────────────────────
+const divisions = ['Dhaka','Chittagong','Rajshahi','Khulna','Barisal','Sylhet','Rangpur','Mymensingh']
+
+const districtMap: Record<string, string[]> = {
+  Dhaka:      ['Dhaka','Gazipur','Narayanganj','Narsingdi','Manikganj','Munshiganj','Faridpur','Gopalganj','Madaripur','Shariatpur','Rajbari','Kishoreganj','Tangail'],
+  Chittagong: ['Chittagong',"Cox's Bazar",'Comilla','Feni','Brahmanbaria','Rangamati','Noakhali','Chandpur','Lakshmipur','Bandarban','Khagrachhari'],
+  Rajshahi:   ['Rajshahi','Bogra','Pabna','Natore','Sirajganj','Joypurhat','Naogaon','Chapainawabganj'],
+  Khulna:     ['Khulna','Bagerhat','Satkhira','Jessore','Narail','Magura','Jhenaidah','Kushtia','Chuadanga','Meherpur'],
+  Barisal:    ['Barisal','Bhola','Patuakhali','Pirojpur','Barguna','Jhalokathi'],
+  Sylhet:     ['Sylhet','Moulvibazar','Habiganj','Sunamganj'],
+  Rangpur:    ['Rangpur','Dinajpur','Gaibandha','Kurigram','Lalmonirhat','Nilphamari','Panchagarh','Thakurgaon'],
+  Mymensingh: ['Mymensingh','Jamalpur','Netrokona','Sherpur'],
+}
+function getDistricts(div: string) { return districtMap[div] ?? [] }
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+const saving = reactive({ personal: false, phones: false, addresses: false })
+const saved  = reactive({ personal: false, phones: false, addresses: false })
+
+function flash(k: keyof typeof saved) {
+  saved[k] = true; setTimeout(() => { saved[k] = false }, 2500)
+}
+
+async function savePersonal() {
+  saving.personal = true
+  await new Promise(r => setTimeout(r, 600))
+  authStore.login({ ...user.value, ...form })
+  saving.personal = false; flash('personal')
+}
+async function savePhones() {
+  saving.phones = true
+  await new Promise(r => setTimeout(r, 600))
+  if (!phones.value.some(p => p.isPrimary) && phones.value.length) phones.value[0].isPrimary = true
+  authStore.login({ ...user.value, phones: phones.value.map(p => ({ ...p })) })
+  saving.phones = false; flash('phones')
+}
+async function saveAddresses() {
+  saving.addresses = true
+  await new Promise(r => setTimeout(r, 600))
+  authStore.login({ ...user.value, addresses: addresses.value.map(a => ({ ...a })) })
+  saving.addresses = false; flash('addresses')
+}
+async function handleLogout() { await authStore.logout() }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MY REVIEWS
+// ──────────────────────────────────────────────────────────────────────────────
+
+interface PendingReviewItem {
+  productSlug: string
+  productName: string
+  orderId: string
+}
+
+const userReviews            = ref<Review[]>([])
+const pendingReviewProducts  = ref<PendingReviewItem[]>([])
+const reviewsLoading         = ref(false)
+
+// Active inline form
+const activeReviewForm       = ref<PendingReviewItem | null>(null)
+const newReview              = reactive({ rating: 0, title: '', body: '', images: [] as string[] })
+const hoverRating            = ref(0)
+const submittingReview       = ref(false)
+const uploadingImage         = ref(false)
+const reviewFormError        = ref('')
+
+// Lightbox
+const reviewLightbox = reactive({ open: false, images: [] as string[], index: 0 })
+function openReviewLightbox(imgs: string[], i: number) {
+  reviewLightbox.images = imgs; reviewLightbox.index = i; reviewLightbox.open = true
+}
+
+const ratingLabels = ['', 'Terrible', 'Poor', 'OK', 'Good', 'Excellent']
+function ratingLabel(n: number) { return ratingLabels[n] ?? '' }
+
+function formatReviewDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-BD', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function openReviewForm(item: PendingReviewItem) {
+  activeReviewForm.value = item
+  Object.assign(newReview, { rating: 0, title: '', body: '', images: [] })
+  hoverRating.value = 0
+  reviewFormError.value = ''
+}
+
+function closeReviewForm() {
+  activeReviewForm.value = null
+  reviewFormError.value = ''
+}
+
+// ── Image upload via ImgBB proxy ──────────────────────────────────────────────
+async function onReviewImagePick(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file || newReview.images.length >= 5) return
+  if (!file.type.startsWith('image/')) { reviewFormError.value = 'Only image files are supported'; return }
+  if (file.size > 25 * 1024 * 1024) { reviewFormError.value = 'Image must be smaller than 25 MB'; return }
+  uploadingImage.value = true
+  reviewFormError.value = ''
+  try {
+    // Compress via canvas (max 1600px, webp 0.82)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const img = new Image()
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        let w = img.naturalWidth, h = img.naturalHeight
+        const MAX = 1600
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round(h / w * MAX); w = MAX }
+          else        { w = Math.round(w / h * MAX); h = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compression failed')), 'image/webp', 0.82)
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')) }
+      img.src = url
+    })
+    // Convert to base64 and upload via server proxy
+    const base64 = await new Promise<string>((res, rej) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        res(dataUrl.split(',')[1]) // strip data:image/webp;base64, prefix
+      }
+      reader.onerror = () => rej(new Error('Failed to read file'))
+      reader.readAsDataURL(blob)
+    })
+    const baseName = file.name.replace(/\.[^.]+$/, '')
+    const res = await fetch('/api/upload/imgbb', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64, name: baseName }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.url) throw new Error(data?.error ?? 'Upload failed')
+    newReview.images.push(data.url as string)
+  } catch (err: any) {
+    reviewFormError.value = err.message ?? 'Image upload failed'
+  } finally {
+    uploadingImage.value = false
+    ;(e.target as HTMLInputElement).value = ''
+  }
+}
+
+function removeReviewImage(i: number) { newReview.images.splice(i, 1) }
+
+// ── Submit review ─────────────────────────────────────────────────────────────
+async function submitReview() {
+  if (!activeReviewForm.value || !authStore.user) return
+  reviewFormError.value = ''
+  submittingReview.value = true
+  try {
+    const res = await fetch(`/api/reviews/${activeReviewForm.value.productSlug}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userEmail: authStore.user.email ?? '',
+        userName:  authStore.user.name  ?? 'Customer',
+        userId:    authStore.user.id,
+        rating:    newReview.rating,
+        title:     newReview.title,
+        body:      newReview.body,
+        images:    newReview.images,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) { reviewFormError.value = data.error ?? 'Failed to submit'; return }
+    // Add to submitted list and remove from pending
+    userReviews.value.unshift({ ...data, productName: activeReviewForm.value.productName })
+    pendingReviewProducts.value = pendingReviewProducts.value.filter(
+      p => p.productSlug !== activeReviewForm.value!.productSlug
+    )
+    closeReviewForm()
+  } catch (err: any) {
+    reviewFormError.value = err.message ?? 'Network error'
+  } finally {
+    submittingReview.value = false
+  }
+}
+
+// ── Load reviews + eligible products ─────────────────────────────────────────
+async function loadUserReviews() {
+  const email = authStore.user?.email
+  if (!email) return
+  reviewsLoading.value = true
+  try {
+    // 1. Already submitted reviews
+    const reviewsRes = await fetch(`/api/user/reviews?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+    if (reviewsRes.ok) {
+      const data = await reviewsRes.json()
+      userReviews.value = data.data ?? []
+    }
+
+    // 2. Delivered orders → filter products not yet reviewed
+    const ordersRes = await fetch(`/api/orders/by-email?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+    if (ordersRes.ok) {
+      const ordersData = await ordersRes.json()
+      const deliveredOrders: any[] = (ordersData.data ?? []).filter((o: any) => o.status === 'delivered')
+      const reviewedSlugs = new Set(userReviews.value.map(r => r.productSlug))
+
+      // Build unique pending items: one entry per product slug across all delivered orders
+      const seen = new Set<string>()
+      const pending: PendingReviewItem[] = []
+      for (const order of deliveredOrders) {
+        for (const item of (order.items ?? [])) {
+          const slug = item.productSlug ?? item.slug ?? item.productId
+          if (!slug || seen.has(slug) || reviewedSlugs.has(slug)) continue
+          seen.add(slug)
+          pending.push({
+            productSlug: slug,
+            productName: item.name ?? item.productName ?? slug,
+            orderId: order.id,
+          })
+        }
+      }
+      pendingReviewProducts.value = pending
+    }
+  } catch (e) {
+    console.error('[ProfileView] loadUserReviews failed:', e)
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+// Lazy-load reviews when the tab is activated
+watch(activeTab, (tab) => {
+  if (tab === 'reviews' && userReviews.value.length === 0 && pendingReviewProducts.value.length === 0) {
+    loadUserReviews()
+  }
+})
+</script>
