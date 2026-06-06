@@ -79,6 +79,35 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
   }
 })
 
+// ── PUT /api/banners/reorder — admin only, bulk reorder ──────────────────────
+router.put('/reorder', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Body: [{ id: string, order: number }, ...]
+    const updates: { id: string; order: number }[] = req.body
+    if (!Array.isArray(updates)) {
+      res.status(400).json({ error: 'Expected an array of { id, order }' })
+      return
+    }
+
+    const banners = await getBanners()
+    const orderMap = new Map(updates.map(u => [u.id, u.order]))
+
+    for (const banner of banners) {
+      if (orderMap.has(banner.id)) {
+        banner.order = orderMap.get(banner.id)!
+      }
+    }
+
+    banners.sort((a, b) => a.order - b.order)
+    await redis.set(KEYS.banners, banners)
+
+    res.json(banners)
+  } catch (err) {
+    console.error('[banners] PUT /reorder', err)
+    res.status(500).json({ error: 'Failed to reorder banners' })
+  }
+})
+
 // ── PUT /api/banners/:id — admin only, update banner ─────────────────────────
 router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
