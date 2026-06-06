@@ -29,9 +29,8 @@
 
         </div>
 
-        <!-- Center: Search bar — hidden at top, slides in on scroll -->
-        <Transition name="header-search">
-          <div v-show="searchVisible" class="hidden sm:flex flex-1 max-w-xl relative mx-3" ref="searchWrap">
+        <!-- Center: Search bar — always visible -->
+        <div class="hidden sm:flex flex-1 max-w-xl relative mx-3" ref="searchWrap">
             <div class="relative flex items-center w-full">
               <div class="absolute left-0 pl-3 flex items-center gap-2 z-10">
                 <select
@@ -94,15 +93,12 @@
               </div>
             </Transition>
           </div>
-        </Transition>
 
         <!-- Right: Wishlist · Cart · Account · Mobile toggle -->
         <div class="flex items-center gap-1.5 shrink-0">
 
-          <!-- Mobile search icon — appears on scroll -->
-          <Transition name="fade">
-            <button
-              v-if="searchVisible"
+          <!-- Mobile search icon — always visible on mobile -->
+          <button
               @click="showMobileSearch = !showMobileSearch"
               class="btn-icon sm:hidden"
               :class="{ 'bg-orange-500/10 text-orange-600': showMobileSearch }"
@@ -110,7 +106,6 @@
             >
               <i class="fa-sharp fa-solid fa-magnifying-glass"></i>
             </button>
-          </Transition>
 
           <!-- Wishlist -->
           <RouterLink to="/wishlist" class="btn-icon hidden sm:flex relative" title="Wishlist">
@@ -230,7 +225,7 @@
 
       <!-- Mobile search bar drop-down — sm and below, shown on scroll -->
       <Transition name="slide">
-        <div v-if="showMobileSearch && searchVisible" class="sm:hidden border-t border-[var(--color-border)] px-4 py-3">
+        <div v-if="showMobileSearch" class="sm:hidden border-t border-[var(--color-border)] px-4 py-3">
           <div class="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-orange-500/10 transition">
             <i class="fa-sharp fa-solid fa-magnifying-glass text-[var(--color-text-muted)] text-sm shrink-0"></i>
             <input
@@ -307,7 +302,6 @@ const showUserMenu     = ref(false)
 const showMobileMenu   = ref(false)
 const showMobileSearch = ref(false)
 const scrolled         = ref(false)
-const searchVisible    = ref(false)
 const cartBounced      = ref(false)
 
 const userMenu   = ref<HTMLElement | null>(null)
@@ -368,13 +362,9 @@ function hideSuggestions() {
   setTimeout(() => { showSuggestions.value = false }, 200)
 }
 
-// Scroll effect — search appears after scrolling past ~220px (below hero search bar)
+// Scroll effect — shadow on scroll
 function onScroll() {
   scrolled.value = window.scrollY > 10
-  const wasVisible = searchVisible.value
-  searchVisible.value = window.scrollY > 220
-  // Auto-close mobile search drawer when scrolling back to top
-  if (wasVisible && !searchVisible.value) showMobileSearch.value = false
 }
 
 // Close menus on outside click
@@ -422,21 +412,5 @@ onUnmounted(() => {
 .slide-leave-from { max-height: 600px; opacity: 1; }
 .slide-leave-to   { max-height: 0; opacity: 0; }
 
-// Header search bar slide-in from top
-.header-search-enter-active {
-  transition: opacity 0.25s ease, transform 0.25s ease, max-width 0.25s ease;
-}
-.header-search-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease, max-width 0.18s ease;
-}
-.header-search-enter-from {
-  opacity: 0;
-  transform: translateY(-8px) scaleY(0.85);
-  max-width: 0;
-}
-.header-search-leave-to {
-  opacity: 0;
-  transform: translateY(-8px) scaleY(0.85);
-  max-width: 0;
-}
+// (header-search transition removed — search bar is now always visible)
 </style>
