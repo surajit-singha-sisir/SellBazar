@@ -366,5 +366,6 @@ export function useAdminApi() {
     fetchOrders, updateOrder, deleteOrder,
     fetchCustomers,
     fetchHealth,
+    request,
   }
 }
