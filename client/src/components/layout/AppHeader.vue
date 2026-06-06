@@ -319,7 +319,10 @@ watch(searchQ, (val) => {
 
 async function fetchSuggestions(q: string) {
   try {
-    const res = await fetch(`/api/products/search?q=${encodeURIComponent(q)}&limit=6`)
+    const res = await fetch(`/api/products?search=${encodeURIComponent(q)}&limit=6`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    })
     if (!res.ok) return
     const data = await res.json()
     // Normalise — backend may return { data: [] } or a plain array
