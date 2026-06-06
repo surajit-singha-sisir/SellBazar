@@ -885,8 +885,9 @@ app.post('/api/reviews/:productSlug', async (req, res) => {
   const hasPurchased = allOrders.some(o => {
     const emailMatch = o.customer?.email?.toLowerCase() === userEmail.toLowerCase()
     const hasItem    = o.items?.some(i =>
-      i.productId === productId ||
-      i.productId === productSlug ||
+      i.productId   === productId   ||
+      i.productId   === productSlug ||
+      i.productSlug === productSlug ||
       (i.name && productData?.name && i.name.toLowerCase() === productData.name.toLowerCase())
     )
     return emailMatch && hasItem && o.status === 'delivered'
