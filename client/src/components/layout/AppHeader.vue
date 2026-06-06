@@ -26,6 +26,7 @@
               <span class="gradient-text">Sell</span><span class="text-[var(--color-text)]">Bazar</span>
             </div>
           </RouterLink>
+
         </div>
 
         <!-- Center: Search bar — always visible -->
@@ -47,7 +48,7 @@
                 @blur="hideSuggestions"
                 type="text"
                 placeholder="Search products, brands…"
-                class="w-full pl-4 lg:pl-32 pr-12 py-2.5 rounded-xl text-sm input-field"
+                class="w-full pl-4 lg:pl-36 pr-12 py-2.5 rounded-xl text-sm input-field"
               />
               <button
                 @click="doSearch"
