@@ -358,14 +358,10 @@ const heroSlides = [
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  if (!productStore.products.length) {
-    await Promise.all([
-      productStore.fetchProducts(),
-      productStore.fetchCategories(),
-    ])
-  } else if (!productStore.categories.length) {
-    await productStore.fetchCategories()
-  }
+  const fetches: Promise<any>[] = []
+  if (!productStore.products.length)   fetches.push(productStore.fetchProducts())
+  if (!productStore.categories.length) fetches.push(productStore.fetchCategories())
+  if (fetches.length) await Promise.all(fetches)
 
   // Close flyout on outside click
   document.addEventListener('click', closeFlyout)
