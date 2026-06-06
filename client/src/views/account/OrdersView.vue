@@ -51,10 +51,10 @@
         <!-- ── Timeline ────────────────────────────────────────────────── -->
         <div class="px-5 pb-4">
           <div class="timeline">
-            <div v-for="(step, i) in timelineSteps(order.status)" :key="step.key + i"
+            <div v-for="(step, i) in timelineSteps(order.status)" :key="step.label + i"
               class="timeline-step"
               :class="{ 'step-done': step.done, 'step-active': step.active, 'step-upcoming': !step.done && !step.active }">
-              <div v-if="i < 4" class="timeline-line" :class="step.done ? 'line-done' : 'line-pending'"></div>
+              <div v-if="i < 4" class="timeline-line" :class="step.done || step.active ? 'line-done' : 'line-pending'"></div>
               <div class="timeline-dot"><i :class="step.icon"></i></div>
               <div class="timeline-label">
                 <span class="step-name">{{ step.label }}</span>
@@ -91,8 +91,8 @@
               <p class="text-xs text-[var(--color-text-muted)]">×{{ item.quantity }} · ৳{{ (item.price * item.quantity).toLocaleString() }}</p>
             </div>
 
-            <!-- Review button (shipped or delivered, if productId known) -->
-            <template v-if="(order.status === 'shipped' || order.status === 'delivered') && item.productId">
+            <!-- Review button (delivered only, if productId known) -->
+            <template v-if="order.status === 'delivered' && item.productId">
               <!-- Already reviewed -->
               <span v-if="reviewedKey(order.id, item.productId)"
                 class="shrink-0 inline-flex items-center gap-1.5 text-xs text-green-600 bg-green-500/8 border border-green-500/20 rounded-lg px-2.5 py-1.5 font-medium">
@@ -596,23 +596,51 @@ async function submitReview() {
 }
 
 // ── Timeline ──────────────────────────────────────────────────────────────────
-type StepKey = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
-const STEPS: { key: StepKey; label: string; icon: string; eta: string }[] = [
-  { key: 'pending',    label: 'Order Placed',      icon: 'fa-sharp fa-solid fa-circle-check',           eta: 'Just now'  },
-  { key: 'processing', label: 'Processing',         icon: 'fa-sharp fa-solid fa-gear',                   eta: '1-2 hours' },
-  { key: 'shipped',    label: 'Shipped',            icon: 'fa-sharp fa-solid fa-truck-fast',             eta: '1-2 days'  },
-  { key: 'delivered',  label: 'Out for Delivery',   icon: 'fa-sharp fa-solid fa-house-chimney',          eta: 'Today'     },
-  { key: 'delivered',  label: 'Delivered',          icon: 'fa-sharp-duotone fa-solid fa-box-circle-check', eta: ''        },
-]
+// 5 visual steps mapped from 4 API statuses:
+//   pending → processing → shipped → [out_for_delivery] → delivered
+// "out_for_delivery" is a visual-only sub-step of "shipped":
+//   - when status === 'shipped'  → shipped is active, out_for_delivery is upcoming
+//   - when status === 'delivered'→ both out_for_delivery AND delivered are shown as done/active
 
-function timelineSteps(status: string) {
-  const order    = ['pending', 'processing', 'shipped', 'delivered']
-  const currentIdx = order.indexOf(status === 'delivered' ? 'delivered' : status)
-  return STEPS.map((step, i) => ({
-    ...step,
-    done:   i < (status === 'cancelled' ? 0 : (currentIdx === 3 ? 5 : currentIdx)),
-    active: status === 'cancelled' ? false : (i === (currentIdx === 3 ? 4 : currentIdx)),
-  }))
+interface TimelineStep {
+  label: string
+  icon:  string
+  eta:   string
+  done:  boolean
+  active: boolean
+}
+
+function timelineSteps(status: string): TimelineStep[] {
+  const cancelled = status === 'cancelled'
+
+  // Visual order index for each API status
+  // 0=pending, 1=processing, 2=shipped, 3=out_for_delivery(visual), 4=delivered
+  const statusIndex: Record<string, number> = {
+    pending:    0,
+    processing: 1,
+    shipped:    2,
+    delivered:  4,   // skips visual step 3 — both 3+4 light up
+  }
+  const idx = cancelled ? -1 : (statusIndex[status] ?? 0)
+
+  const DEFS = [
+    { label: 'Order Placed',      icon: 'fa-sharp fa-solid fa-circle-check',    eta: 'Just now'  },
+    { label: 'Processing',        icon: 'fa-sharp fa-solid fa-gear',             eta: '1–2 hours' },
+    { label: 'Shipped',           icon: 'fa-sharp fa-solid fa-truck-fast',       eta: '1–2 days'  },
+    { label: 'Out for Delivery',  icon: 'fa-sharp fa-solid fa-house-chimney',    eta: 'Today'     },
+    { label: 'Delivered',         icon: 'fa-sharp fa-solid fa-box-circle-check', eta: ''          },
+  ]
+
+  return DEFS.map((def, i) => {
+    if (cancelled) {
+      return { ...def, done: false, active: false }
+    }
+    // When delivered: steps 0-3 are all "done", step 4 is "active"
+    // When shipped:   steps 0-1 are "done", step 2 is "active", 3-4 are upcoming
+    const done   = i < idx
+    const active = i === idx
+    return { ...def, done, active }
+  })
 }
 
 const statusBadgeMap: Record<string, string> = {
