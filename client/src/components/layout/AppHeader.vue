@@ -32,8 +32,9 @@
           <i class="fa-sharp fa-solid fa-chevron-down text-[var(--color-text-muted)] text-[10px]"></i>
         </button>
 
-        <!-- Search bar -->
-        <div class="flex-1 max-w-2xl relative" ref="searchWrap">
+        <!-- Search bar — hidden at top, slides in after scrolling past hero search -->
+        <Transition name="header-search">
+          <div v-show="searchVisible" class="flex-1 max-w-2xl relative" ref="searchWrap">
           <div class="relative flex items-center">
             <div class="absolute left-0 pl-3 flex items-center gap-2 z-10">
               <!-- Category dropdown -->
@@ -100,9 +101,23 @@
             </div>
           </Transition>
         </div>
+        </Transition>
 
         <!-- Right actions -->
         <div class="flex items-center gap-1.5 shrink-0">
+
+          <!-- Mobile search icon — only visible on small screens when scrolled past hero search -->
+          <Transition name="fade">
+            <button
+              v-if="searchVisible"
+              @click="showMobileSearch = !showMobileSearch"
+              class="btn-icon sm:hidden"
+              :class="{ 'bg-orange-500/10 text-orange-600': showMobileSearch }"
+              aria-label="Search"
+            >
+              <i class="fa-sharp fa-solid fa-magnifying-glass"></i>
+            </button>
+          </Transition>
 
           <!-- Wishlist -->
           <RouterLink to="/wishlist" class="btn-icon hidden sm:flex relative">
@@ -199,6 +214,45 @@
         </div>
       </div>
 
+      <!-- Mobile search bar drop-down — sm and below, shown on scroll -->
+      <Transition name="slide">
+        <div v-if="showMobileSearch && searchVisible" class="sm:hidden border-t border-[var(--color-border)] px-4 py-3">
+          <div class="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-orange-500/10 transition">
+            <i class="fa-sharp fa-solid fa-magnifying-glass text-[var(--color-text-muted)] text-sm shrink-0"></i>
+            <input
+              v-model="searchQ"
+              @keyup.enter="doSearch"
+              @focus="showSuggestions = true"
+              @blur="hideSuggestions"
+              type="text"
+              placeholder="Search products, brands…"
+              class="flex-1 bg-transparent border-none outline-none text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]"
+              autofocus
+            />
+            <button @click="doSearch" class="btn-primary py-1.5 px-3 text-xs rounded-lg shrink-0">
+              Go
+            </button>
+          </div>
+          <!-- Mobile suggestions -->
+          <div
+            v-if="showSuggestions && searchQ.length > 1 && suggestions.length"
+            class="mt-2 card shadow-lg py-2 max-h-60 overflow-y-auto"
+          >
+            <div
+              v-for="s in suggestions" :key="s.id"
+              class="px-3 py-2 hover:bg-[var(--color-surface-2)] cursor-pointer flex items-center gap-3 transition"
+              @mousedown="selectSuggestion(s.name); showMobileSearch = false"
+            >
+              <img :src="s.image" :alt="s.name" class="w-8 h-8 rounded-lg object-cover shrink-0 bg-[var(--color-surface-2)]" onerror="this.src='https://placehold.co/32x32/f97316/fff?text=?'" />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate">{{ s.name }}</p>
+                <p class="text-xs text-[var(--color-text-muted)] truncate">{{ s.category }} · ৳{{ (s.salePrice ?? s.price).toLocaleString() }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <!-- Category nav (desktop) -->
       <nav class="hidden lg:flex items-center gap-1 pb-2 overflow-x-auto scrollbar-hide">
         <RouterLink
@@ -247,11 +301,13 @@ const wishlistStore = useWishlistStore()
 
 const searchQ        = ref('')
 const searchCategory = ref('')
-const showSuggestions = ref(false)
-const showUserMenu    = ref(false)
-const showMobileMenu  = ref(false)
-const scrolled        = ref(false)
-const cartBounced     = ref(false)
+const showSuggestions  = ref(false)
+const showUserMenu     = ref(false)
+const showMobileMenu   = ref(false)
+const showMobileSearch = ref(false)
+const scrolled         = ref(false)
+const searchVisible    = ref(false)
+const cartBounced      = ref(false)
 
 const userMenu   = ref<HTMLElement | null>(null)
 
@@ -311,8 +367,14 @@ function hideSuggestions() {
   setTimeout(() => { showSuggestions.value = false }, 200)
 }
 
-// Scroll effect
-function onScroll() { scrolled.value = window.scrollY > 10 }
+// Scroll effect — search appears after scrolling past ~220px (below hero search bar)
+function onScroll() {
+  scrolled.value = window.scrollY > 10
+  const wasVisible = searchVisible.value
+  searchVisible.value = window.scrollY > 220
+  // Auto-close mobile search drawer when scrolling back to top
+  if (wasVisible && !searchVisible.value) showMobileSearch.value = false
+}
 
 // Close menus on outside click
 function onClickOutside(e: MouseEvent) {
@@ -358,4 +420,22 @@ onUnmounted(() => {
 .slide-enter-to   { max-height: 600px; opacity: 1; }
 .slide-leave-from { max-height: 600px; opacity: 1; }
 .slide-leave-to   { max-height: 0; opacity: 0; }
+
+// Header search bar slide-in from top
+.header-search-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease, max-width 0.25s ease;
+}
+.header-search-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease, max-width 0.18s ease;
+}
+.header-search-enter-from {
+  opacity: 0;
+  transform: translateY(-8px) scaleY(0.85);
+  max-width: 0;
+}
+.header-search-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scaleY(0.85);
+  max-width: 0;
+}
 </style>
