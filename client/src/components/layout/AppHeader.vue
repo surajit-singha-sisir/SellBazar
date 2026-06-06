@@ -52,7 +52,7 @@
               />
               <button
                 @click="doSearch"
-                class="absolute right-1.5 top-1/2 -translate-y-1/2 btn-primary py-2 px-3 text-xs rounded-lg"
+                class="absolute right-1.5 top-1/2 -translate-y-1/2 btn-primary py-2 px-4 text-s rounded-lg"
               >
                 <i class="fa-sharp fa-solid fa-search"></i>
               </button>
