@@ -4,23 +4,11 @@
        class="min-h-screen bg-[var(--color-bg)] animate-pulse">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 space-y-10">
       <!-- Hero skeleton -->
-      <div class="flex flex-col items-center text-center space-y-4 py-10 px-4">
-        <div class="h-5 w-48 rounded-full bg-[var(--color-surface-2)]"></div>
-        <div class="h-10 w-3/4 max-w-md rounded-xl bg-[var(--color-surface-2)]"></div>
-        <div class="h-10 w-1/2 max-w-xs rounded-xl bg-[var(--color-surface-2)]"></div>
-        <div class="h-4 w-full max-w-lg rounded bg-[var(--color-surface-2)]"></div>
-        <div class="h-12 w-full max-w-lg rounded-2xl bg-[var(--color-surface-2)]"></div>
-        <div class="flex gap-3 justify-center">
-          <div class="h-11 w-32 rounded-2xl bg-[var(--color-surface-2)]"></div>
-          <div class="h-11 w-28 rounded-2xl bg-[var(--color-surface-2)]"></div>
+      <div class="flex gap-4">
+        <div class="w-64 shrink-0 space-y-2">
+          <div v-for="n in 8" :key="n" class="h-11 rounded-xl bg-[var(--color-surface-2)]"></div>
         </div>
-        <div class="flex gap-4 justify-center mt-2">
-          <div v-for="n in 4" :key="n" class="h-4 w-20 rounded bg-[var(--color-surface-2)]"></div>
-        </div>
-      </div>
-      <!-- Category chips skeleton -->
-      <div class="grid grid-cols-4 lg:grid-cols-8 gap-3">
-        <div v-for="n in 8" :key="n" class="h-24 rounded-2xl bg-[var(--color-surface-2)]"></div>
+        <div class="flex-1 h-80 rounded-2xl bg-[var(--color-surface-2)]"></div>
       </div>
       <!-- Product cards skeleton -->
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -34,14 +22,13 @@
 
     <!-- ── Hero Section ──────────────────────────────────────────────── -->
     <section class="hero-section">
-      <!-- Background layers -->
       <div class="hero-bg-grid"></div>
       <div class="hero-blob hero-blob--orange"></div>
       <div class="hero-blob hero-blob--violet"></div>
 
       <div class="hero-content max-w-7xl mx-auto">
 
-        <!-- ── Badge ───────────────────────────────────────────────── -->
+        <!-- Badge -->
         <div class="hero-top-row">
           <span class="hero-badge">
             <span class="pulse-dot"></span>
@@ -49,157 +36,140 @@
           </span>
         </div>
 
-        <!-- ── Main layout: centered single column ───────────────── -->
-        <div class="hero-layout-center">
+        <!-- ── Two-column hero layout ─────────────────────────────── -->
+        <div class="hero-two-col">
 
-          <!-- Center column: copy + search + trust -->
-          <div class="hero-left hero-left--center">
+          <!-- LEFT: Dynamic Category List -->
+          <aside class="hero-cat-panel" @mouseleave="activeCat = null">
+            <div class="hero-cat-header">
+              <i class="fa-sharp fa-solid fa-grid-2 text-[var(--color-brand)]"></i>
+              <span>All Categories</span>
+            </div>
 
-            <h1 class="hero-headline">
-              <span class="gradient-text">Shop Smart,</span>
-              <br/>
-              <span>Deliver Fast</span>
-            </h1>
-
-            <p class="hero-sub">
-              From Dhaka to every district — millions of products,
-              instant <strong>bKash checkout</strong>, and same-day delivery.
-            </p>
-
-            <!-- Search bar (primary CTA on mobile) -->
-            <div class="hero-search-wrap">
-              <i class="fa-sharp fa-solid fa-magnifying-glass hero-search-icon"></i>
-              <input
-                v-model="heroSearch"
-                @keyup.enter="heroSearch.trim() && $router.push(`/products?q=${encodeURIComponent(heroSearch.trim())}`)"
-                type="text"
-                class="hero-search-input"
-                placeholder="Search products, brands…"
-              />
-              <button
-                class="hero-search-btn"
-                @click="heroSearch.trim() && $router.push(`/products?q=${encodeURIComponent(heroSearch.trim())}`)"
+            <ul class="hero-cat-list">
+              <li
+                v-for="(cat, idx) in displayCategories"
+                :key="cat.id"
+                class="hero-cat-item"
+                :class="{ 'hero-cat-item--active': activeCat === cat.id }"
+                @mouseenter="activeCat = cat.id"
+                @click.stop="handleCatClick(cat)"
               >
-                Search
-              </button>
+                <!-- Category row -->
+                <div class="hero-cat-row">
+                  <span class="hero-cat-icon-wrap" :style="`background:${cat.color}18`">
+                    <i :class="'fa-sharp fa-solid fa-' + cat.icon" :style="`color:${cat.color}`"></i>
+                  </span>
+                  <span class="hero-cat-name">{{ cat.name }}</span>
+                  <span class="hero-cat-count">{{ (cat.productCount ?? cat.count ?? 0).toLocaleString() }}+</span>
+                  <i v-if="cat.subcategories?.length"
+                    class="fa-sharp fa-solid fa-chevron-right hero-cat-chevron"></i>
+                </div>
+
+                <!-- Subcategory flyout panel -->
+                <Transition name="subpanel">
+                  <div
+                    v-if="cat.subcategories?.length && activeCat === cat.id"
+                    class="hero-subcat-panel"
+                    :class="idx >= displayCategories.length - 3 ? 'hero-subcat-panel--up' : ''"
+                    @click.stop
+                  >
+                    <div class="hero-subcat-header">
+                      <span class="hero-subcat-icon" :style="`background:${cat.color}18`">
+                        <i :class="'fa-sharp fa-solid fa-' + cat.icon" :style="`color:${cat.color}`"></i>
+                      </span>
+                      <span class="font-semibold text-sm">{{ cat.name }}</span>
+                      <RouterLink
+                        :to="`/products?cat=${encodeURIComponent(cat.name)}`"
+                        class="ml-auto text-xs text-orange-500 font-semibold hover:underline"
+                        @click="activeCat = null"
+                      >All →</RouterLink>
+                    </div>
+                    <div class="hero-subcat-grid">
+                      <RouterLink
+                        v-for="sub in cat.subcategories.slice(0, 10)" :key="sub.slug"
+                        :to="`/products?cat=${encodeURIComponent(cat.name)}&sub=${sub.slug}`"
+                        class="hero-subcat-link"
+                        @click="activeCat = null"
+                      >
+                        <i :class="'fa-sharp fa-solid fa-' + sub.icon" :style="`color:${cat.color};opacity:0.8`"></i>
+                        <span>{{ sub.name }}</span>
+                      </RouterLink>
+                    </div>
+                  </div>
+                </Transition>
+              </li>
+            </ul>
+
+            <!-- See all link -->
+            <RouterLink to="/products" class="hero-cat-all-link">
+              <i class="fa-sharp fa-solid fa-layer-group text-xs"></i>
+              See All Categories
+              <i class="fa-sharp fa-solid fa-arrow-right text-xs"></i>
+            </RouterLink>
+          </aside>
+
+          <!-- RIGHT: Swiper Carousel -->
+          <div class="hero-carousel-col">
+            <div class="swiper hero-swiper" ref="swiperEl">
+              <div class="swiper-wrapper">
+                <div
+                  v-for="slide in heroSlides" :key="slide.id"
+                  class="swiper-slide hero-slide"
+                  :style="`background: ${slide.bg}`"
+                >
+                  <div class="hero-slide-content">
+                    <span class="hero-slide-tag">{{ slide.tag }}</span>
+                    <h2 class="hero-slide-title">{{ slide.title }}</h2>
+                    <p class="hero-slide-sub">{{ slide.subtitle }}</p>
+                    <RouterLink :to="slide.link" class="hero-slide-btn">
+                      <i class="fa-sharp fa-solid fa-bolt"></i>
+                      {{ slide.cta }}
+                    </RouterLink>
+                  </div>
+                  <div class="hero-slide-img-wrap">
+                    <img :src="slide.image" :alt="slide.title" class="hero-slide-img" />
+                  </div>
+                </div>
+              </div>
+              <!-- Swiper controls -->
+              <div class="swiper-pagination hero-swiper-pagination"></div>
+              <div class="swiper-button-prev hero-swiper-prev"></div>
+              <div class="swiper-button-next hero-swiper-next"></div>
             </div>
 
-            <!-- Quick links -->
-            <div class="hero-quick">
-              <span class="hero-quick-label">Popular:</span>
-              <button v-for="tag in quickTags" :key="tag"
-                class="hero-quick-tag"
-                @click="$router.push(`/products?q=${encodeURIComponent(tag)}`)">
-                {{ tag }}
-              </button>
-            </div>
-
-            <!-- CTA row (secondary on mobile, both on desktop) -->
-            <div class="hero-cta-row">
-              <RouterLink to="/products" class="btn-primary hero-cta-main">
-                <i class="fa-sharp fa-solid fa-bolt"></i> Shop Now
-              </RouterLink>
-              <RouterLink to="/deals" class="btn-secondary hero-cta-ghost">
-                <i class="fa-sharp fa-solid fa-fire text-orange-400"></i> Deals
-              </RouterLink>
-            </div>
-
-            <!-- Trust strip -->
-            <div class="hero-trust">
-              <span class="trust-item"><i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i> Secure</span>
-              <span class="trust-divider"></span>
-              <span class="trust-item"><i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i> Fast Delivery</span>
-              <span class="trust-divider"></span>
-              <span class="trust-item"><i class="fa-sharp fa-solid fa-rotate-left text-orange-500"></i> Easy Returns</span>
-              <span class="trust-divider"></span>
-              <span class="trust-item"><i class="fa-sharp fa-solid fa-headset text-purple-500"></i> 24/7</span>
+            <!-- Trust strip below carousel -->
+            <div class="hero-trust-row">
+              <div class="hero-trust-item">
+                <i class="fa-sharp fa-solid fa-truck-fast text-blue-500"></i>
+                <span>Free Delivery above ৳599</span>
+              </div>
+              <div class="hero-trust-divider"></div>
+              <div class="hero-trust-item">
+                <i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i>
+                <span>Secure Payments</span>
+              </div>
+              <div class="hero-trust-divider"></div>
+              <div class="hero-trust-item">
+                <i class="fa-sharp fa-solid fa-rotate-left text-orange-500"></i>
+                <span>Easy 7-day Returns</span>
+              </div>
+              <div class="hero-trust-divider"></div>
+              <div class="hero-trust-item">
+                <i class="fa-sharp fa-solid fa-headset text-purple-500"></i>
+                <span>24/7 Support</span>
+              </div>
             </div>
           </div>
 
-        </div>
+        </div><!-- end .hero-two-col -->
 
       </div>
     </section>
 
-
-    <!-- ── Categories ─────────────────────────────────────────────────── -->
-    <section class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="font-display text-2xl font-bold">Browse Categories</h2>
-        <RouterLink to="/products" class="btn-ghost text-sm">See all <i class="fa-sharp fa-regular fa-arrow-right"></i></RouterLink>
-      </div>
-      <div class="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-        <div
-          v-for="(cat, idx) in displayCategories" :key="cat.id"
-          class="relative cat-item"
-          @mouseenter="activeCat = cat.id"
-          @mouseleave="activeCat = null"
-          @click.stop="activeCat = activeCat === cat.id ? null : cat.id"
-        >
-          <RouterLink
-            :to="`/products?cat=${encodeURIComponent(cat.name)}`"
-            class="card flex flex-col items-center gap-2 py-4 px-2 hover:shadow-md hover:-translate-y-1 transition-all duration-200 text-center"
-            :class="{ 'ring-2 ring-[var(--color-brand)] ring-offset-1': activeCat === cat.id && cat.subcategories?.length }"
-            @click.prevent="cat.subcategories?.length ? (activeCat = activeCat === cat.id ? null : cat.id) : $router.push(`/products?cat=${encodeURIComponent(cat.name)}`)"
-          >
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-200"
-              :class="activeCat === cat.id ? 'scale-110' : ''"
-              :style="`background: ${cat.color}18`">
-              <i :class="'fa-sharp fa-solid fa-' + cat.icon + ' text-lg'" :style="`color: ${cat.color}`"></i>
-            </div>
-            <span class="text-xs font-medium leading-tight text-[var(--color-text-2)]"
-              :class="activeCat === cat.id ? 'text-[var(--color-text)]' : ''">{{ cat.name }}</span>
-            <span class="text-[10px] text-[var(--color-text-muted)]">{{ (cat.productCount ?? cat.count ?? 0).toLocaleString() }}+</span>
-            <!-- Chevron hint when subcats exist -->
-            <i v-if="cat.subcategories?.length"
-              class="fa-sharp fa-solid fa-chevron-down text-[9px] text-[var(--color-text-muted)] transition-transform duration-200"
-              :class="activeCat === cat.id ? 'rotate-180 text-[var(--color-brand)]' : ''"></i>
-          </RouterLink>
-
-          <!-- Subcategory flyout -->
-          <Transition name="subcat">
-            <div
-              v-if="cat.subcategories?.length && activeCat === cat.id"
-              class="subcat-flyout"
-              :class="{
-                'subcat-flyout--right': idx <= 1,
-                'subcat-flyout--left':  idx >= displayCategories.length - 2,
-                'subcat-flyout--center': idx > 1 && idx < displayCategories.length - 2
-              }"
-              @click.stop
-            >
-              <!-- Header -->
-              <div class="px-3 pt-2.5 pb-1.5 border-b border-[var(--color-border)] flex items-center gap-2">
-                <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" :style="`background:${cat.color}18`">
-                  <i :class="'fa-sharp fa-solid fa-' + cat.icon + ' text-[11px]'" :style="`color:${cat.color}`"></i>
-                </div>
-                <span class="text-xs font-bold text-[var(--color-text)]">{{ cat.name }}</span>
-                <RouterLink :to="`/products?cat=${encodeURIComponent(cat.name)}`"
-                  class="ml-auto text-[10px] text-orange-500 font-semibold hover:underline whitespace-nowrap"
-                  @click="activeCat = null">
-                  All →
-                </RouterLink>
-              </div>
-              <!-- Subcat grid -->
-              <div class="p-2 grid grid-cols-2 gap-0.5">
-                <RouterLink
-                  v-for="sub in cat.subcategories.slice(0, 8)" :key="sub.slug"
-                  :to="`/products?cat=${encodeURIComponent(cat.name)}&sub=${sub.slug}`"
-                  class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs hover:bg-[var(--color-surface-2)] text-[var(--color-text-2)] hover:text-[var(--color-text)] transition-colors"
-                  @click="activeCat = null"
-                >
-                  <i :class="'fa-sharp fa-solid fa-' + sub.icon + ' w-3.5 text-center shrink-0'" :style="`color:${cat.color};opacity:0.7`"></i>
-                  <span class="truncate">{{ sub.name }}</span>
-                </RouterLink>
-              </div>
-            </div>
-          </Transition>
-        </div>
-      </div>
-    </section>
 
     <!-- ── Featured Products ──────────────────────────────────────────── -->
-    <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
+    <section class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
       <div class="flex items-center justify-between mb-6">
         <div>
           <h2 class="font-display text-2xl font-bold">Featured Products</h2>
@@ -210,12 +180,10 @@
       <div v-if="productStore.featured.length" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         <ProductCard v-for="p in productStore.featured" :key="p.id" :product="p" />
       </div>
-      <!-- inline mini-skeleton while re-fetching after stale nav -->
       <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
         <div v-for="n in 8" :key="n" class="h-64 rounded-2xl bg-[var(--color-surface-2)]"></div>
       </div>
     </section>
-
 
     <!-- ── Deals Banner ───────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
@@ -260,7 +228,6 @@
       </div>
     </section>
 
-
     <!-- ── Why SellBazar ──────────────────────────────────────────────── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
       <h2 class="font-display text-2xl font-bold text-center mb-8">Why Choose SellBazar?</h2>
@@ -294,22 +261,82 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useProductStore } from '@/stores/useProductStore'
 import ProductCard from '@/components/product/ProductCard.vue'
+import Swiper from 'swiper'
+import { Navigation, Pagination, Autoplay } from 'swiper/modules'
+import 'swiper/css'
+import 'swiper/css/navigation'
+import 'swiper/css/pagination'
 
+const router = useRouter()
 const productStore = useProductStore()
-
-// Hero search
-const heroSearch = ref('')
-const quickTags  = ['Samsung', 'Saree', 'Nike', 'Laptop', 'bKash Offer']
 
 // Active category for subcat flyout
 const activeCat = ref<string | null>(null)
+const swiperEl  = ref<HTMLElement | null>(null)
+let swiperInstance: Swiper | null = null
+
 function closeFlyout() { activeCat.value = null }
 
+function handleCatClick(cat: any) {
+  if (cat.subcategories?.length) {
+    activeCat.value = activeCat.value === cat.id ? null : cat.id
+  } else {
+    router.push(`/products?cat=${encodeURIComponent(cat.name)}`)
+  }
+}
+
+// Dynamic categories from store only — no static fallback shown to user
+const displayCategories = computed(() => productStore.categories)
+
+// Hero slides
+const heroSlides = [
+  {
+    id: 1,
+    tag: '🔥 Eid Special',
+    title: 'Shop Smart,\nDeliver Fast',
+    subtitle: 'From Dhaka to every district — same-day delivery & bKash checkout.',
+    cta: 'Shop Now',
+    link: '/products',
+    bg: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+    image: 'https://placehold.co/480x320/f97316/fff?text=Eid+Sale',
+  },
+  {
+    id: 2,
+    tag: '⚡ Flash Deal',
+    title: 'Electronics\nat Best Prices',
+    subtitle: 'Smartphones, laptops, gadgets — up to 40% off this week only.',
+    cta: 'Explore Electronics',
+    link: '/products?cat=Electronics',
+    bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+    image: 'https://placehold.co/480x320/3b82f6/fff?text=Electronics',
+  },
+  {
+    id: 3,
+    tag: '👗 New Season',
+    title: 'Fresh Fashion\nDrops Daily',
+    subtitle: 'Trendy styles for every occasion. Free returns on fashion items.',
+    cta: 'Explore Fashion',
+    link: '/products?cat=Fashion',
+    bg: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)',
+    image: 'https://placehold.co/480x320/d946ef/fff?text=Fashion',
+  },
+  {
+    id: 4,
+    tag: '🛒 Grocery',
+    title: 'Daily Essentials\nDelivered Fast',
+    subtitle: 'Fresh groceries from top brands. Order before noon, get today.',
+    cta: 'Order Groceries',
+    link: '/products?cat=Grocery',
+    bg: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+    image: 'https://placehold.co/480x320/22c55e/fff?text=Grocery',
+  },
+]
+
 onMounted(async () => {
-  // Only fetch if store is empty (avoids redundant refetch on back-navigation)
   if (!productStore.products.length) {
     await Promise.all([
       productStore.fetchProducts(),
@@ -318,29 +345,27 @@ onMounted(async () => {
   } else if (!productStore.categories.length) {
     await productStore.fetchCategories()
   }
-  // Close flyout on any outside click
+
   document.addEventListener('click', closeFlyout)
+
+  // Init Swiper after DOM is ready
+  await nextTick()
+  if (swiperEl.value) {
+    swiperInstance = new Swiper(swiperEl.value, {
+      modules: [Navigation, Pagination, Autoplay],
+      loop: true,
+      autoplay: { delay: 4500, disableOnInteraction: false },
+      pagination: { el: '.hero-swiper-pagination', clickable: true },
+      navigation: { nextEl: '.hero-swiper-next', prevEl: '.hero-swiper-prev' },
+      speed: 600,
+    })
+  }
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', closeFlyout)
+  swiperInstance?.destroy(true, true)
 })
-
-
-// Static fallback — icons are bare names (no fa- prefix); the template prepends "fa-sharp fa-solid fa-"
-const staticCategories = [
-  { id: '1', slug: 'electronics', name: 'Electronics', icon: 'microchip',       color: '#3b82f6', count: 45000, productCount: 45000, subcategories: [] },
-  { id: '2', slug: 'fashion',     name: 'Fashion',     icon: 'shirt',           color: '#ec4899', count: 80000, productCount: 80000, subcategories: [] },
-  { id: '3', slug: 'grocery',     name: 'Grocery',     icon: 'basket-shopping', color: '#22c55e', count: 12000, productCount: 12000, subcategories: [] },
-  { id: '4', slug: 'beauty',      name: 'Beauty',      icon: 'pump-soap',       color: '#a78bfa', count: 8000,  productCount: 8000,  subcategories: [] },
-  { id: '5', slug: 'home',        name: 'Home',        icon: 'couch',           color: '#f97316', count: 25000, productCount: 25000, subcategories: [] },
-  { id: '6', slug: 'sports',      name: 'Sports',      icon: 'dumbbell',        color: '#0ea5e9', count: 15000, productCount: 15000, subcategories: [] },
-  { id: '7', slug: 'business',    name: 'Business',    icon: 'briefcase',       color: '#8b5cf6', count: 5000,  productCount: 5000,  subcategories: [] },
-  { id: '8', slug: 'books',       name: 'Books',       icon: 'book-open',       color: '#fbbf24', count: 30000, productCount: 30000, subcategories: [] },
-]
-const displayCategories = computed(() =>
-  productStore.categories.length ? productStore.categories : staticCategories
-)
 
 const features = [
   { title: 'Free Delivery',   desc: 'On orders above ৳599',      icon: 'fa-sharp fa-solid fa-truck',         color: '#3b82f6' },
