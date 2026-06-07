@@ -357,7 +357,7 @@
                 class="flex items-start gap-2 text-sm text-green-600 bg-green-500/8 border border-green-500/20 rounded-xl px-3 py-3">
                 <i class="fa-sharp fa-solid fa-circle-check mt-0.5 shrink-0"></i>
                 <div>
-                  <strong>Review submitted!</strong> It'll appear on the product page after moderation. Thank you!
+                  <strong>Review submitted!</strong> It's now live on the product page. Thank you!
                 </div>
               </div>
 
@@ -367,7 +367,7 @@
             <div class="rv-footer" v-if="!reviewModal.success">
               <p class="rv-disclaimer">
                 <i class="fa-sharp fa-solid fa-shield-halved text-green-500"></i>
-                Reviews are verified purchases only and go through moderation.
+                Verified purchases only. Reviews are published instantly.
               </p>
               <div class="rv-actions">
                 <button class="btn-secondary" @click="closeReviewModal">Cancel</button>
