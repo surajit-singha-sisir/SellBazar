@@ -368,7 +368,6 @@ import 'swiper/css/autoplay'
 import { useProductStore }  from '@/stores/useProductStore'
 import { useCartStore }     from '@/stores/useCartStore'
 import { useWishlistStore } from '@/stores/useWishlistStore'
-import { useAuthStore }     from '@/stores/useAuthStore'
 import type { Product, Review } from '@/types'
 import ProductCard          from '@/components/product/ProductCard.vue'
 
@@ -376,7 +375,6 @@ const route         = useRoute()
 const productStore  = useProductStore()
 const cartStore     = useCartStore()
 const wishlistStore = useWishlistStore()
-const authStore     = useAuthStore()
 
 const loading = ref(true)
 const product = ref<Product | null>(null)
@@ -424,16 +422,9 @@ function addToCart() {
   setTimeout(() => { added.value = false }, 1500)
 }
 
-// ── Reviews ───────────────────────────────────────────────────
-const reviews         = ref<Review[]>([])
-const reviewsLoading  = ref(false)
-const showReviewForm  = ref(false)
-const submittingReview = ref(false)
-const reviewError     = ref('')
-const uploadingImage  = ref(false)
-const hoverRating     = ref(0)
-
-const newReview = reactive({ rating: 0, title: '', body: '', images: [] as string[] })
+// ── Reviews (read-only display — submitted from account/orders) ───────────────
+const reviews        = ref<Review[]>([])
+const reviewsLoading = ref(false)
 
 const reviewLightbox = reactive({ open: false, images: [] as string[], index: 0 })
 function openReviewLightbox(imgs: string[], i: number) {
@@ -452,48 +443,8 @@ function ratingBarPct(n: number) {
   return Math.round((ratingCount(n) / reviews.value.length) * 100)
 }
 
-const ratingLabels = ['', 'Terrible', 'Poor', 'OK', 'Good', 'Excellent']
-function ratingLabel(n: number) { return ratingLabels[n] ?? '' }
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-BD', { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
-// Whether the logged-in user can write a review (has a delivered order for this product)
-const canReview = ref(false)
-const userAlreadyReviewed = ref(false)
-
-async function checkCanReview(slug: string) {
-  canReview.value = false
-  userAlreadyReviewed.value = false
-  if (!authStore.isLoggedIn || !authStore.user?.email) return
-
-  const email = authStore.user.email
-
-  // Fast-path: check locally loaded reviews first
-  if (reviews.value.some(r => r.userEmail?.toLowerCase() === email.toLowerCase())) {
-    userAlreadyReviewed.value = true
-    return
-  }
-
-  // Call the eligibility endpoint
-  try {
-    const res = await fetch(
-      `/api/reviews/${encodeURIComponent(slug)}/eligibility?email=${encodeURIComponent(email)}`,
-      { cache: 'no-store' }
-    )
-    if (res.ok) {
-      const data = await res.json()
-      if (data.eligible) {
-        canReview.value = true
-      } else if (data.reason === 'already_reviewed') {
-        userAlreadyReviewed.value = true
-      }
-      // reason === 'no_delivered_order' → both stay false (not eligible, hasn't reviewed)
-    }
-  } catch (e) {
-    console.warn('[checkCanReview] eligibility check failed:', e)
-  }
 }
 
 async function loadReviews(slug: string) {
@@ -508,95 +459,6 @@ async function loadReviews(slug: string) {
     console.error('[Reviews] load failed:', e)
   } finally {
     reviewsLoading.value = false
-  }
-  await checkCanReview(slug)
-}
-
-async function onReviewImagePick(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file || newReview.images.length >= 5) return
-  if (!file.type.startsWith('image/')) { reviewError.value = 'Only image files are supported'; return }
-  if (file.size > 25 * 1024 * 1024) { reviewError.value = 'Image must be smaller than 25 MB'; return }
-  uploadingImage.value = true
-  reviewError.value = ''
-  try {
-    // Compress via canvas (max 1600px, webp 0.82)
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      const url = URL.createObjectURL(file)
-      const img = new Image()
-      img.onload = () => {
-        URL.revokeObjectURL(url)
-        let w = img.naturalWidth, h = img.naturalHeight
-        const MAX = 1600
-        if (w > MAX || h > MAX) {
-          if (w >= h) { h = Math.round(h / w * MAX); w = MAX }
-          else        { w = Math.round(w / h * MAX); h = MAX }
-        }
-        const canvas = document.createElement('canvas')
-        canvas.width = w; canvas.height = h
-        const ctx = canvas.getContext('2d')!
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h)
-        ctx.drawImage(img, 0, 0, w, h)
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compression failed')), 'image/webp', 0.82)
-      }
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')) }
-      img.src = url
-    })
-    // Convert to base64 and upload via server proxy (keeps API key server-side)
-    const base64 = await new Promise<string>((res, rej) => {
-      const reader = new FileReader()
-      reader.onload = () => res((reader.result as string).split(',')[1])
-      reader.onerror = () => rej(new Error('Failed to read file'))
-      reader.readAsDataURL(blob)
-    })
-    const baseName = file.name.replace(/\.[^.]+$/, '')
-    const res  = await fetch('/api/upload/imgbb', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64, name: baseName }),
-    })
-    const data = await res.json()
-    if (!res.ok || !data.url) throw new Error(data?.error ?? 'Upload failed')
-    newReview.images.push(data.url as string)
-  } catch (err: any) {
-    reviewError.value = err.message ?? 'Image upload failed'
-  } finally {
-    uploadingImage.value = false
-    ;(e.target as HTMLInputElement).value = ''
-  }
-}
-
-function removeReviewImage(i: number) { newReview.images.splice(i, 1) }
-
-async function submitReview() {
-  if (!product.value || !authStore.user) return
-  reviewError.value = ''
-  submittingReview.value = true
-  try {
-    const res = await fetch(`/api/reviews/${product.value.slug}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userEmail: authStore.user.email ?? '',
-        userName:  authStore.user.name  ?? 'Customer',
-        userId:    authStore.user.id,
-        rating:    newReview.rating,
-        title:     newReview.title,
-        body:      newReview.body,
-        images:    newReview.images,
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) { reviewError.value = data.error ?? 'Failed to submit'; return }
-    reviews.value.unshift(data)
-    userAlreadyReviewed.value = true
-    canReview.value = false
-    showReviewForm.value = false
-    Object.assign(newReview, { rating: 0, title: '', body: '', images: [] })
-  } catch (err: any) {
-    reviewError.value = err.message ?? 'Network error'
-  } finally {
-    submittingReview.value = false
   }
 }
 
@@ -618,8 +480,6 @@ async function load(slug: string) {
   activeIdx.value = 0
   mainSwiper.value?.slideTo(0)
   reviews.value = []
-  canReview.value = false
-  userAlreadyReviewed.value = false
 
   try {
     let found: Product | null | undefined = productStore.getBySlug(slug)
