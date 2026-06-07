@@ -397,6 +397,7 @@ const API = '/api'
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface OrderItem {
   productId?: string
+  productSlug?: string
   name: string
   quantity: number
   price: number
@@ -542,6 +543,31 @@ function printInvoice(o: Order) {
   setTimeout(() => { try { win.focus(); win.print() } catch {} }, 800)
 }
 
+// ── Product link helper ───────────────────────────────────────────────────────
+// Orders store productId (numeric string like "1") — we need the slug for the
+// /products/:slug route. If item has a productSlug field, use it; otherwise fall
+// back to a lookup in the seeded product list via productId.
+const SEED_SLUG_MAP: Record<string, string> = {
+  '1':'samsung-galaxy-a55','2':'nike-air-max-2027','3':'walton-primo-x7',
+  '4':'muslin-saree-jamdani','5':'xiaomi-redmi-note-13','6':'bkash-qr-scanner',
+  '7':'pran-mango-juice-1l','8':'lenovo-ideapad-slim5','9':'aarong-kurta-men',
+  '10':'symphony-z55','11':'rfl-pressure-cooker','12':'meril-splash',
+  '13':'sony-wh1000xm5','14':'apple-watch-s9','15':'basmati-rice-5kg',
+  '16':'loreal-vitamin-c','17':'walton-ac-1ton','18':'gp-cricket-bat',
+  '19':'humayun-himu','20':'polo-shirt-men','21':'canon-eos-r50',
+  '22':'samsung-65-qled-tv','23':'ladies-kurti-set','24':'atomic-habits-bangla',
+  '25':'rasasi-oud-perfume','26':'miyako-rice-cooker','27':'yoga-mat-tpe',
+}
+
+function productLink(item: OrderItem): string {
+  if (item.productSlug) return `/products/${item.productSlug}`
+  const id = item.productId ?? ''
+  // If it already looks like a slug (contains non-numeric chars), use directly
+  if (!/^\d+$/.test(id)) return `/products/${id}`
+  // Map numeric id → slug
+  return `/products/${SEED_SLUG_MAP[id] ?? id}`
+}
+
 // ── Already-reviewed set ──────────────────────────────────────────────────────
 // Primary source: server eligibility check. localStorage is the fast cache.
 const reviewedKeys = ref<Set<string>>(
@@ -663,22 +689,21 @@ async function submitReview() {
   try {
     const user = authStore.user!
 
-    // API needs the product SLUG, not numeric id.
-    // item.productId may be a numeric string like "1"; look it up from seed mapping.
-    // We pass it as-is — the server checks productId === p.id OR p.slug, so both work.
-    const productSlug = item.productId!
+    // API routes on productSlug — resolve numeric id → slug if needed
+    const rawId = item.productId!
+    const productSlug = /^\d+$/.test(rawId) ? (SEED_SLUG_MAP[rawId] ?? rawId) : rawId
 
     const res = await fetch(`${API}/reviews/${encodeURIComponent(productSlug)}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-      userEmail:   user.email ?? '',
-      userName:    user.name  ?? 'Customer',
-      userId:      user.id    ?? '',
-      rating:      reviewForm.value.rating,
-      title:       reviewForm.value.title.trim(),
-      body:        reviewForm.value.body.trim(),
-      images:      reviewForm.value.images,
+        userEmail:   user.email ?? '',
+        userName:    user.name  ?? 'Customer',
+        userId:      user.id    ?? '',
+        rating:      reviewForm.value.rating,
+        title:       reviewForm.value.title.trim(),
+        body:        reviewForm.value.body.trim(),
+        images:      reviewForm.value.images,
       }),
     })
 
