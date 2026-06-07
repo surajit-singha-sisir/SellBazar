@@ -687,15 +687,5 @@ watch(() => route.params.slug, (slug) => { if (slug) load(slug as string) })
   border: 1px solid var(--color-border);
   border-radius: 12px;
 }
-.review-form-card {
-  border: 1.5px solid rgba(249,115,22,.3);
-  background: var(--color-surface);
-  border-radius: 16px;
-}
-.review-form-enter-active, .review-form-leave-active {
-  transition: opacity .2s ease, transform .2s ease;
-}
-.review-form-enter-from { opacity: 0; transform: translateY(-10px); }
-.review-form-leave-to   { opacity: 0; transform: translateY(-10px); }
 
 </style>
