@@ -87,7 +87,13 @@
 
             <!-- Name + qty + price -->
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium truncate text-[var(--color-text-2)]">{{ item.name }}</p>
+              <RouterLink
+                v-if="item.productId"
+                :to="productLink(item)"
+                class="text-sm font-medium truncate block text-[var(--color-text-2)] hover:text-orange-500 transition-colors"
+                @click.stop
+              >{{ item.name }}</RouterLink>
+              <p v-else class="text-sm font-medium truncate text-[var(--color-text-2)]">{{ item.name }}</p>
               <p class="text-xs text-[var(--color-text-muted)]">×{{ item.quantity }} · ৳{{ (item.price * item.quantity).toLocaleString() }}</p>
             </div>
 
@@ -296,6 +302,47 @@
                   placeholder="What did you like or dislike? How was the quality and delivery?"
                   maxlength="2000"></textarea>
                 <p class="rv-hint">{{ reviewForm.body.length }}/2000</p>
+              </div>
+
+              <!-- Image upload -->
+              <div class="rv-field">
+                <label class="rv-label">
+                  Photos
+                  <span class="rv-label-sub">(up to 5, optional)</span>
+                </label>
+                <div class="rv-image-row">
+                  <div
+                    v-for="(img, i) in reviewForm.images"
+                    :key="i"
+                    class="rv-img-thumb"
+                  >
+                    <img :src="img" class="w-full h-full object-cover" />
+                    <button
+                      class="rv-img-remove"
+                      @click="removeReviewImage(i)"
+                      title="Remove"
+                    ><i class="fa-sharp fa-solid fa-xmark"></i></button>
+                  </div>
+                  <label
+                    v-if="reviewForm.images.length < 5"
+                    class="rv-img-add"
+                    :class="{ 'rv-img-uploading': reviewImageUploading }"
+                  >
+                    <i v-if="reviewImageUploading" class="fa-sharp fa-solid fa-spinner fa-spin text-orange-500"></i>
+                    <template v-else>
+                      <i class="fa-sharp fa-regular fa-camera text-lg"></i>
+                      <span class="text-[9px] mt-0.5">Add Photo</span>
+                    </template>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="hidden"
+                      :disabled="reviewImageUploading"
+                      @change="onReviewImagePick"
+                    />
+                  </label>
+                </div>
+                <p v-if="reviewImageError" class="rv-hint" style="color:#ef4444">{{ reviewImageError }}</p>
               </div>
 
               <!-- Error -->
@@ -518,8 +565,10 @@ const reviewModal = ref({
   success:    false,
 })
 
-const reviewForm = ref({ rating: 0, title: '', body: '' })
+const reviewForm = ref({ rating: 0, title: '', body: '', images: [] as string[] })
 const hoverRating = ref(0)
+const reviewImageUploading = ref(false)
+const reviewImageError    = ref('')
 
 const ratingLabels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
 const ratingLabel  = computed(() =>
@@ -536,9 +585,67 @@ function openReviewModal(order: Order, item: OrderItem) {
     alert('Please log in to write a review.')
     return
   }
-  reviewModal.value = { open: true, order, item, submitting: false, error: '', success: false }
-  reviewForm.value  = { rating: 0, title: '', body: '' }
-  hoverRating.value = 0
+  reviewModal.value    = { open: true, order, item, submitting: false, error: '', success: false }
+  reviewForm.value     = { rating: 0, title: '', body: '', images: [] }
+  hoverRating.value    = 0
+  reviewImageError.value = ''
+}
+
+function removeReviewImage(i: number) {
+  reviewForm.value.images.splice(i, 1)
+}
+
+async function onReviewImagePick(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file || reviewForm.value.images.length >= 5) return
+  if (!file.type.startsWith('image/')) { reviewImageError.value = 'Only image files are supported'; return }
+  if (file.size > 25 * 1024 * 1024)   { reviewImageError.value = 'Image must be smaller than 25 MB'; return }
+  reviewImageUploading.value = true
+  reviewImageError.value = ''
+  try {
+    // Compress via canvas (max 1600px, webp 0.82)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const img = new Image()
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        let w = img.naturalWidth, h = img.naturalHeight
+        const MAX = 1600
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round(h / w * MAX); w = MAX }
+          else        { w = Math.round(w / h * MAX); h = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compression failed')), 'image/webp', 0.82)
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')) }
+      img.src = url
+    })
+    const base64 = await new Promise<string>((res, rej) => {
+      const reader = new FileReader()
+      reader.onload  = () => res((reader.result as string).split(',')[1])
+      reader.onerror = () => rej(new Error('Failed to read file'))
+      reader.readAsDataURL(blob)
+    })
+    const baseName = file.name.replace(/\.[^.]+$/, '')
+    const uploadRes = await fetch('/api/upload/imgbb', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ base64, name: baseName }),
+    })
+    const data = await uploadRes.json()
+    if (!uploadRes.ok || !data.url) throw new Error(data?.error ?? 'Upload failed')
+    reviewForm.value.images.push(data.url as string)
+  } catch (err: any) {
+    reviewImageError.value = err.message ?? 'Image upload failed'
+  } finally {
+    reviewImageUploading.value = false
+    ;(e.target as HTMLInputElement).value = ''
+  }
 }
 
 function closeReviewModal() {
@@ -565,13 +672,13 @@ async function submitReview() {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userEmail:   user.email ?? '',
-        userName:    user.name  ?? 'Customer',
-        userId:      user.id    ?? '',
-        rating:      reviewForm.value.rating,
-        title:       reviewForm.value.title.trim(),
-        body:        reviewForm.value.body.trim(),
-        images:      [],
+      userEmail:   user.email ?? '',
+      userName:    user.name  ?? 'Customer',
+      userId:      user.id    ?? '',
+      rating:      reviewForm.value.rating,
+      title:       reviewForm.value.title.trim(),
+      body:        reviewForm.value.body.trim(),
+      images:      reviewForm.value.images,
       }),
     })
 
@@ -874,4 +981,72 @@ function formatDate(d: string) {
 .review-fade-enter-active { transition: opacity .25s ease, transform .25s ease; }
 .review-fade-leave-active { transition: opacity .2s ease, transform .2s ease; }
 .review-fade-enter-from, .review-fade-leave-to { opacity: 0; transform: scale(0.96) translateY(8px); }
+
+/* ── Review image upload ───────────────────────────────────────────────── */
+.rv-label-sub {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  text-transform: none;
+  margin-left: 4px;
+}
+.rv-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.rv-img-thumb {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.rv-img-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  border: none;
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.rv-img-thumb:hover .rv-img-remove { opacity: 1; }
+.rv-img-add {
+  width: 68px;
+  height: 68px;
+  border-radius: 10px;
+  border: 2px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: border-color .15s, background .15s;
+  font-size: 11px;
+  gap: 2px;
+}
+.rv-img-add:hover {
+  border-color: #f97316;
+  background: rgba(249,115,22,0.05);
+  color: #f97316;
+}
+.rv-img-add.rv-img-uploading {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 </style>
