@@ -182,18 +182,13 @@
         </div>
       </div>
 
-      <!-- ── Reviews Section ───────────────────────────────────────────────── -->
+      <!-- Customer Reviews (read-only: submitted via account area) -->
       <div class="mt-16" id="reviews">
-        <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <h2 class="font-display font-bold text-2xl flex items-center gap-2">
-            <i class="fa-sharp-duotone fa-solid fa-star text-amber-400"></i>
-            Customer Reviews
-            <span class="text-base font-normal text-[var(--color-text-muted)] ml-1">({{ reviews.length }})</span>
-          </h2>
-          <button v-if="canReview && !showReviewForm" @click="showReviewForm = true" class="btn-primary text-sm px-4 py-2.5">
-            <i class="fa-sharp fa-regular fa-pen-to-square"></i> Write a Review
-          </button>
-        </div>
+        <h2 class="font-display font-bold text-2xl flex items-center gap-2 mb-6">
+          <i class="fa-sharp-duotone fa-solid fa-star text-amber-400"></i>
+          Customer Reviews
+          <span class="text-base font-normal text-[var(--color-text-muted)] ml-1">({{ reviews.length }})</span>
+        </h2>
 
         <!-- Rating summary bar -->
         <div v-if="reviews.length > 0" class="review-summary card p-5 mb-6">
@@ -221,86 +216,14 @@
           </div>
         </div>
 
-        <!-- Write a Review form -->
-        <Transition name="review-form">
-          <div v-if="showReviewForm" class="review-form-card card p-6 mb-6">
-            <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
-              <i class="fa-sharp fa-regular fa-pen-line text-orange-500"></i>
-              Write Your Review
-            </h3>
-            <!-- Star picker -->
-            <div class="mb-4">
-              <label class="block text-xs font-semibold text-[var(--color-text-muted)] mb-2 uppercase tracking-wide">Your Rating <span class="text-red-500">*</span></label>
-              <div class="flex gap-1">
-                <button v-for="n in 5" :key="n" @click="newReview.rating = n" @mouseover="hoverRating = n" @mouseleave="hoverRating = 0"
-                  class="text-2xl transition-transform hover:scale-110">
-                  <i :class="n <= (hoverRating || newReview.rating) ? 'fa-sharp fa-solid fa-star text-amber-400' : 'fa-sharp fa-regular fa-star text-[var(--color-border)]'"></i>
-                </button>
-                <span class="ml-2 text-sm text-[var(--color-text-muted)] self-center">{{ ratingLabel(newReview.rating) }}</span>
-              </div>
-            </div>
-            <!-- Title -->
-            <div class="mb-4">
-              <label class="block text-xs font-semibold text-[var(--color-text-muted)] mb-2 uppercase tracking-wide">Review Title</label>
-              <input v-model="newReview.title" class="input-field w-full" placeholder="Summarise your experience..." maxlength="100" />
-            </div>
-            <!-- Body -->
-            <div class="mb-4">
-              <label class="block text-xs font-semibold text-[var(--color-text-muted)] mb-2 uppercase tracking-wide">Your Review <span class="text-red-500">*</span></label>
-              <textarea v-model="newReview.body" class="input-field w-full resize-none" rows="4"
-                placeholder="Share details about your experience — quality, delivery, packaging..." maxlength="1000"></textarea>
-              <div class="text-right text-[10px] text-[var(--color-text-muted)] mt-1">{{ newReview.body.length }}/1000</div>
-            </div>
-            <!-- Image upload -->
-            <div class="mb-5">
-              <label class="block text-xs font-semibold text-[var(--color-text-muted)] mb-2 uppercase tracking-wide">
-                Photos <span class="text-[var(--color-text-muted)] font-normal normal-case">(up to 5)</span>
-              </label>
-              <div class="flex flex-wrap gap-2">
-                <div v-for="(img, i) in newReview.images" :key="i" class="relative w-20 h-20 rounded-xl overflow-hidden border border-[var(--color-border)] group">
-                  <img :src="img" class="w-full h-full object-cover" />
-                  <button @click="removeReviewImage(i)"
-                    class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
-                    <i class="fa-sharp fa-solid fa-xmark"></i>
-                  </button>
-                </div>
-                <label v-if="newReview.images.length < 5"
-                  class="w-20 h-20 rounded-xl border-2 border-dashed border-[var(--color-border)] flex flex-col items-center justify-center cursor-pointer hover:border-orange-400 hover:bg-orange-50/10 transition text-[var(--color-text-muted)]"
-                  :class="{ 'opacity-50 cursor-not-allowed': uploadingImage }">
-                  <i v-if="uploadingImage" class="fa-sharp fa-solid fa-spinner fa-spin text-orange-500"></i>
-                  <i v-else class="fa-sharp fa-regular fa-camera text-lg"></i>
-                  <span class="text-[9px] mt-0.5">{{ uploadingImage ? 'Uploading…' : 'Add Photo' }}</span>
-                  <input type="file" accept="image/*" class="hidden" :disabled="uploadingImage" @change="onReviewImagePick" />
-                </label>
-              </div>
-            </div>
-            <!-- Actions -->
-            <div class="flex items-center gap-3 flex-wrap">
-              <button @click="submitReview" :disabled="submittingReview || !newReview.rating || !newReview.body.trim()"
-                class="btn-primary px-6 py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                <i :class="submittingReview ? 'fa-sharp fa-solid fa-spinner fa-spin' : 'fa-sharp fa-regular fa-paper-plane-top'"></i>
-                {{ submittingReview ? 'Submitting…' : 'Submit Review' }}
-              </button>
-              <button @click="showReviewForm = false; reviewError = ''" class="btn-ghost text-sm">Cancel</button>
-              <span v-if="reviewError" class="text-red-500 text-sm flex items-center gap-1">
-                <i class="fa-sharp fa-regular fa-circle-exclamation"></i> {{ reviewError }}
-              </span>
-            </div>
-          </div>
-        </Transition>
-
-        <!-- Not eligible notice -->
-        <div v-if="authStore.isLoggedIn && !canReview && !userAlreadyReviewed && !reviewsLoading" class="review-notice card p-4 mb-6 flex items-center gap-3 text-sm text-[var(--color-text-muted)]">
-          <i class="fa-sharp fa-regular fa-lock text-orange-400 text-base flex-shrink-0"></i>
-          <span>Only customers who have <strong class="text-[var(--color-text)]">received this product</strong> can write a review.</span>
-        </div>
-        <div v-if="!authStore.isLoggedIn && !reviewsLoading" class="review-notice card p-4 mb-6 flex items-center gap-3 text-sm">
-          <i class="fa-sharp fa-regular fa-user text-orange-400 text-base flex-shrink-0"></i>
-          <span><RouterLink to="/login" class="text-orange-500 font-semibold hover:underline">Sign in</RouterLink> and purchase this product to leave a review.</span>
-        </div>
-        <div v-if="userAlreadyReviewed" class="review-notice card p-4 mb-6 flex items-center gap-3 text-sm text-green-600">
-          <i class="fa-sharp fa-solid fa-circle-check text-base flex-shrink-0"></i>
-          <span>You've already reviewed this product. Thank you!</span>
+        <!-- CTA: write review from account orders -->
+        <div class="review-notice card p-4 mb-6 flex items-center gap-3 text-sm">
+          <i class="fa-sharp fa-regular fa-pen-to-square text-orange-400 text-base flex-shrink-0"></i>
+          <span>
+            Purchased this product?
+            <RouterLink to="/account/orders" class="text-orange-500 font-semibold hover:underline">Go to My Orders</RouterLink>
+            to leave a review.
+          </span>
         </div>
 
         <!-- Review loading -->
@@ -313,7 +236,7 @@
         <div v-else-if="reviews.length === 0" class="text-center py-12 text-[var(--color-text-muted)]">
           <i class="fa-sharp fa-regular fa-star text-4xl block mb-3 opacity-30"></i>
           <p class="font-medium">No reviews yet</p>
-          <p class="text-sm">Be the first to review this product!</p>
+          <p class="text-sm">Be the first to review via your order history!</p>
         </div>
 
         <!-- Review list -->
