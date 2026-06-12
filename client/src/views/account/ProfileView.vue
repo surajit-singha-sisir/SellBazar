@@ -454,20 +454,20 @@ function flash(k: keyof typeof saved) {
 async function savePersonal() {
   saving.personal = true
   await new Promise(r => setTimeout(r, 600))
-  authStore.login({ ...user.value, ...form })
+  authStore.login({ ...user.value, ...form } as User, authStore.token as string)
   saving.personal = false; flash('personal')
 }
 async function savePhones() {
   saving.phones = true
   await new Promise(r => setTimeout(r, 600))
   if (!phones.value.some(p => p.isPrimary) && phones.value.length) phones.value[0].isPrimary = true
-  authStore.login({ ...user.value, phones: phones.value.map(p => ({ ...p })) })
+  authStore.login({ ...user.value, phones: phones.value.map(p => ({ ...p })) } as User, authStore.token as string)
   saving.phones = false; flash('phones')
 }
 async function saveAddresses() {
   saving.addresses = true
   await new Promise(r => setTimeout(r, 600))
-  authStore.login({ ...user.value, addresses: addresses.value.map(a => ({ ...a })) })
+  authStore.login({ ...user.value, addresses: addresses.value.map(a => ({ ...a })) } as User, authStore.token as string)
   saving.addresses = false; flash('addresses')
 }
 async function handleLogout() { await authStore.logout() }
