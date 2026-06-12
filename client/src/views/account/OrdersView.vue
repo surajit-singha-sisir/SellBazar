@@ -689,17 +689,22 @@ async function submitReview() {
   try {
     const user = authStore.user!
 
-    // API routes on productSlug — resolve numeric id → slug if needed
+    // Resolve numeric productId → slug
     const rawId = item.productId!
-    const productSlug = /^\d+$/.test(rawId) ? (SEED_SLUG_MAP[rawId] ?? rawId) : rawId
+    const productSlug = item.productSlug
+      ?? (/^\d+$/.test(rawId) ? (SEED_SLUG_MAP[rawId] ?? rawId) : rawId)
 
-    const res = await fetch(`${API}/reviews/${encodeURIComponent(productSlug)}`, {
+    const res = await fetch(`${API}/reviews`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userEmail:   user.email ?? '',
-        userName:    user.name  ?? 'Customer',
+        orderId:     order.id,
+        productId:   rawId,
+        productSlug,
+        productName: item.name,
         userId:      user.id    ?? '',
+        userName:    user.name  ?? 'Customer',
+        userEmail:   user.email ?? '',
         rating:      reviewForm.value.rating,
         title:       reviewForm.value.title.trim(),
         body:        reviewForm.value.body.trim(),

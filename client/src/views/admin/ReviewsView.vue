@@ -424,8 +424,10 @@ async function loadReviews() {
   loading.value   = true
   loadError.value = ''
   try {
-    const data = await apiFetch('/admin/reviews')
-    allReviews.value = data.data ?? []
+    // Local server:  GET /api/reviews        → returns array directly
+    // Vercel server: GET /api/admin/reviews  → returns { data: [] }
+    const data = await apiFetch('/reviews')
+    allReviews.value = Array.isArray(data) ? data : (data.data ?? [])
   } catch (e: any) {
     loadError.value  = e.message ?? 'Failed to load reviews'
     allReviews.value = []
@@ -436,8 +438,10 @@ async function loadReviews() {
 
 async function changeStatus(review: ApiReview, status: string) {
   try {
-    const updated = await apiFetch(`/admin/reviews/${review.productSlug}/${review.id}`, {
-      method: 'PATCH',
+    // Local server:  PUT /api/reviews/:id    → { status, adminNote }
+    // Vercel server: PATCH /api/admin/reviews/:productSlug/:id
+    const updated = await apiFetch(`/reviews/${review.id}`, {
+      method: 'PUT',
       body: JSON.stringify({ status }),
     })
     const idx = allReviews.value.findIndex(r => r.id === review.id)
@@ -453,7 +457,8 @@ async function doDelete() {
   if (!deleteTarget.value) return
   deleting.value = true
   try {
-    await apiFetch(`/admin/reviews/${deleteTarget.value.productSlug}/${deleteTarget.value.id}`, { method: 'DELETE' })
+    // Local server:  DELETE /api/reviews/:id
+    await apiFetch(`/reviews/${deleteTarget.value.id}`, { method: 'DELETE' })
     allReviews.value = allReviews.value.filter(r => r.id !== deleteTarget.value!.id)
     deleteTarget.value = null
   } catch (e: any) {
