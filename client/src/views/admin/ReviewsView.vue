@@ -382,10 +382,11 @@ async function saveEdit() {
   editSaving.value = true
   editError.value  = ''
   try {
-    const updated = await apiFetch(
-      `/admin/reviews/${editTarget.value.productSlug}/${editTarget.value.id}`,
-      { method: 'PATCH', body: JSON.stringify(editForm.value) }
-    )
+    // Local server: PUT /api/reviews/:id
+    const updated = await apiFetch(`/reviews/${editTarget.value.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(editForm.value),
+    })
     const idx = allReviews.value.findIndex(r => r.id === editTarget.value!.id)
     if (idx !== -1) allReviews.value[idx] = { ...allReviews.value[idx], ...updated }
     editTarget.value = null

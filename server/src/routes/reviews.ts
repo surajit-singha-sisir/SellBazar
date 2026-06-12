@@ -176,17 +176,21 @@ router.get('/', async (_req, res) => {
   res.json(reviews)
 })
 
-// PUT /api/reviews/:id — admin update (approve/reject/note)
+// PUT /api/reviews/:id — admin update (approve/reject/edit)
 router.put('/:id', async (req, res) => {
   const reviews = await getReviews()
   const idx = reviews.findIndex(r => r.id === req.params.id)
   if (idx === -1) return res.status(404).json({ error: 'Review not found' })
-  const { status, adminNote } = req.body
-  if (status) reviews[idx].status    = status as ReviewStatus
+  const { status, adminNote, rating, title, body, userName } = req.body
+  if (status    !== undefined) reviews[idx].status    = status as ReviewStatus
   if (adminNote !== undefined) reviews[idx].adminNote = String(adminNote)
+  if (rating    !== undefined) reviews[idx].rating    = Number(rating)
+  if (title     !== undefined) reviews[idx].title     = String(title).slice(0, 120)
+  if (body      !== undefined) reviews[idx].body      = String(body).slice(0, 2000)
+  if (userName  !== undefined) reviews[idx].userName  = String(userName)
   await saveReviews(reviews)
-  // Sync product rating when approving/rejecting
-  if (status === 'approved' || status === 'rejected') {
+  // Sync product rating when status or rating changes
+  if (status === 'approved' || status === 'rejected' || rating !== undefined) {
     await syncProductRating(reviews[idx].productSlug)
   }
   broadcast('reviews_updated')
