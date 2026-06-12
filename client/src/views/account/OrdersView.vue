@@ -435,16 +435,39 @@ async function fetchOrders() {
   error.value   = ''
   try {
     const savedIds: string[] = JSON.parse(localStorage.getItem('sb-order-ids') ?? '[]')
-    if (savedIds.length === 0) { orders.value = []; return }
-    const results = await Promise.all(
-      savedIds.map(id =>
-        fetch(`${API}/orders/by-id/${id}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      )
-    )
-    orders.value = (results.filter(Boolean) as Order[])
+
+    // Fetch by ID (from localStorage) and by email (logged-in users) in parallel
+    const byIdPromise: Promise<Order[]> = savedIds.length > 0
+      ? Promise.all(
+          savedIds.map(id =>
+            fetch(`${API}/orders/by-id/${id}`)
+              .then(r => r.ok ? r.json() as Promise<Order> : null)
+              .catch(() => null)
+          )
+        ).then(results => results.filter(Boolean) as Order[])
+      : Promise.resolve([])
+
+    const byEmailPromise: Promise<Order[]> = authStore.isLoggedIn && authStore.user?.email
+      ? fetch(`${API}/orders/by-email?email=${encodeURIComponent(authStore.user.email)}`)
+          .then(r => r.ok ? r.json().then((d: any) => d.data as Order[]) : [])
+          .catch(() => [])
+      : Promise.resolve([])
+
+    const [byId, byEmail] = await Promise.all([byIdPromise, byEmailPromise])
+
+    // Merge, de-duplicate by order ID, sort newest first
+    const merged = new Map<string, Order>()
+    for (const o of [...byId, ...byEmail]) merged.set(o.id, o)
+
+    // Persist any newly discovered order IDs back to localStorage
+    const allIds = [...merged.keys()]
+    if (allIds.length > savedIds.length) {
+      localStorage.setItem('sb-order-ids', JSON.stringify(allIds))
+    }
+
+    orders.value = [...merged.values()]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
   } catch {
     error.value = 'Could not load orders. Please try again.'
   } finally {

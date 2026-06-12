@@ -213,13 +213,24 @@ async function markProductDeleted(slug) {
 async function getAllOrders() {
   if (KV_ENABLED) {
     const ids = (await kvGet('sb:order_ids')) ?? null
-    // First time: no orders in KV yet — seed them in
     if (ids === null) {
+      // Very first run — seed demo orders but do NOT overwrite any real orders
       await seedOrdersToKV()
       return [...SEED_ORDERS]
     }
-    const orders = await Promise.all(ids.map(id => kvGet(`sb:order:${id}`)))
-    return orders.filter(Boolean)
+    // Fetch all orders listed in the index
+    const listed = await Promise.all(ids.map(id => kvGet(`sb:order:${id}`)))
+    const result = listed.filter(Boolean)
+
+    // Also ensure seed orders are included (they may not be in sb:order_ids
+    // if the index was initialised before seeding, or was reset)
+    for (const seed of SEED_ORDERS) {
+      if (!result.find(o => o.id === seed.id)) {
+        const fromKv = await kvGet(`sb:order:${seed.id}`)
+        result.push(fromKv ?? seed)
+      }
+    }
+    return result
   }
   // In-memory fallback: seed once
   if (_mem.dynamicOrders.length === 0) {
@@ -229,9 +240,16 @@ async function getAllOrders() {
 }
 
 async function seedOrdersToKV() {
-  const ids = SEED_ORDERS.map(o => o.id)
-  await kvSet('sb:order_ids', ids)
-  await Promise.all(SEED_ORDERS.map(o => kvSet(`sb:order:${o.id}`, o)))
+  // Write each seed order object directly — do NOT touch sb:order_ids here
+  // because real user orders may already be listed there.
+  await Promise.all(SEED_ORDERS.map(async o => {
+    const existing = await kvGet(`sb:order:${o.id}`)
+    if (!existing) await kvSet(`sb:order:${o.id}`, o)
+  }))
+  // Merge seed IDs into the index without clobbering existing entries
+  const existing = (await kvGet('sb:order_ids')) ?? []
+  const merged = [...new Set([...SEED_ORDERS.map(o => o.id), ...existing])]
+  await kvSet('sb:order_ids', merged)
 }
 
 async function saveOrder(order) {
