@@ -403,8 +403,15 @@ interface OrderItem {
   price: number
   image?: string
 }
+interface OrderCustomer {
+  name?: string
+  email?: string
+  phone?: string
+  address?: string
+}
 interface Order {
   id: string
+  customer?: OrderCustomer
   items: OrderItem[]
   subtotal: number
   shipping: number
@@ -412,6 +419,7 @@ interface Order {
   status: string
   paymentMethod: string
   paymentStatus: string
+  notes?: string
   trackingNumber: string
   createdAt: string
   updatedAt: string
