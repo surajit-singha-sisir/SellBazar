@@ -1031,10 +1031,5 @@ async function handleLogout() { await authStore.logout() }
   .danger-zone  { margin: 0 16px 16px; }
   .panel-footer { padding: 14px 16px; }
   .panel-header { padding: 16px 16px 12px; }
-  .panel-body   { padding: 16px 12px; }
-  .rf-field     { padding: 12px 14px 0; }
-  .rf-actions   { padding: 14px 14px 16px; }
-  .review-form-header { padding: 14px 14px 12px; }
-  .pending-card { padding: 12px; }
 }
 </style>
