@@ -236,9 +236,16 @@ async function seedOrdersToKV() {
 
 async function saveOrder(order) {
   if (KV_ENABLED) {
+    // Always write the order object first — this is the source of truth.
+    // The order_ids index is for listing; by-id lookups go directly to sb:order:<id>.
     await kvSet(`sb:order:${order.id}`, order)
-    const ids = (await kvGet('sb:order_ids')) ?? []
-    if (!ids.includes(order.id)) { ids.unshift(order.id); await kvSet('sb:order_ids', ids) }
+    try {
+      const ids = (await kvGet('sb:order_ids')) ?? []
+      if (!ids.includes(order.id)) { ids.unshift(order.id); await kvSet('sb:order_ids', ids) }
+    } catch (e) {
+      // Index update failed — the order is still retrievable by direct key lookup
+      console.error('[saveOrder] Failed to update sb:order_ids index:', e.message)
+    }
   } else {
     const idx = _mem.dynamicOrders.findIndex(o => o.id === order.id)
     if (idx !== -1) _mem.dynamicOrders[idx] = order; else _mem.dynamicOrders.unshift(order)
@@ -711,8 +718,15 @@ app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (
 // ──────────────────────────────────────────────────────────────────────────────
 
 app.get('/api/orders/by-id/:id', async (req, res) => {
+  const id = req.params.id
+  // Fast path: look up the order directly by its KV key (avoids loading all order IDs)
+  if (KV_ENABLED) {
+    const direct = await kvGet(`sb:order:${id}`)
+    if (direct) return res.json(direct)
+  }
+  // Fallback: scan all orders (covers in-memory mode + seed orders)
   const orders = await getAllOrders()
-  const o = orders.find(o => o.id === req.params.id)
+  const o = orders.find(o => o.id === id)
   if (!o) return res.status(404).json({ error: 'Order not found' })
   res.json(o)
 })
@@ -1377,8 +1391,12 @@ app.post('/api/auth/login-debug', async (req, res) => {
 // matches any app.get('/api/...') route.  We restore the prefix here.
 
 module.exports = (req, res) => {
-  if (!req.url.startsWith('/api')) {
-    req.url = '/api' + req.url
+  // Vercel strips the matched rewrite prefix before forwarding to the function.
+  // e.g. /api/orders/by-id/SB-123 arrives as /orders/by-id/SB-123
+  // But sometimes (depending on Vercel runtime version) it arrives with /api already.
+  // Normalise: always ensure exactly one /api prefix.
+  if (!req.url.startsWith('/api/') && req.url !== '/api') {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url)
   }
   app(req, res)
 }
