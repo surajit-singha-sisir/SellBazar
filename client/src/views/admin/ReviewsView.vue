@@ -76,6 +76,14 @@
         <i class="fa-sharp fa-solid fa-spinner fa-spin" style="font-size:24px;color:#f97316;display:block;margin-bottom:8px"></i>
         Loading reviews…
       </div>
+      <div v-else-if="loadError" style="text-align:center;padding:48px;color:#ef4444">
+        <i class="fa-sharp fa-solid fa-triangle-exclamation" style="font-size:32px;display:block;margin-bottom:10px"></i>
+        <p style="font-weight:600;margin-bottom:6px">Failed to load reviews</p>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">{{ loadError }}</p>
+        <button class="admin-btn secondary" @click="loadReviews">
+          <i class="fa-sharp fa-solid fa-arrows-rotate"></i> Retry
+        </button>
+      </div>
       <div v-else-if="filtered.length === 0" style="text-align:center;padding:48px;color:var(--text-secondary)">
         <i class="fa-sharp fa-regular fa-star" style="font-size:36px;display:block;margin-bottom:8px;opacity:.2"></i>
         No reviews found.
@@ -140,6 +148,11 @@
               </td>
               <td>
                 <div style="display:flex;gap:6px">
+                  <button @click="openEdit(review)"
+                    class="admin-btn ghost" style="padding:4px 8px;font-size:11px;color:#8b5cf6;border-color:rgba(139,92,246,.3)"
+                    title="Edit">
+                    <i class="fa-sharp fa-regular fa-pen-to-square"></i>
+                  </button>
                   <button v-if="review.status !== 'approved'" @click="changeStatus(review, 'approved')"
                     class="admin-btn ghost" style="padding:4px 8px;font-size:11px;color:#22c55e;border-color:rgba(34,197,94,.3)"
                     title="Approve">
@@ -162,6 +175,113 @@
         </table>
       </div>
     </div>
+
+    <!-- ── Edit Review Modal ──────────────────────────────────────────────── -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="editTarget" class="modal-backdrop" @click.self="editTarget = null">
+          <div class="edit-modal-box">
+
+            <!-- Header -->
+            <div class="edit-modal-header">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="edit-modal-icon">
+                  <i class="fa-sharp fa-solid fa-pen-to-square"></i>
+                </div>
+                <div>
+                  <div style="font-size:15px;font-weight:800;color:var(--text-primary)">Edit Review</div>
+                  <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">{{ editTarget.productName || editTarget.productSlug }}</div>
+                </div>
+              </div>
+              <button class="edit-close-btn" @click="editTarget = null">
+                <i class="fa-sharp fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="edit-modal-body">
+
+              <!-- Reviewer info (read-only) -->
+              <div class="edit-field-row">
+                <div class="edit-field" style="flex:1">
+                  <label class="edit-label">Reviewer Name</label>
+                  <input v-model="editForm.userName" class="admin-input" placeholder="Customer name" />
+                </div>
+                <div class="edit-field" style="flex:1">
+                  <label class="edit-label">Email <span style="color:var(--text-secondary);font-weight:400;font-size:10px">(read-only)</span></label>
+                  <input :value="editTarget.userEmail" class="admin-input" disabled style="opacity:.6;cursor:not-allowed" />
+                </div>
+              </div>
+
+              <!-- Rating -->
+              <div class="edit-field">
+                <label class="edit-label">Rating</label>
+                <div class="edit-stars">
+                  <button v-for="n in 5" :key="n"
+                    class="edit-star-btn"
+                    :class="{ filled: n <= editForm.rating, hovered: n <= editHover }"
+                    @mouseenter="editHover = n"
+                    @mouseleave="editHover = 0"
+                    @click="editForm.rating = n">
+                    <i class="fa-sharp fa-solid fa-star"></i>
+                  </button>
+                  <span class="edit-star-label">{{ editRatingLabel }}</span>
+                </div>
+              </div>
+
+              <!-- Title -->
+              <div class="edit-field">
+                <label class="edit-label">Review Title</label>
+                <input v-model="editForm.title" class="admin-input" placeholder="Review headline…" maxlength="120" />
+                <p class="edit-hint">{{ editForm.title.length }}/120</p>
+              </div>
+
+              <!-- Body -->
+              <div class="edit-field">
+                <label class="edit-label">Review Body <span style="color:#ef4444">*</span></label>
+                <textarea v-model="editForm.body" class="admin-input" style="resize:none;min-height:90px"
+                  placeholder="Review content…" maxlength="2000" rows="4"></textarea>
+                <p class="edit-hint">{{ editForm.body.length }}/2000</p>
+              </div>
+
+              <!-- Status + Admin note -->
+              <div class="edit-field-row">
+                <div class="edit-field" style="flex:1">
+                  <label class="edit-label">Status</label>
+                  <select v-model="editForm.status" class="admin-input">
+                    <option value="approved">Approved</option>
+                    <option value="pending">Pending</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="edit-field">
+                <label class="edit-label">Admin Note <span style="color:var(--text-secondary);font-weight:400;font-size:10px">(internal only)</span></label>
+                <input v-model="editForm.adminNote" class="admin-input" placeholder="Optional internal note…" />
+              </div>
+
+              <!-- Error -->
+              <div v-if="editError" style="display:flex;align-items:center;gap:8px;font-size:12px;color:#ef4444;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 14px">
+                <i class="fa-sharp fa-solid fa-circle-exclamation"></i>
+                {{ editError }}
+              </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="edit-modal-footer">
+              <button class="admin-btn secondary" @click="editTarget = null">Cancel</button>
+              <button class="admin-btn primary" :disabled="editSaving || !editForm.body.trim()" @click="saveEdit">
+                <i :class="editSaving ? 'fa-sharp fa-solid fa-spinner fa-spin' : 'fa-sharp fa-solid fa-floppy-disk'"></i>
+                {{ editSaving ? 'Saving…' : 'Save Changes' }}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Delete confirm modal -->
     <Teleport to="body">
@@ -217,12 +337,65 @@ type ApiReview = Review & { productSlug: string; productName?: string }
 
 const allReviews   = ref<ApiReview[]>([])
 const loading      = ref(false)
+const loadError    = ref('')
 const search       = ref('')
 const filterStatus = ref('all')
 const filterRating = ref<number | 'all'>('all')
 const deleteTarget = ref<ApiReview | null>(null)
 const deleting     = ref(false)
 const preview      = ref<string | null>(null)
+
+// ── Edit state ─────────────────────────────────────────────────────────────────
+const editTarget = ref<ApiReview | null>(null)
+const editSaving = ref(false)
+const editError  = ref('')
+const editHover  = ref(0)
+const editForm = ref({
+  userName:  '',
+  rating:    5,
+  title:     '',
+  body:      '',
+  status:    'approved' as 'approved' | 'pending' | 'rejected',
+  adminNote: '',
+})
+const ratingLabels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
+const editRatingLabel = computed(() =>
+  ratingLabels[editHover.value || editForm.value.rating] ?? ''
+)
+
+function openEdit(review: ApiReview) {
+  editTarget.value = review
+  editError.value  = ''
+  editHover.value  = 0
+  editForm.value   = {
+    userName:  review.userName,
+    rating:    review.rating,
+    title:     review.title  ?? '',
+    body:      review.body,
+    status:    review.status as 'approved' | 'pending' | 'rejected',
+    adminNote: review.adminNote ?? '',
+  }
+}
+
+async function saveEdit() {
+  if (!editTarget.value) return
+  editSaving.value = true
+  editError.value  = ''
+  try {
+    const updated = await apiFetch(
+      `/admin/reviews/${editTarget.value.productSlug}/${editTarget.value.id}`,
+      { method: 'PATCH', body: JSON.stringify(editForm.value) }
+    )
+    const idx = allReviews.value.findIndex(r => r.id === editTarget.value!.id)
+    if (idx !== -1) allReviews.value[idx] = { ...allReviews.value[idx], ...updated }
+    editTarget.value = null
+  } catch (e: any) {
+    editError.value = e.message ?? 'Failed to save changes'
+  } finally {
+    editSaving.value = false
+  }
+}
+// ── /Edit state ────────────────────────────────────────────────────────────────
 
 const avgRating = computed(() => {
   const approved = allReviews.value.filter(r => r.status === 'approved')
@@ -248,12 +421,14 @@ const filtered = computed(() => {
 })
 
 async function loadReviews() {
-  loading.value = true
+  loading.value   = true
+  loadError.value = ''
   try {
     const data = await apiFetch('/admin/reviews')
     allReviews.value = data.data ?? []
-  } catch (e) {
-    console.error('[AdminReviews] load:', e)
+  } catch (e: any) {
+    loadError.value  = e.message ?? 'Failed to load reviews'
+    allReviews.value = []
   } finally {
     loading.value = false
   }
@@ -314,6 +489,65 @@ onMounted(loadReviews)
   line-height: 1.5; margin: 0;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+
+/* ── Edit modal ─────────────────────────────────────────────────────────────── */
+.edit-modal-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  width: 96%;
+  max-width: 560px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,.3);
+  overflow: hidden;
+}
+.edit-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0; gap: 10px;
+}
+.edit-modal-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: rgba(139,92,246,.12); color: #8b5cf6;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.edit-close-btn {
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--border-color); background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); transition: all .15s;
+}
+.edit-close-btn:hover { background: var(--bg-primary); color: var(--text-primary); }
+
+.edit-modal-body {
+  overflow-y: auto; padding: 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.edit-modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
+}
+.edit-field { display: flex; flex-direction: column; gap: 5px; }
+.edit-field-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.edit-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.edit-hint  { font-size: 11px; color: var(--text-secondary); text-align: right; margin: 0; }
+
+/* Stars */
+.edit-stars { display: flex; align-items: center; gap: 4px; }
+.edit-star-btn {
+  background: none; border: none; cursor: pointer; padding: 2px;
+  font-size: 26px; color: var(--border-color); transition: color .12s, transform .1s; line-height: 1;
+}
+.edit-star-btn.filled,
+.edit-star-btn.hovered { color: #f59e0b; }
+.edit-star-btn:hover { transform: scale(1.15); }
+.edit-star-label { font-size: 12px; font-weight: 700; color: #f59e0b; min-width: 70px; margin-left: 4px; }
+
+/* Delete / generic modal */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,.5); backdrop-filter: blur(4px);
@@ -334,8 +568,8 @@ onMounted(loadReviews)
 .modal-actions { display: flex; gap: 10px; justify-content: center; }
 .admin-btn.danger {
   background: #ef4444; color: white; border-color: #ef4444;
-  &:hover:not(:disabled) { background: #dc2626; }
 }
+.admin-btn.danger:hover:not(:disabled) { background: #dc2626; }
 .modal-enter-active, .modal-leave-active { transition: opacity .2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>
