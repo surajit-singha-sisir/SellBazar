@@ -560,7 +560,6 @@ const tabs = [
   { id: 'personal',  label: 'Personal Info',  icon: 'fa-sharp-duotone fa-solid fa-id-card'          },
   { id: 'phones',    label: 'Phone Numbers',  icon: 'fa-sharp-duotone fa-solid fa-mobile-screen'     },
   { id: 'addresses', label: 'Addresses',      icon: 'fa-sharp-duotone fa-solid fa-map-location-dot'  },
-  { id: 'reviews',   label: 'My Reviews',     icon: 'fa-sharp-duotone fa-solid fa-star'              },
   { id: 'security',  label: 'Security',       icon: 'fa-sharp-duotone fa-solid fa-shield-keyhole'    },
 ]
 const activeTab = ref('personal')
