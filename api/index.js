@@ -1370,7 +1370,15 @@ app.post('/api/auth/login-debug', async (req, res) => {
 })
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Export
+// Export — Vercel serverless wrapper
 // ──────────────────────────────────────────────────────────────────────────────
+// When Vercel routes /api/orders/by-id/:id → api/index.js, it strips the
+// leading /api prefix so Express receives /orders/by-id/:id, which never
+// matches any app.get('/api/...') route.  We restore the prefix here.
 
-module.exports = app
+module.exports = (req, res) => {
+  if (!req.url.startsWith('/api')) {
+    req.url = '/api' + req.url
+  }
+  app(req, res)
+}
