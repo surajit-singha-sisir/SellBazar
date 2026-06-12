@@ -957,6 +957,11 @@ app.patch('/api/admin/reviews/:productSlug/:reviewId', requireAdmin, async (req,
   if (!review) return res.status(404).json({ error: 'Review not found' })
   if (req.body.status    !== undefined) review.status    = req.body.status
   if (req.body.adminNote !== undefined) review.adminNote = req.body.adminNote
+  if (req.body.rating    !== undefined) review.rating    = Number(req.body.rating)
+  if (req.body.title     !== undefined) review.title     = req.body.title
+  if (req.body.body      !== undefined) review.body      = req.body.body
+  if (req.body.userName  !== undefined) review.userName  = req.body.userName
+  review.updatedAt = new Date().toISOString()
   await saveProductReviews(req.params.productSlug, reviews)
   await recalculateProductRating(req.params.productSlug)
   res.json(review)
