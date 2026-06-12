@@ -48,7 +48,12 @@ const KV_HEADERS = () => ({
 async function kvGet(key) {
   if (!KV_ENABLED) return null
   try {
-    const res  = await fetch(`${KV_URL}/get/${encodeURIComponent(key)}`, { headers: KV_HEADERS() })
+    // Use JSON-body command format: POST ["GET", "key"] to the base URL
+    const res = await fetch(KV_URL, {
+      method:  'POST',
+      headers: KV_HEADERS(),
+      body:    JSON.stringify(['GET', key]),
+    })
     if (!res.ok) return null
     const json = await res.json()
     if (json.result === null || json.result === undefined) return null
@@ -62,18 +67,28 @@ async function kvGet(key) {
 async function kvSet(key, value) {
   if (!KV_ENABLED) return
   try {
-    const encoded = encodeURIComponent(JSON.stringify(value))
-    await fetch(`${KV_URL}/set/${encodeURIComponent(key)}/${encoded}`, {
-      method: 'POST', headers: KV_HEADERS(),
+    // Use JSON-body command format: POST ["SET", "key", "json-string"] to the base URL.
+    // This avoids all URL-length limits — critical for large order/product objects.
+    const res = await fetch(KV_URL, {
+      method:  'POST',
+      headers: KV_HEADERS(),
+      body:    JSON.stringify(['SET', key, JSON.stringify(value)]),
     })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      console.error('[KV set] failed', key, res.status, text)
+    }
   } catch (e) { console.error('[KV set]', key, e.message) }
 }
 
 async function kvDel(key) {
   if (!KV_ENABLED) return
   try {
-    await fetch(`${KV_URL}/del/${encodeURIComponent(key)}`, {
-      method: 'POST', headers: KV_HEADERS(),
+    // Use JSON-body command format: POST ["DEL", "key"]
+    await fetch(KV_URL, {
+      method:  'POST',
+      headers: KV_HEADERS(),
+      body:    JSON.stringify(['DEL', key]),
     })
   } catch (e) { console.error('[KV del]', key, e.message) }
 }
