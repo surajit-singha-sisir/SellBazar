@@ -1208,7 +1208,7 @@ app.get('/api/events', async (req, res) => {
 // Public: upload review image via ImgBB (no auth required)
 app.post('/api/upload/imgbb', async (req, res) => {
   const { base64, name } = req.body
-  const apiKey = process.env.IMGBB_API_KEY
+  const apiKey = 'f3c12080238055cf04e5a657a47ee058'
   if (!apiKey) return res.status(503).json({ error: 'Image upload not configured (IMGBB_API_KEY missing)' })
   if (!base64) return res.status(400).json({ error: 'base64 image data required' })
   try {
