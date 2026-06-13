@@ -837,3 +837,247 @@ app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (
     await saveCategory(cat); res.json({ message:'Subcategory deleted', slug:removed.slug })
   } catch(e) { res.status(500).json({ error:e.message }) }
 })
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REVIEWS  /api/reviews/*
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/api/reviews/product/:slug', async (req, res) => {
+  try {
+    const reviews = await getReviews()
+    res.json(reviews.filter(r => r.productSlug===req.params.slug && r.status==='approved').sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)))
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.get('/api/reviews/check', async (req, res) => {
+  try {
+    const { orderId, productId, userId } = req.query
+    if (!orderId||!productId||!userId) return res.status(400).json({ error:'orderId, productId and userId required' })
+    const orderRows = await sql`SELECT * FROM orders WHERE id = ${orderId} LIMIT 1`
+    if (!orderRows.length) return res.status(404).json({ canReview:false, reason:'Order not found' })
+    const order = rowToOrder(orderRows[0])
+    const userRows = await sql`SELECT email FROM users WHERE id = ${userId} LIMIT 1`
+    const userEmail = userRows[0]?.email ?? ''
+    const ownsOrder = order.customer?.userId===userId || (userEmail && order.customer?.email?.toLowerCase()===userEmail.toLowerCase())
+    if (!ownsOrder) return res.json({ canReview:false, reason:'Order does not belong to this account' })
+    if (order.status!=='delivered') return res.json({ canReview:false, reason:'Order not yet delivered' })
+    if (!order.items?.some(i => i.productId===productId)) return res.json({ canReview:false, reason:'Product not in this order' })
+    const existing = await sql`SELECT id FROM reviews WHERE order_id=${orderId} AND product_id=${productId} AND user_id=${userId} LIMIT 1`
+    if (existing.length) return res.json({ canReview:false, reason:'Already reviewed', reviewId:existing[0].id })
+    res.json({ canReview:true })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.get('/api/reviews', async (_req, res) => {
+  try { res.json(await getReviews()) }
+  catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.post('/api/reviews', async (req, res) => {
+  try {
+    const { orderId, productId, productSlug, productName, userId, userName, userEmail, rating, title, body, images } = req.body
+    if (!orderId||!productId||!productSlug||!userId||!rating) return res.status(400).json({ error:'orderId, productId, productSlug, userId and rating required' })
+    if (rating<1||rating>5) return res.status(400).json({ error:'Rating must be 1-5' })
+    const orderRows = await sql`SELECT * FROM orders WHERE id = ${orderId} LIMIT 1`
+    if (!orderRows.length) return res.status(404).json({ error:'Order not found' })
+    const order = rowToOrder(orderRows[0])
+    if (order.status!=='delivered') return res.status(403).json({ error:'Can only review delivered orders' })
+    if (!order.items?.some(i => i.productId===productId)) return res.status(403).json({ error:'Product not in this order' })
+    const existing = await sql`SELECT id FROM reviews WHERE order_id=${orderId} AND product_id=${productId} AND user_id=${userId} LIMIT 1`
+    if (existing.length) return res.status(409).json({ error:'Already reviewed' })
+    const review = {
+      id:`rev-${Date.now()}`, productId:String(productId), productSlug:String(productSlug), productName:String(productName??''),
+      orderId:String(orderId), userId:String(userId), userName:String(userName??'Anonymous'), userEmail:String(userEmail??''),
+      rating:Number(rating), title:String(title??'').slice(0,120), body:String(body??'').slice(0,2000),
+      images:Array.isArray(images)?images.slice(0,4):[], status:'pending', helpful:0, adminNote:'', createdAt:new Date().toISOString(),
+    }
+    await saveReview(review)
+    res.status(201).json(review)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.post('/api/reviews/:id/helpful', async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM reviews WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error:'Review not found' })
+    const r = rowToReview(rows[0])
+    r.helpful = (r.helpful??0) + 1
+    await saveReview(r); res.json({ helpful:r.helpful })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.put('/api/reviews/:id', async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM reviews WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error:'Review not found' })
+    const r = rowToReview(rows[0])
+    const { status, adminNote, rating, title, body, userName } = req.body
+    if (status!==undefined) r.status=status
+    if (adminNote!==undefined) r.adminNote=String(adminNote)
+    if (rating!==undefined) r.rating=Number(rating)
+    if (title!==undefined) r.title=String(title).slice(0,120)
+    if (body!==undefined) r.body=String(body).slice(0,2000)
+    if (userName!==undefined) r.userName=String(userName)
+    await saveReview(r)
+    if (status==='approved'||status==='rejected'||rating!==undefined) await syncProductRating(r.productSlug)
+    res.json(r)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.delete('/api/reviews/:id', async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM reviews WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error:'Review not found' })
+    const r = rowToReview(rows[0])
+    await deleteReview(req.params.id)
+    await syncProductRating(r.productSlug)
+    res.json({ message:'Deleted', id:r.id })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BANNERS  /api/banners/*
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/api/banners', async (_req, res) => {
+  try { res.json(await getBanners()) }
+  catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.get('/api/banners/all', requireAdmin, async (_req, res) => {
+  try { res.json(await getBanners()) }
+  catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.post('/api/banners', requireAdmin, async (req, res) => {
+  try {
+    const { id, tag, title, subtitle, cta, link, image, active, order } = req.body
+    if (!title||!image) return res.status(400).json({ error:'title and image required' })
+    const banners = await getBanners()
+    const newBanner = {
+      id: id||randomBytes(8).toString('hex'), tag:tag??'', title:title.trim(),
+      subtitle:subtitle??'', cta:cta??'Shop Now', link:link??'/', image:image.trim(),
+      active:active??true, order:typeof order==='number'?order:banners.length,
+    }
+    await saveBanner(newBanner); res.status(201).json(newBanner)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.put('/api/banners/reorder', requireAdmin, async (req, res) => {
+  try {
+    const updates = req.body
+    if (!Array.isArray(updates)) return res.status(400).json({ error:'Expected array of {id,order}' })
+    const banners = await getBanners()
+    const map = new Map(updates.map(u=>[u.id,u.order]))
+    for (const b of banners) if (map.has(b.id)) { b.order=map.get(b.id); await saveBanner(b) }
+    res.json(await getBanners())
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.put('/api/banners/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM banners WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error:'Banner not found' })
+    const updated = { ...rowToBanner(rows[0]), ...req.body, id:req.params.id }
+    await saveBanner(updated); res.json(updated)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.patch('/api/banners/:id/toggle', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM banners WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error:'Banner not found' })
+    const b = rowToBanner(rows[0]); b.active = !b.active
+    await saveBanner(b); res.json(b)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.delete('/api/banners/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT id FROM banners WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error:'Banner not found' })
+    await deleteBanner(req.params.id); res.json({ success:true })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN DASHBOARD & UTILITIES  /api/admin/*
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/api/admin/dashboard', requireAdmin, async (_req, res) => {
+  try {
+    const [products, orders] = await Promise.all([getProducts(), getOrders()])
+    const now = new Date(), thisMonth=now.getMonth(), thisYear=now.getFullYear()
+    const lastMonth=thisMonth===0?11:thisMonth-1, lastMonthYear=thisMonth===0?thisYear-1:thisYear
+    function inMonth(d,m,y){const dt=new Date(d);return dt.getMonth()===m&&dt.getFullYear()===y}
+    const paidOrders = orders.filter(o=>o.paymentStatus==='paid')
+    const totalRevenue = paidOrders.reduce((s,o)=>s+o.total,0)
+    const thisMonthRev = paidOrders.filter(o=>inMonth(o.createdAt,thisMonth,thisYear)).reduce((s,o)=>s+o.total,0)
+    const lastMonthRev = paidOrders.filter(o=>inMonth(o.createdAt,lastMonth,lastMonthYear)).reduce((s,o)=>s+o.total,0)
+    const revenueGrowth = lastMonthRev>0?((thisMonthRev-lastMonthRev)/lastMonthRev)*100:0
+    const statusCounts = orders.reduce((acc,o)=>{acc[o.status]=(acc[o.status]??0)+1;return acc},{})
+    const last7=[]; for(let i=6;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);const ds=d.toISOString().slice(0,10);const dayOrders=orders.filter(o=>o.createdAt.slice(0,10)===ds);last7.push({date:ds,revenue:dayOrders.filter(o=>o.paymentStatus==='paid').reduce((s,o)=>s+o.total,0),orders:dayOrders.length})}
+    const catMap={}; products.forEach(p=>{catMap[p.category]=(catMap[p.category]??0)+1})
+    const categoryBreakdown=Object.entries(catMap).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count)
+    const recentOrders=[...orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,5)
+    res.json({
+      totalRevenue, thisMonthRevenue:thisMonthRev, lastMonthRevenue:lastMonthRev,
+      revenueGrowth:Number(revenueGrowth.toFixed(1)), totalOrders:orders.length, statusCounts,
+      pendingOrders:(statusCounts['pending']??0)+(statusCounts['processing']??0),
+      totalProducts:products.length, lowStockCount:products.filter(p=>p.stock<25).length,
+      outOfStock:products.filter(p=>p.stock===0).length,
+      avgRating:products.length?Number((products.reduce((s,p)=>s+p.rating,0)/products.length).toFixed(2)):0,
+      uniqueCustomers:[...new Set(orders.map(o=>o.customer?.email).filter(Boolean))].length,
+      last7Days:last7, categoryBreakdown, recentOrders,
+    })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.get('/api/admin/customers', requireAdmin, async (_req, res) => {
+  try {
+    const orders = await getOrders()
+    const map={}
+    orders.forEach(o=>{
+      const email=o.customer?.email??o.id
+      if(!map[email]) map[email]={id:email,name:o.customer?.name??'Unknown',email:o.customer?.email??'',phone:o.customer?.phone??'',address:o.customer?.address??'',orderCount:0,totalSpent:0,lastOrder:o.createdAt,firstOrder:o.createdAt,orders:[]}
+      map[email].orderCount++; map[email].totalSpent+=o.total
+      if(o.createdAt>map[email].lastOrder) map[email].lastOrder=o.createdAt
+      if(o.createdAt<map[email].firstOrder) map[email].firstOrder=o.createdAt
+      map[email].orders.push(o.id)
+    })
+    const customers=Object.values(map).sort((a,b)=>b.totalSpent-a.totalSpent)
+    res.json({ data:customers, total:customers.length })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+// reset-collection — truncates a table and re-seeds on next request
+app.delete('/api/admin/reset-collection/:col', requireAdmin, async (req, res) => {
+  try {
+    const col = req.params.col
+    if (col === 'products')   { await sql`TRUNCATE products CASCADE`; res.json({ ok:true, message:'products cleared — will auto-reseed on next request' }) }
+    else if (col === 'orders') { await sql`TRUNCATE orders CASCADE`;   res.json({ ok:true, message:'orders cleared — will auto-reseed on next request' }) }
+    else if (col === 'categories') { await sql`TRUNCATE categories CASCADE`; res.json({ ok:true, message:'categories cleared — will auto-reseed on next request' }) }
+    else res.status(400).json({ error:'col must be products|orders|categories' })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SSE EVENTS  /api/events  (no-op snapshot on Vercel serverless)
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type','text/event-stream')
+  res.setHeader('Cache-Control','no-cache')
+  res.setHeader('Connection','keep-alive')
+  res.setHeader('X-Accel-Buffering','no')
+  res.flushHeaders()
+  // Vercel serverless can't hold long-lived connections.
+  // Send an immediate snapshot and close gracefully.
+  Promise.all([
+    sql`SELECT * FROM orders ORDER BY created_at DESC LIMIT 50`,
+    sql`SELECT * FROM products ORDER BY updated_at DESC LIMIT 50`,
+  ]).then(([orderRows, productRows]) => {
+    try {
+      res.write(`event: snapshot\ndata: ${JSON.stringify({
+        orders: orderRows.map(rowToOrder),
+        products: productRows.map(rowToProduct),
+      })}\n\n`)
+    } catch {}
+    res.end()
+  }).catch(() => res.end())
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Export for Vercel
+// ═══════════════════════════════════════════════════════════════════════════════
+module.exports = app
