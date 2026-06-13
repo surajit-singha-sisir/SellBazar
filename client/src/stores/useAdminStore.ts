@@ -279,6 +279,30 @@ export const useAdminStore = defineStore('admin', () => {
     customers.value = customers.value.filter(c => c.id !== id)
   }
 
+  async function createCustomer(data: {
+    name: string; email: string; phone: string; division: string; password: string
+  }) {
+    loading.value.saving = true
+    try {
+      const res = await api.createCustomer(data)
+      const now = new Date().toISOString()
+      customers.value.unshift({
+        id:            res.customer.id,
+        name:          res.customer.name,
+        email:         res.customer.email,
+        phone:         res.customer.phone,
+        address:       '',
+        orderCount:    0,
+        totalSpent:    0,
+        lastOrder:     now,
+        firstOrder:    now,
+        paymentMethod: '',
+        orders:        [],
+      })
+      return res
+    } finally { loading.value.saving = false }
+  }
+
   // ── Image upload ──────────────────────────────────────────────────────────
   async function uploadImage(file: File) {
     return api.uploadImage(file)
@@ -295,7 +319,7 @@ export const useAdminStore = defineStore('admin', () => {
     loadAll, loadDashboard, loadProducts, loadOrders, loadCustomers, checkHealth,
     createProduct, updateProduct, deleteProduct,
     updateOrder, deleteOrder,
-    removeCustomer,
+    removeCustomer, createCustomer,
     uploadImage,
     // SSE
     connectSSE, disconnectSSE,

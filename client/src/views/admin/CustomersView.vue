@@ -251,7 +251,7 @@
   <Teleport to="body">
     <Transition name="cmodal">
       <div v-if="addModal.open" class="cmodal-overlay" @click.self="closeAddModal">
-        <div class="cmodal-box" style="max-width:480px">
+        <div class="cmodal-box" style="max-width:520px">
           <div class="cmodal-header">
             <div class="cmodal-title">
               <i class="fa-sharp fa-solid fa-user-plus" style="color:var(--brand)"></i>
@@ -263,24 +263,68 @@
           </div>
 
           <div class="cmodal-body" style="padding:20px">
+
+            <!-- Name -->
             <div class="edit-field">
               <label>Full Name <span style="color:#ef4444">*</span></label>
               <input class="admin-input" v-model="addForm.name" placeholder="e.g. Rahim Uddin" />
               <span v-if="addErrors.name" class="field-error">{{ addErrors.name }}</span>
             </div>
+
+            <!-- Email -->
             <div class="edit-field">
-              <label>Email</label>
+              <label>Email <span style="color:#ef4444">*</span></label>
               <input class="admin-input" v-model="addForm.email" type="email" placeholder="email@example.com" />
               <span v-if="addErrors.email" class="field-error">{{ addErrors.email }}</span>
             </div>
+
+            <!-- Phone -->
             <div class="edit-field">
               <label>Phone <span style="color:#ef4444">*</span></label>
-              <input class="admin-input" v-model="addForm.phone" placeholder="+8801XXXXXXXXX" />
+              <input class="admin-input" v-model="addForm.phone" placeholder="01XXXXXXXXX" />
               <span v-if="addErrors.phone" class="field-error">{{ addErrors.phone }}</span>
             </div>
+
+            <!-- Division -->
             <div class="edit-field">
-              <label>Address</label>
-              <textarea class="admin-input" v-model="addForm.address" rows="3" placeholder="Full address" style="resize:vertical"></textarea>
+              <label>Division <span style="color:#ef4444">*</span></label>
+              <select class="admin-input" v-model="addForm.division">
+                <option value="Dhaka">Dhaka</option>
+                <option value="Chattogram">Chattogram</option>
+                <option value="Rajshahi">Rajshahi</option>
+                <option value="Khulna">Khulna</option>
+                <option value="Barishal">Barishal</option>
+                <option value="Sylhet">Sylhet</option>
+                <option value="Rangpur">Rangpur</option>
+                <option value="Mymensingh">Mymensingh</option>
+              </select>
+            </div>
+
+            <!-- Password -->
+            <div class="edit-field">
+              <label>Password <span style="color:#ef4444">*</span></label>
+              <div style="position:relative">
+                <input
+                  class="admin-input"
+                  :type="addModal.showPass ? 'text' : 'password'"
+                  v-model="addForm.password"
+                  placeholder="Min. 6 characters"
+                  style="padding-right:40px"
+                />
+                <button
+                  type="button"
+                  @click="addModal.showPass = !addModal.showPass"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:14px;padding:0"
+                >
+                  <i :class="addModal.showPass ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+                </button>
+              </div>
+              <span v-if="addErrors.password" class="field-error">{{ addErrors.password }}</span>
+            </div>
+
+            <!-- API error banner -->
+            <div v-if="addErrors.api" class="field-error" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);padding:8px 12px;border-radius:8px;margin-bottom:4px">
+              <i class="fa-solid fa-circle-exclamation" style="margin-right:6px"></i>{{ addErrors.api }}
             </div>
 
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
