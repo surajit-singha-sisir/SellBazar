@@ -352,14 +352,6 @@ export function useAdminApi() {
     return request<{ data: ApiCustomer[]; total: number }>('/admin/customers')
   }
 
-  async function createCustomer(data: {
-    name: string; email: string; phone: string; division: string; password: string
-  }) {
-    return request<{ ok: boolean; customer: Omit<ApiCustomer, 'orderCount' | 'totalSpent' | 'lastOrder' | 'firstOrder' | 'paymentMethod' | 'orders'> }>(
-      '/admin/customers', { method: 'POST', body: JSON.stringify(data) }
-    )
-  }
-
   // ── Health ──────────────────────────────────────────────────────────────────
   async function fetchHealth() {
     return request<{ status: string; service: string; time: string }>('/health')
@@ -372,7 +364,7 @@ export function useAdminApi() {
     fetchProducts, createProduct, updateProduct, deleteProduct,
     uploadImage, compressImages,
     fetchOrders, updateOrder, deleteOrder,
-    fetchCustomers, createCustomer,
+    fetchCustomers,
     fetchHealth,
     request,
   }
