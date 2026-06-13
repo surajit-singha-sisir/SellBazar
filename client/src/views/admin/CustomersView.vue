@@ -829,41 +829,44 @@ const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 
 const paginated  = computed(() => filtered.value.slice((page.value - 1) * perPage, page.value * perPage))
 
 // ── Add Customer modal ───────────────────────────────────────────────────────
-const addModal = reactive({ open: false, saving: false })
-const addForm  = reactive({ name: '', email: '', phone: '', address: '' })
-const addErrors = reactive({ name: '', email: '', phone: '' })
+const addModal  = reactive({ open: false, saving: false, showPass: false })
+const addForm   = reactive({ name: '', email: '', phone: '', division: 'Dhaka', password: '' })
+const addErrors = reactive({ name: '', email: '', phone: '', password: '', api: '' })
 
 function closeAddModal() {
-  addModal.open = false
-  addForm.name = ''; addForm.email = ''; addForm.phone = ''; addForm.address = ''
-  addErrors.name = ''; addErrors.email = ''; addErrors.phone = ''
+  addModal.open     = false
+  addModal.showPass = false
+  addForm.name      = ''; addForm.email = ''; addForm.phone = ''
+  addForm.division  = 'Dhaka'; addForm.password = ''
+  addErrors.name    = ''; addErrors.email = ''; addErrors.phone = ''
+  addErrors.password = ''; addErrors.api = ''
 }
 
 async function saveNewCustomer() {
-  // Validation
-  addErrors.name  = addForm.name.trim()  ? '' : 'Name is required.'
-  addErrors.phone = addForm.phone.trim() ? '' : 'Phone is required.'
-  addErrors.email = (!addForm.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addForm.email))
-    ? '' : 'Enter a valid email.'
-  if (addErrors.name || addErrors.phone || addErrors.email) return
+  // Client-side validation
+  addErrors.name     = addForm.name.trim()                                      ? '' : 'Name is required.'
+  addErrors.phone    = addForm.phone.trim()                                     ? '' : 'Phone is required.'
+  addErrors.email    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addForm.email.trim()) ? '' : 'Enter a valid email.'
+  addErrors.password = addForm.password.length >= 6                             ? '' : 'Password must be at least 6 characters.'
+  addErrors.api      = ''
+  if (addErrors.name || addErrors.phone || addErrors.email || addErrors.password) return
 
   addModal.saving = true
   try {
-    const now = new Date().toISOString()
-    const newCustomer = {
-      id:           'cust_' + Date.now().toString(36),
-      name:         addForm.name.trim(),
-      email:        addForm.email.trim(),
-      phone:        addForm.phone.trim(),
-      address:      addForm.address.trim(),
-      orderCount:   0,
-      totalSpent:   0,
-      lastOrder:    now,
-      firstOrder:   now,
-      paymentMethod: '',
-    }
-    adminStore.customers.unshift(newCustomer)
+    await adminStore.createCustomer({
+      name:     addForm.name.trim(),
+      email:    addForm.email.trim(),
+      phone:    addForm.phone.trim(),
+      division: addForm.division,
+      password: addForm.password,
+    })
     closeAddModal()
+  } catch (e: any) {
+    // Show server-side duplicate / validation errors inline
+    const msg: string = e?.message ?? 'Failed to add customer.'
+    if (msg.toLowerCase().includes('email')) addErrors.email = msg
+    else if (msg.toLowerCase().includes('phone')) addErrors.phone = msg
+    else addErrors.api = msg
   } finally {
     addModal.saving = false
   }
