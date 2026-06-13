@@ -186,7 +186,9 @@ async function getProducts() {
   const rows = await sql`SELECT * FROM products ORDER BY updated_at DESC`
   if (rows.length === 0) {
     await seedProducts()
-    return SEED_PRODUCTS
+    // Re-query after seeding so we always return DB-normalised rows
+    const seeded = await sql`SELECT * FROM products ORDER BY updated_at DESC`
+    return seeded.length ? seeded.map(rowToProduct) : SEED_PRODUCTS
   }
   return rows.map(rowToProduct)
 }
@@ -259,7 +261,9 @@ async function getOrders() {
   const rows = await sql`SELECT * FROM orders ORDER BY created_at DESC`
   if (rows.length === 0) {
     await seedOrders()
-    return SEED_ORDERS
+    // Re-query after seeding so we always return DB-normalised rows
+    const seeded = await sql`SELECT * FROM orders ORDER BY created_at DESC`
+    return seeded.length ? seeded.map(rowToOrder) : SEED_ORDERS
   }
   return rows.map(rowToOrder)
 }
@@ -329,7 +333,9 @@ async function getCategories() {
   const rows = await sql`SELECT * FROM categories ORDER BY name`
   if (rows.length === 0) {
     await seedCategories()
-    return SEED_CATEGORIES
+    // Re-query after seeding so we always return DB-normalised rows
+    const seeded = await sql`SELECT * FROM categories ORDER BY name`
+    return seeded.length ? seeded.map(rowToCategory) : SEED_CATEGORIES
   }
   return rows.map(rowToCategory)
 }
@@ -451,6 +457,18 @@ app.post('/api/auth/login', async (req, res) => {
     const { phone, email, password } = req.body
     if ((!phone && !email) || !password)
       return res.status(400).json({ error: 'Phone/email and password required' })
+
+    // ── Check if this is an admin trying the wrong endpoint ──────────────
+    if (email) {
+      const admin = ADMIN_ACCOUNTS.find(a => a.email === email.toLowerCase().trim())
+      if (admin) {
+        if (admin.password !== password)
+          return res.status(401).json({ error: 'Incorrect password. Please try again.' })
+        const token = jwt.sign({ id:admin.id, email:admin.email, role:admin.role }, JWT_SECRET, { expiresIn:'24h' })
+        return res.json({ user: { id:admin.id, name:admin.name, email:admin.email, role:admin.role }, token })
+      }
+    }
+
     const users = await getUsers()
     const np = phone ? normalizePhone(phone) : null
     const user = users.find(u =>

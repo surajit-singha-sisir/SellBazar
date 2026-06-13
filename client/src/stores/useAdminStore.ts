@@ -275,6 +275,10 @@ export const useAdminStore = defineStore('admin', () => {
     } finally { loading.value.saving = false }
   }
 
+  function removeCustomer(id: string) {
+    customers.value = customers.value.filter(c => c.id !== id)
+  }
+
   // ── Image upload ──────────────────────────────────────────────────────────
   async function uploadImage(file: File) {
     return api.uploadImage(file)
@@ -291,6 +295,7 @@ export const useAdminStore = defineStore('admin', () => {
     loadAll, loadDashboard, loadProducts, loadOrders, loadCustomers, checkHealth,
     createProduct, updateProduct, deleteProduct,
     updateOrder, deleteOrder,
+    removeCustomer,
     uploadImage,
     // SSE
     connectSSE, disconnectSSE,

@@ -844,7 +844,7 @@ async function doDelete() {
       await adminStore.deleteOrder(o.id)
     }
     // Remove from customers list
-    adminStore.customers = adminStore.customers.filter(cu => cu.id !== c.id)
+    adminStore.removeCustomer(c.id)
     deleteModal.open = false
   } finally {
     deleteModal.deleting = false
