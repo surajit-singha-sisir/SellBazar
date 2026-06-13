@@ -1,1269 +1,860 @@
 <template>
-  <div class="admin-page-wrap">
+  <div class="customers-view">
 
-    <!-- ── Page header ──────────────────────────────────────────────────── -->
-    <div class="admin-page-header">
-      <div>
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-left">
         <h1 class="page-title">Customers</h1>
-        <p class="page-subtitle">{{ filtered.length }} customers found</p>
+        <span class="customer-count">{{ customers.length }} total</span>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="admin-btn secondary" @click="load">
-          <i class="fa-sharp fa-solid fa-arrows-rotate" :class="{'fa-spin': adminStore.loading.customers}"></i> Refresh
-        </button>
-        <div class="export-wrap" v-click-outside="() => exportOpen = false">
-          <button class="admin-btn secondary" @click="exportOpen = !exportOpen">
-            <i class="fa-sharp fa-solid fa-file-export"></i> Export
-            <i class="fa-solid fa-chevron-down" style="font-size:10px"></i>
-          </button>
-          <div v-if="exportOpen" class="export-dropdown">
-            <button @click="doExport('excel')"><i class="fa-solid fa-file-excel" style="color:#22c55e"></i> Excel</button>
-            <button @click="doExport('pdf')"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> PDF</button>
-            <button @click="doExport('csv')"><i class="fa-solid fa-file-csv" style="color:#3b82f6"></i> CSV</button>
-            <button @click="doExport('json')"><i class="fa-solid fa-file-code" style="color:#a855f7"></i> JSON</button>
-          </div>
-        </div>
+      <button class="btn-primary" @click="openAddModal">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"
+          stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        Add Customer
+      </button>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="toolbar">
+      <div class="search-box">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"
+          stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8" />
+          <path stroke-linecap="round" d="M21 21l-4.35-4.35" />
+        </svg>
+        <input v-model="search" type="text" placeholder="Search by name or email…" />
       </div>
     </div>
 
-    <!-- ── Summary cards ────────────────────────────────────────────────── -->
-    <div class="admin-grid-4" style="margin-bottom:20px">
-      <div class="admin-stat-card">
-        <div class="stat-icon" style="background:rgba(59,130,246,0.12);color:#3b82f6">
-          <i class="fa-sharp-duotone fa-solid fa-users"></i>
-        </div>
-        <div>
-          <div class="stat-label">Total Customers</div>
-          <div class="stat-value">{{ customers.length }}</div>
-        </div>
-        <div class="stat-delta positive"><i class="fa-solid fa-user-plus"></i> Unique buyers</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="stat-icon" style="background:rgba(34,197,94,0.12);color:#22c55e">
-          <i class="fa-sharp-duotone fa-solid fa-repeat"></i>
-        </div>
-        <div>
-          <div class="stat-label">Repeat Buyers</div>
-          <div class="stat-value">{{ repeatCount }}</div>
-        </div>
-        <div class="stat-delta positive"><i class="fa-solid fa-arrow-trend-up"></i> 2+ orders</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="stat-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">
-          <i class="fa-sharp-duotone fa-solid fa-coin"></i>
-        </div>
-        <div>
-          <div class="stat-label">Avg. Lifetime Value</div>
-          <div class="stat-value">৳{{ fmtNum(avgLtv) }}</div>
-        </div>
-        <div class="stat-delta neutral"><i class="fa-solid fa-minus"></i> Per customer</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="stat-icon" style="background:rgba(249,115,22,0.12);color:#f97316">
-          <i class="fa-sharp-duotone fa-solid fa-crown"></i>
-        </div>
-        <div>
-          <div class="stat-label">Top Spender</div>
-          <div class="stat-value" style="font-size:15px">{{ topSpender?.name ?? '—' }}</div>
-        </div>
-        <div class="stat-delta positive" v-if="topSpender">
-          <i class="fa-solid fa-star"></i> ৳{{ fmtNum(topSpender.totalSpent) }}
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Filters ───────────────────────────────────────────────────────── -->
-    <div class="admin-filters">
-      <div class="search-wrap">
-        <i class="fa-sharp fa-solid fa-magnifying-glass search-icon"></i>
-        <input class="filter-input" v-model="search" placeholder="Search name, email, phone, address…" />
-      </div>
-      <select class="filter-select" v-model="sortBy">
-        <option value="totalSpent">Sort: Highest Spent</option>
-        <option value="orderCount">Sort: Most Orders</option>
-        <option value="lastOrder">Sort: Most Recent</option>
-        <option value="name">Sort: Name A–Z</option>
-      </select>
-      <select class="filter-select" v-model="loyaltyFilter">
-        <option value="">All Customers</option>
-        <option value="loyal">Loyal (2+ orders)</option>
-        <option value="new">New (1 order)</option>
-      </select>
-    </div>
-
-    <!-- ── Table ─────────────────────────────────────────────────────────── -->
-    <div class="admin-table-wrap">
-      <div v-if="adminStore.loading.customers" style="padding:40px;text-align:center;color:var(--text-secondary)">
-        <i class="fa-solid fa-spinner-third fa-spin fa-2x"></i><br><br>Loading customers…
-      </div>
-
-      <table v-else class="admin-table customers-table">
+    <!-- Customers Table -->
+    <div class="table-card">
+      <table class="customers-table">
         <thead>
           <tr>
-            <th style="width:36px">#</th>
-            <th class="sortable" @click="sortBy='name'">Customer</th>
-            <th>Phone No.</th>
-            <th>Addresses</th>
-            <th class="sortable" @click="sortBy='orderCount'" style="text-align:center">Total Orders</th>
-            <th class="sortable" @click="sortBy='totalSpent'">Total Spent</th>
-            <th class="sortable" @click="sortBy='lastOrder'">Last Order</th>
-            <th>Account Age</th>
-            <th style="text-align:center">Actions</th>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Address</th>
+            <th>Joined</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(c, i) in paginated" :key="c.id">
-
-            <!-- # -->
-            <td class="col-index">{{ (page - 1) * perPage + i + 1 }}</td>
-
-            <!-- Customer: avatar + name + email -->
-            <td>
-              <div class="cust-identity">
-                <div class="customer-avatar" :style="{ background: avatarBg(c.id), color: avatarFg(c.id) }">
-                  {{ initials(c.name) }}
-                </div>
-                <div>
-                  <div class="cust-name">{{ c.name }}</div>
-                  <div class="cust-email">{{ c.email || '—' }}</div>
-                  <span class="status-badge" :class="c.orderCount > 1 ? 'delivered' : 'pending'" style="margin-top:3px">
-                    {{ c.orderCount > 1 ? 'Loyal' : 'New' }}
-                  </span>
-                </div>
-              </div>
-            </td>
-
-            <!-- Phone numbers (may be one or array) -->
-            <td>
-              <div class="phone-list">
-                <template v-if="phoneList(c).length">
-                  <a v-for="ph in phoneList(c)" :key="ph" :href="'tel:' + ph" class="phone-chip">
-                    <i class="fa-sharp fa-solid fa-phone"></i> {{ ph }}
-                  </a>
-                </template>
-                <span v-else class="col-muted">—</span>
-              </div>
-            </td>
-
-            <!-- Addresses: text + Google Maps link -->
-            <td>
-              <div class="address-list">
-                <template v-if="addressList(c).length">
-                  <div v-for="addr in addressList(c)" :key="addr" class="address-row">
-                    <span class="address-text">
-                      <i class="fa-sharp fa-solid fa-location-dot" style="color:var(--brand);font-size:10px;margin-right:3px"></i>
-                      {{ addr }}
-                    </span>
-                    <a
-                      :href="googleMapsUrl(addr)"
-                      target="_blank"
-                      rel="noopener"
-                      class="map-link"
-                      title="Open in Google Maps"
-                    >
-                      <i class="fa-sharp fa-solid fa-share-from-square"></i>
-                    </a>
-                  </div>
-                </template>
-                <span v-else class="col-muted">—</span>
-              </div>
-            </td>
-
-            <!-- Total Orders — click opens orders modal -->
-            <td style="text-align:center">
-              <button class="orders-badge orders-badge-btn" :title="`View all orders for ${c.name}`" @click="openOrders(c)">
-                <i class="fa-sharp fa-solid fa-receipt" style="font-size:10px"></i>
-                {{ c.orderCount }}
-              </button>
-            </td>
-
-            <!-- Total Spent -->
-            <td>
-              <div class="spent-value">৳{{ c.totalSpent.toLocaleString() }}</div>
-              <div class="col-muted" style="font-size:10px;margin-top:1px">
-                avg ৳{{ Math.round(c.totalSpent / Math.max(c.orderCount, 1)).toLocaleString() }}
-              </div>
-            </td>
-
-            <!-- Last Order -->
-            <td>
-              <div style="font-size:12px;font-weight:500">{{ fmtDate(c.lastOrder) }}</div>
-              <div class="col-muted" style="font-size:10px;margin-top:1px">{{ timeAgo(c.lastOrder) }}</div>
-            </td>
-
-            <!-- Account Age: created date + human duration -->
-            <td>
-              <div style="font-size:11px;color:var(--text-secondary)">
-                <i class="fa-sharp fa-regular fa-calendar" style="margin-right:3px"></i>
-                {{ fmtDate(c.firstOrder) }}
-              </div>
-              <div class="age-pill">{{ accountAge(c.firstOrder) }}</div>
-            </td>
-
-            <!-- Actions: Edit + Delete -->
-            <td>
-              <div class="action-btns">
-                <button class="action-btn edit" title="Edit customer" @click="openEdit(c)">
-                  <i class="fa-sharp fa-solid fa-pen-to-square"></i>
-                </button>
-                <button class="action-btn delete" title="Delete customer & all data" @click="confirmDelete(c)">
-                  <i class="fa-sharp fa-solid fa-trash"></i>
-                </button>
-              </div>
+          <tr v-if="filteredCustomers.length === 0">
+            <td colspan="5" class="empty-state">
+              <div class="empty-icon">👥</div>
+              <p>No customers found</p>
+              <span>Add your first customer to get started</span>
             </td>
           </tr>
-
-          <tr v-if="!paginated.length">
-            <td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary)">
-              No customers found.
+          <tr v-for="customer in filteredCustomers" :key="customer.id">
+            <td>
+              <div class="customer-info">
+                <div class="avatar">{{ initials(customer.name) }}</div>
+                <div>
+                  <div class="customer-name">{{ customer.name }}</div>
+                  <div class="customer-email">{{ customer.email }}</div>
+                </div>
+              </div>
+            </td>
+            <td class="text-muted">{{ customer.phone || '—' }}</td>
+            <td class="text-muted">{{ customer.address || '—' }}</td>
+            <td class="text-muted">{{ customer.joinedAt }}</td>
+            <td>
+              <div class="action-btns">
+                <button class="btn-icon" title="Edit" @click="editCustomer(customer)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button class="btn-icon btn-danger" title="Delete" @click="confirmDelete(customer)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- ── Pagination ────────────────────────────────────────────────────── -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:8px">
-      <span style="font-size:12px;color:var(--text-secondary)">
-        Showing {{ Math.min((page-1)*perPage+1, filtered.length) }}–{{ Math.min(page*perPage, filtered.length) }}
-        of {{ filtered.length }}
-      </span>
-      <div style="display:flex;gap:6px">
-        <button class="admin-btn secondary" style="padding:6px 12px" :disabled="page===1" @click="page--">
-          <i class="fa-solid fa-chevron-left"></i>
-        </button>
-        <span style="padding:6px 14px;font-size:13px;font-weight:700;color:var(--brand)">
-          {{ page }} / {{ totalPages }}
-        </span>
-        <button class="admin-btn secondary" style="padding:6px 12px" :disabled="page>=totalPages" @click="page++">
-          <i class="fa-solid fa-chevron-right"></i>
-        </button>
-      </div>
-    </div>
+    <!-- ── Add / Edit Customer Modal ── -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showModal" class="modal-backdrop" @click.self="closeModal">
+          <div class="modal" role="dialog" aria-modal="true" :aria-label="isEditing ? 'Edit Customer' : 'Add Customer'">
+
+            <!-- Modal Header -->
+            <div class="modal-header">
+              <h2>{{ isEditing ? 'Edit Customer' : 'Add New Customer' }}</h2>
+              <button class="btn-close" @click="closeModal" aria-label="Close">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+              <!-- Name -->
+              <div class="form-group">
+                <label for="cust-name">Full Name <span class="required">*</span></label>
+                <input id="cust-name" v-model.trim="form.name" type="text" placeholder="e.g. Rahim Uddin"
+                  :class="{ 'input-error': errors.name }" @input="clearError('name')" />
+                <span v-if="errors.name" class="error-msg">{{ errors.name }}</span>
+              </div>
+
+              <!-- Email -->
+              <div class="form-group">
+                <label for="cust-email">Email Address <span class="required">*</span></label>
+                <input id="cust-email" v-model.trim="form.email" type="email" placeholder="e.g. rahim@example.com"
+                  :class="{ 'input-error': errors.email }" @input="clearError('email')" />
+                <span v-if="errors.email" class="error-msg">{{ errors.email }}</span>
+              </div>
+
+              <!-- Phone -->
+              <div class="form-group">
+                <label for="cust-phone">Phone Number</label>
+                <input id="cust-phone" v-model.trim="form.phone" type="tel" placeholder="e.g. +880 1700 000000" />
+              </div>
+
+              <!-- Address -->
+              <div class="form-group">
+                <label for="cust-address">Address</label>
+                <textarea id="cust-address" v-model.trim="form.address" rows="2"
+                  placeholder="e.g. 12 Zindabazar, Sylhet"></textarea>
+              </div>
+
+              <!-- Password (only on Add) -->
+              <div v-if="!isEditing" class="form-group">
+                <label for="cust-password">Password <span class="required">*</span></label>
+                <div class="password-wrap">
+                  <input id="cust-password" v-model="form.password" :type="showPassword ? 'text' : 'password'"
+                    placeholder="Minimum 8 characters" :class="{ 'input-error': errors.password }"
+                    @input="clearError('password')" />
+                  <button type="button" class="toggle-pw" @click="showPassword = !showPassword">
+                    <svg v-if="!showPassword" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none"
+                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none"
+                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  </button>
+                </div>
+                <span v-if="errors.password" class="error-msg">{{ errors.password }}</span>
+              </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+              <button class="btn-secondary" @click="closeModal">Cancel</button>
+              <button class="btn-primary" :disabled="isSubmitting" @click="submitForm">
+                <span v-if="isSubmitting" class="spinner"></span>
+                {{ isSubmitting ? 'Saving…' : (isEditing ? 'Save Changes' : 'Add Customer') }}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Delete Confirm Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showDeleteModal" class="modal-backdrop" @click.self="showDeleteModal = false">
+          <div class="modal modal-sm" role="dialog">
+            <div class="modal-header">
+              <h2>Delete Customer</h2>
+              <button class="btn-close" @click="showDeleteModal = false">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p class="delete-msg">Are you sure you want to delete <strong>{{ customerToDelete?.name }}</strong>? This
+                action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-secondary" @click="showDeleteModal = false">Cancel</button>
+              <button class="btn-delete" @click="deleteCustomer">Delete</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Toast Notification -->
+    <Teleport to="body">
+      <Transition name="toast">
+        <div v-if="toast.show" class="toast" :class="toast.type">
+          {{ toast.message }}
+        </div>
+      </Transition>
+    </Teleport>
+
   </div>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       ORDERS POPUP MODAL
-  ══════════════════════════════════════════════════════════════════════ -->
-  <Teleport to="body">
-    <Transition name="cmodal">
-      <div v-if="ordersModal.open" class="cmodal-overlay" @click.self="ordersModal.open = false">
-        <div class="cmodal-box">
-          <!-- Header -->
-          <div class="cmodal-header">
-            <div>
-              <div class="cmodal-title">
-                <i class="fa-sharp fa-solid fa-receipt" style="color:var(--brand)"></i>
-                Orders — {{ ordersModal.customer?.name }}
-              </div>
-              <div class="cmodal-sub">{{ ordersModal.orders.length }} order(s) found</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <!-- All Invoice button: only show when orders exist -->
-              <button
-                v-if="ordersModal.orders.length"
-                class="admin-btn primary"
-                style="padding:7px 14px;font-size:12px"
-                @click="openInvoice"
-              >
-                <i class="fa-sharp fa-solid fa-file-invoice"></i> All Invoice
-              </button>
-              <button class="admin-btn ghost" style="padding:6px 10px" @click="ordersModal.open = false">
-                <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- Loading -->
-          <div v-if="ordersModal.loading" style="padding:40px;text-align:center;color:var(--text-secondary)">
-            <i class="fa-solid fa-spinner-third fa-spin fa-2x"></i><br><br>Loading orders…
-          </div>
-
-          <!-- Empty -->
-          <div v-else-if="!ordersModal.orders.length" class="admin-empty">
-            <i class="fa-sharp fa-solid fa-box-open"></i>
-            No orders found for this customer.
-          </div>
-
-          <!-- Order list -->
-          <div v-else class="cmodal-body">
-            <div v-for="ord in ordersModal.orders" :key="ord.id" class="order-card">
-              <!-- Order header -->
-              <div class="order-card-head">
-                <div>
-                  <span class="order-id">#{{ ord.id.slice(-8).toUpperCase() }}</span>
-                  <span class="status-badge" :class="ord.status" style="margin-left:8px">{{ ord.status }}</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:12px">
-                  <span style="font-size:12px;color:var(--text-secondary)">
-                    {{ fmtDate(ord.createdAt) }}
-                  </span>
-                  <span class="order-total">৳{{ ord.total.toLocaleString() }}</span>
-                </div>
-              </div>
-
-              <!-- Items -->
-              <div class="order-items">
-                <div v-for="item in ord.items" :key="item.name + item.quantity" class="order-item">
-                  <img
-                    v-if="item.image"
-                    :src="item.image"
-                    :alt="item.name"
-                    class="order-item-img"
-                    onerror="this.style.display='none'"
-                  />
-                  <div class="order-item-img-placeholder" v-else>
-                    <i class="fa-sharp fa-solid fa-box" style="font-size:12px;opacity:0.4"></i>
-                  </div>
-                  <div class="order-item-info">
-                    <div class="order-item-name">{{ item.name }}</div>
-                    <div class="order-item-meta">
-                      ৳{{ item.price.toLocaleString() }} × {{ item.quantity }}
-                    </div>
-                  </div>
-                  <div class="order-item-subtotal">
-                    ৳{{ (item.price * item.quantity).toLocaleString() }}
-                  </div>
-                </div>
-              </div>
-
-              <!-- Totals row -->
-              <div class="order-totals">
-                <span class="col-muted">Subtotal ৳{{ ord.subtotal?.toLocaleString() ?? '—' }}</span>
-                <span class="col-muted" v-if="ord.shipping">+ Shipping ৳{{ ord.shipping }}</span>
-                <span class="col-muted">· Payment: <strong style="color:var(--text-primary)">{{ ord.paymentMethod }}</strong></span>
-                <span class="col-muted">· Status: <strong style="color:var(--text-primary)">{{ ord.paymentStatus }}</strong></span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       ALL INVOICE MODAL
-  ══════════════════════════════════════════════════════════════════════ -->
-  <Teleport to="body">
-    <Transition name="cmodal">
-      <div v-if="invoiceModal.open" class="cmodal-overlay" @click.self="invoiceModal.open = false">
-        <div class="cmodal-box invoice-modal-box">
-
-          <!-- Toolbar -->
-          <div class="cmodal-header invoice-toolbar">
-            <div>
-              <div class="cmodal-title">
-                <i class="fa-sharp fa-solid fa-file-invoice" style="color:var(--brand)"></i>
-                All Orders Invoice — {{ ordersModal.customer?.name }}
-              </div>
-              <div class="cmodal-sub">{{ ordersModal.orders.length }} order(s) · Grand Total: ৳{{ invoiceGrandTotal.toLocaleString() }}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <button class="admin-btn primary" style="padding:7px 16px;font-size:12px" @click="printInvoice">
-                <i class="fa-sharp fa-solid fa-print"></i> Print
-              </button>
-              <button class="admin-btn ghost" style="padding:6px 10px" @click="invoiceModal.open = false">
-                <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- Invoice document -->
-          <div class="cmodal-body invoice-body" id="invoice-print-area">
-            <div class="inv-doc">
-
-              <!-- Header -->
-              <div class="inv-head">
-                <div>
-                  <div class="inv-brand-name">SellBazar</div>
-                  <div class="inv-brand-sub">sellbazar.com · support@sellbazar.com</div>
-                </div>
-                <div class="inv-meta">
-                  <div class="inv-meta-title">INVOICE</div>
-                  <div class="inv-meta-row">
-                    <span>Date:</span>
-                    <strong>{{ fmtDateFull(new Date().toISOString()) }}</strong>
-                  </div>
-                  <div class="inv-meta-row">
-                    <span>Orders:</span>
-                    <strong>{{ ordersModal.orders.length }}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Bill To + Summary -->
-              <div class="inv-bill-section">
-                <div>
-                  <div class="inv-section-label">BILL TO</div>
-                  <div class="inv-customer-name">{{ ordersModal.customer?.name }}</div>
-                  <div class="inv-customer-detail" v-if="ordersModal.customer?.email">
-                    <i class="fa-sharp fa-solid fa-envelope" style="color:#f97316;font-size:10px"></i>
-                    {{ ordersModal.customer.email }}
-                  </div>
-                  <div class="inv-customer-detail" v-if="ordersModal.customer?.phone">
-                    <i class="fa-sharp fa-solid fa-phone" style="color:#f97316;font-size:10px"></i>
-                    {{ ordersModal.customer.phone }}
-                  </div>
-                  <div class="inv-customer-detail" v-if="ordersModal.customer?.address">
-                    <i class="fa-sharp fa-solid fa-location-dot" style="color:#f97316;font-size:10px"></i>
-                    {{ ordersModal.customer.address }}
-                  </div>
-                </div>
-                <div class="inv-summary-box">
-                  <div class="inv-section-label">SUMMARY</div>
-                  <div class="inv-summary-row">
-                    <span>Total Orders</span>
-                    <strong>{{ ordersModal.orders.length }}</strong>
-                  </div>
-                  <div class="inv-summary-row">
-                    <span>Total Items</span>
-                    <strong>{{ invoiceTotalQty }}</strong>
-                  </div>
-                  <div class="inv-summary-row">
-                    <span>Subtotal</span>
-                    <strong>৳{{ ordersModal.orders.reduce((s,o) => s + (o.subtotal ?? o.total), 0).toLocaleString() }}</strong>
-                  </div>
-                  <div class="inv-summary-row">
-                    <span>Shipping</span>
-                    <strong>৳{{ ordersModal.orders.reduce((s,o) => s + (Number(o.shipping) || 0), 0).toLocaleString() }}</strong>
-                  </div>
-                  <div class="inv-summary-row inv-summary-total">
-                    <span>Grand Total</span>
-                    <strong>৳{{ invoiceGrandTotal.toLocaleString() }}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Per-order blocks -->
-              <div v-for="(ord, oi) in ordersModal.orders" :key="ord.id" class="inv-order-block">
-
-                <!-- Order header bar -->
-                <div class="inv-order-head">
-                  <div style="display:flex;align-items:center;gap:10px">
-                    <span class="inv-order-num">#{{ ord.id.slice(-8).toUpperCase() }}</span>
-                    <span :class="['inv-status-dot', ord.status]">{{ ord.status }}</span>
-                  </div>
-                  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-                    <span class="inv-date">{{ fmtDateFull(ord.createdAt) }}</span>
-                    <span style="font-size:11px;color:#555">Payment: <strong>{{ ord.paymentMethod }}</strong></span>
-                    <span style="font-size:11px;color:#555">Paid: <strong>{{ ord.paymentStatus }}</strong></span>
-                    <span style="font-size:13px;font-weight:800;color:#f97316">৳{{ ord.total.toLocaleString() }}</span>
-                  </div>
-                </div>
-
-                <!-- Items table -->
-                <table class="inv-items-table">
-                  <thead>
-                    <tr>
-                      <th style="width:28px">#</th>
-                      <th style="width:44px"></th>
-                      <th>Product</th>
-                      <th style="text-align:right">Unit Price</th>
-                      <th style="text-align:center">Qty</th>
-                      <th style="text-align:right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(item, ii) in ord.items" :key="item.name + ii">
-                      <td class="inv-item-num">{{ ii + 1 }}</td>
-                      <td>
-                        <img v-if="item.image" :src="item.image" :alt="item.name" class="inv-item-thumb" onerror="this.style.display='none'" />
-                        <div v-else style="width:32px;height:32px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center">
-                          <i class="fa-sharp fa-solid fa-box" style="font-size:11px;color:#bbb"></i>
-                        </div>
-                      </td>
-                      <td class="inv-item-name">{{ item.name }}</td>
-                      <td style="text-align:right">৳{{ item.price.toLocaleString() }}</td>
-                      <td style="text-align:center">{{ item.quantity }}</td>
-                      <td style="text-align:right;font-weight:700">৳{{ (item.price * item.quantity).toLocaleString() }}</td>
-                    </tr>
-                  </tbody>
-                  <tfoot>
-                    <tr class="inv-subtotal-row">
-                      <td colspan="4"></td>
-                      <td style="text-align:right;font-weight:600;color:#555">Subtotal</td>
-                      <td style="text-align:right;font-weight:700">৳{{ (ord.subtotal ?? ord.total).toLocaleString() }}</td>
-                    </tr>
-                    <tr v-if="ord.shipping" class="inv-subtotal-row">
-                      <td colspan="4"></td>
-                      <td style="text-align:right;font-weight:600;color:#555">Shipping</td>
-                      <td style="text-align:right">৳{{ Number(ord.shipping).toLocaleString() }}</td>
-                    </tr>
-                    <tr class="inv-total-row">
-                      <td colspan="4"></td>
-                      <td style="text-align:right;font-weight:800;color:#f97316">Order Total</td>
-                      <td style="text-align:right;font-weight:900;color:#f97316">৳{{ ord.total.toLocaleString() }}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-
-              </div><!-- /per-order block -->
-
-              <!-- Grand total footer -->
-              <div class="inv-grand-footer">
-                <div class="inv-grand-left">
-                  <div style="font-weight:700;font-size:13px;color:#fff;margin-bottom:4px">Thank you for shopping with us!</div>
-                  <div class="inv-grand-note">This is a computer-generated invoice. No signature required.</div>
-                </div>
-                <div class="inv-grand-total">
-                  <div class="inv-grand-label">GRAND TOTAL</div>
-                  <div class="inv-grand-value">৳{{ invoiceGrandTotal.toLocaleString() }}</div>
-                </div>
-              </div>
-
-            </div><!-- /inv-doc -->
-          </div><!-- /invoice-body -->
-
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       EDIT CUSTOMER MODAL
-  ══════════════════════════════════════════════════════════════════════ -->
-  <Teleport to="body">
-    <Transition name="cmodal">
-      <div v-if="editModal.open" class="cmodal-overlay" @click.self="editModal.open = false">
-        <div class="cmodal-box" style="max-width:480px">
-          <div class="cmodal-header">
-            <div class="cmodal-title">
-              <i class="fa-sharp fa-solid fa-pen-to-square" style="color:var(--brand)"></i>
-              Edit Customer
-            </div>
-            <button class="admin-btn ghost" style="padding:6px 10px" @click="editModal.open = false">
-              <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
-            </button>
-          </div>
-
-          <div class="cmodal-body" style="padding:20px">
-            <div class="edit-field">
-              <label>Full Name</label>
-              <input class="admin-input" v-model="editForm.name" placeholder="Full name" />
-            </div>
-            <div class="edit-field">
-              <label>Email</label>
-              <input class="admin-input" v-model="editForm.email" type="email" placeholder="Email address" />
-            </div>
-            <div class="edit-field">
-              <label>Phone</label>
-              <input class="admin-input" v-model="editForm.phone" placeholder="+880…" />
-            </div>
-            <div class="edit-field">
-              <label>Address</label>
-              <textarea class="admin-input" v-model="editForm.address" rows="3" placeholder="Full address" style="resize:vertical"></textarea>
-            </div>
-
-            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
-              <button class="admin-btn secondary" @click="editModal.open = false">Cancel</button>
-              <button class="admin-btn primary" :disabled="editModal.saving" @click="saveEdit">
-                <i class="fa-sharp fa-solid fa-floppy-disk"></i>
-                {{ editModal.saving ? 'Saving…' : 'Save Changes' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       DELETE CONFIRMATION MODAL
-  ══════════════════════════════════════════════════════════════════════ -->
-  <Teleport to="body">
-    <Transition name="cmodal">
-      <div v-if="deleteModal.open" class="cmodal-overlay" @click.self="deleteModal.open = false">
-        <div class="cmodal-box" style="max-width:420px">
-          <div class="cmodal-header">
-            <div class="cmodal-title" style="color:#ef4444">
-              <i class="fa-sharp fa-solid fa-triangle-exclamation"></i>
-              Delete Customer
-            </div>
-            <button class="admin-btn ghost" style="padding:6px 10px" @click="deleteModal.open = false">
-              <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
-            </button>
-          </div>
-          <div class="cmodal-body" style="padding:20px">
-            <p style="font-size:13px;color:var(--text-primary);margin-bottom:8px">
-              Are you sure you want to delete <strong>{{ deleteModal.customer?.name }}</strong>?
-            </p>
-            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:20px">
-              This will permanently remove the customer and all their associated order data.
-              This action <strong style="color:#ef4444">cannot be undone</strong>.
-            </p>
-            <div style="display:flex;gap:10px;justify-content:flex-end">
-              <button class="admin-btn secondary" @click="deleteModal.open = false">Cancel</button>
-              <button class="admin-btn danger" :disabled="deleteModal.deleting" @click="doDelete">
-                <i class="fa-sharp fa-solid fa-trash"></i>
-                {{ deleteModal.deleting ? 'Deleting…' : 'Yes, Delete' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, watch, onMounted, reactive } from 'vue'
-import { useAdminStore } from '@/stores/useAdminStore'
-import { useExport } from '@/composables/useExport'
-import type { ApiCustomer, ApiOrder } from '@/composables/useAdminApi'
+<script setup>
+import { ref, reactive, computed } from 'vue'
 
-const adminStore = useAdminStore()
-const exporter   = useExport()
+// ── State ──────────────────────────────────────────────
+const customers = ref([
+  { id: 1, name: 'Rahim Uddin', email: 'rahim@example.com', phone: '+880 1700 000001', address: 'Zindabazar, Sylhet', joinedAt: 'Jun 1, 2025' },
+  { id: 2, name: 'Fatema Begum', email: 'fatema@example.com', phone: '+880 1800 000002', address: 'Banani, Dhaka', joinedAt: 'Jun 5, 2025' },
+  { id: 3, name: 'Karim Hossain', email: 'karim@example.com', phone: '', address: '', joinedAt: 'Jun 10, 2025' },
+])
 
-// ── Filter / sort state ──────────────────────────────────────────────────────
-const search        = ref('')
-const sortBy        = ref<string>('totalSpent')
-const loyaltyFilter = ref('')
-const page          = ref(1)
-const perPage       = 15
-const exportOpen    = ref(false)
+const search = ref('')
+const showModal = ref(false)
+const isEditing = ref(false)
+const isSubmitting = ref(false)
+const showPassword = ref(false)
+const showDeleteModal = ref(false)
+const customerToDelete = ref(null)
+const editingId = ref(null)
 
-watch([search, sortBy, loyaltyFilter], () => { page.value = 1 })
+const form = reactive({ name: '', email: '', phone: '', address: '', password: '' })
+const errors = reactive({ name: '', email: '', password: '' })
 
-// ── Avatar helpers ───────────────────────────────────────────────────────────
-const COLORS = ['#f97316','#3b82f6','#a855f7','#22c55e','#ef4444','#06b6d4','#ec4899','#f59e0b']
-function hashIdx(s: string) {
-  let h = 0
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) % COLORS.length
-  return Math.abs(h) % COLORS.length
-}
-function avatarBg(id: string) { return COLORS[hashIdx(id)] + '22' }
-function avatarFg(id: string) { return COLORS[hashIdx(id)] }
-function initials(name: string) {
-  return (name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-}
+const toast = reactive({ show: false, message: '', type: 'success' })
 
-// ── Data helpers ─────────────────────────────────────────────────────────────
-const customers = computed(() => adminStore.customers)
-
-const repeatCount = computed(() => customers.value.filter(c => c.orderCount > 1).length)
-const avgLtv = computed(() => {
-  if (!customers.value.length) return 0
-  return Math.round(customers.value.reduce((s, c) => s + c.totalSpent, 0) / customers.value.length)
-})
-const topSpender = computed(() =>
-  customers.value.reduce((a, b) => b.totalSpent > (a?.totalSpent ?? -1) ? b : a, customers.value[0] ?? null)
-)
-
-// Phone: could be a comma/semicolon separated string or single value
-function phoneList(c: ApiCustomer): string[] {
-  if (!c.phone) return []
-  return c.phone.split(/[,;\/\s]+/).map(p => p.trim()).filter(Boolean)
-}
-
-// Address: same pattern
-function addressList(c: ApiCustomer): string[] {
-  if (!c.address) return []
-  // Try to split on common separators (pipe or double semicolon) but keep commas as part of address text
-  const raw = c.address.split(/\s*\|\s*/).map(a => a.trim()).filter(Boolean)
-  return raw.length > 1 ? raw : [c.address.trim()]
-}
-
-function googleMapsUrl(address: string): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ', Bangladesh')}`
-}
-
-// ── Date / time helpers ──────────────────────────────────────────────────────
-function fmtDate(d: string) {
-  if (!d) return '—'
-  const dt = new Date(d)
-  if (isNaN(dt.getTime())) return '—'
-  return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
-}
-
-function timeAgo(d: string): string {
-  if (!d) return ''
-  const diff = Date.now() - new Date(d).getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days < 1)  return 'Today'
-  if (days < 7)  return `${days}d ago`
-  if (days < 30) return `${Math.floor(days / 7)}w ago`
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`
-  return `${Math.floor(days / 365)}y ago`
-}
-
-function accountAge(d: string): string {
-  if (!d) return '—'
-  const from = new Date(d)
-  if (isNaN(from.getTime())) return '—'
-  const now = new Date()
-  let y = now.getFullYear() - from.getFullYear()
-  let mo = now.getMonth() - from.getMonth()
-  let dy = now.getDate() - from.getDate()
-  if (dy < 0) { mo--; dy += new Date(now.getFullYear(), now.getMonth(), 0).getDate() }
-  if (mo < 0) { y--; mo += 12 }
-  const parts: string[] = []
-  if (y > 0)  parts.push(`${y}y`)
-  if (mo > 0) parts.push(`${mo}mo`)
-  if (dy > 0) parts.push(`${dy}d`)
-  return parts.join(' ') || 'Today'
-}
-
-function fmtNum(n: number) { return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toLocaleString() }
-
-// ── Filtered + sorted + paginated ────────────────────────────────────────────
-const filtered = computed(() => {
-  let list = [...customers.value]
-  if (search.value) {
-    const q = search.value.toLowerCase()
-    list = list.filter(c =>
-      c.name?.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q) ||
-      c.address?.toLowerCase().includes(q) ||
-      c.phone?.includes(q)
-    )
-  }
-  if (loyaltyFilter.value === 'loyal') list = list.filter(c => c.orderCount > 1)
-  if (loyaltyFilter.value === 'new')   list = list.filter(c => c.orderCount === 1)
-  list.sort((a: any, b: any) => {
-    if (sortBy.value === 'name')      return (a.name || '').localeCompare(b.name || '')
-    if (sortBy.value === 'lastOrder') return (b.lastOrder || '').localeCompare(a.lastOrder || '')
-    return (b[sortBy.value] ?? 0) - (a[sortBy.value] ?? 0)
-  })
-  return list
-})
-
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / perPage)))
-const paginated  = computed(() => filtered.value.slice((page.value - 1) * perPage, page.value * perPage))
-
-// ── Orders modal ─────────────────────────────────────────────────────────────
-const ordersModal = reactive({
-  open: false,
-  loading: false,
-  customer: null as ApiCustomer | null,
-  orders: [] as ApiOrder[],
-})
-
-async function openOrders(c: ApiCustomer) {
-  ordersModal.customer = c
-  ordersModal.orders   = []
-  ordersModal.open     = true
-  ordersModal.loading  = true
-  try {
-    // Match orders from the store by customer email/phone/name
-    const allOrders: ApiOrder[] = adminStore.orders
-    ordersModal.orders = allOrders.filter(o =>
-      (c.email && o.customer?.email === c.email) ||
-      (c.phone && o.customer?.phone === c.phone) ||
-      (c.name  && o.customer?.name  === c.name)
-    )
-    // If store is empty, try loading
-    if (!allOrders.length) {
-      await adminStore.loadOrders()
-      ordersModal.orders = adminStore.orders.filter(o =>
-        (c.email && o.customer?.email === c.email) ||
-        (c.phone && o.customer?.phone === c.phone) ||
-        (c.name  && o.customer?.name  === c.name)
-      )
-    }
-  } finally {
-    ordersModal.loading = false
-  }
-}
-
-// ── Edit modal ───────────────────────────────────────────────────────────────
-const editModal = reactive({
-  open: false,
-  saving: false,
-  customer: null as ApiCustomer | null,
-})
-const editForm = reactive({ name: '', email: '', phone: '', address: '' })
-
-function openEdit(c: ApiCustomer) {
-  editModal.customer = c
-  editForm.name    = c.name    ?? ''
-  editForm.email   = c.email   ?? ''
-  editForm.phone   = c.phone   ?? ''
-  editForm.address = c.address ?? ''
-  editModal.open   = true
-}
-
-async function saveEdit() {
-  if (!editModal.customer) return
-  editModal.saving = true
-  try {
-    // Patch every matching order's customer object in the store
-    adminStore.orders.forEach(o => {
-      if (
-        (editModal.customer!.email && o.customer?.email === editModal.customer!.email) ||
-        (editModal.customer!.phone && o.customer?.phone === editModal.customer!.phone)
-      ) {
-        o.customer = {
-          ...o.customer,
-          name:    editForm.name,
-          email:   editForm.email,
-          phone:   editForm.phone,
-          address: editForm.address,
-        }
-      }
-    })
-    // Patch the customer entry in adminStore.customers
-    const idx = adminStore.customers.findIndex(c => c.id === editModal.customer!.id)
-    if (idx !== -1) {
-      adminStore.customers[idx] = {
-        ...adminStore.customers[idx],
-        name:    editForm.name,
-        email:   editForm.email,
-        phone:   editForm.phone,
-        address: editForm.address,
-      }
-    }
-    editModal.open = false
-  } finally {
-    editModal.saving = false
-  }
-}
-
-// ── Delete modal ─────────────────────────────────────────────────────────────
-const deleteModal = reactive({
-  open: false,
-  deleting: false,
-  customer: null as ApiCustomer | null,
-})
-
-function confirmDelete(c: ApiCustomer) {
-  deleteModal.customer = c
-  deleteModal.open     = true
-}
-
-async function doDelete() {
-  if (!deleteModal.customer) return
-  deleteModal.deleting = true
-  try {
-    const c = deleteModal.customer
-    // Remove all matching orders via the store (which calls the API)
-    const matchingOrders = adminStore.orders.filter(o =>
-      (c.email && o.customer?.email === c.email) ||
-      (c.phone && o.customer?.phone === c.phone)
-    )
-    for (const o of matchingOrders) {
-      await adminStore.deleteOrder(o.id)
-    }
-    // Remove from customers list
-    adminStore.removeCustomer(c.id)
-    deleteModal.open = false
-  } finally {
-    deleteModal.deleting = false
-  }
-}
-
-// ── Export ───────────────────────────────────────────────────────────────────
-function doExport(fmt: 'excel' | 'pdf' | 'csv' | 'json') {
-  exportOpen.value = false
-  const data = filtered.value.map(c => ({
-    Name: c.name, Email: c.email, Phone: c.phone, Address: c.address,
-    Orders: c.orderCount, TotalSpent: c.totalSpent,
-    AvgOrder: Math.round(c.totalSpent / Math.max(c.orderCount, 1)),
-    LastOrder: fmtDate(c.lastOrder), FirstOrder: fmtDate(c.firstOrder),
-    AccountAge: accountAge(c.firstOrder),
-    Payment: c.paymentMethod, Loyalty: c.orderCount > 1 ? 'Loyal' : 'New',
-  }))
-  const filename = `customers_${new Date().toISOString().slice(0, 10)}`
-  if (fmt === 'excel') exporter.exportExcel(data, filename, 'Customers')
-  else if (fmt === 'csv')  exporter.exportCSV(data, filename)
-  else if (fmt === 'json') exporter.exportJSON(data, filename)
-  else exporter.exportPDF(
-    ['Name', 'Email', 'Phone', 'Orders', 'Total Spent', 'Account Age', 'Status'],
-    filtered.value.map(c => [
-      c.name, c.email || '—', c.phone || '—', c.orderCount,
-      `৳${c.totalSpent}`, accountAge(c.firstOrder), c.orderCount > 1 ? 'Loyal' : 'New',
-    ]),
-    filename, 'SellBazar — Customers Export'
+// ── Computed ───────────────────────────────────────────
+const filteredCustomers = computed(() => {
+  const q = search.value.toLowerCase()
+  if (!q) return customers.value
+  return customers.value.filter(c =>
+    c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
   )
+})
+
+// ── Helpers ────────────────────────────────────────────
+const initials = name =>
+  name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+
+const clearError = field => { errors[field] = '' }
+
+const showToast = (message, type = 'success') => {
+  toast.message = message
+  toast.type = type
+  toast.show = true
+  setTimeout(() => { toast.show = false }, 3000)
 }
 
-// ── Invoice modal ─────────────────────────────────────────────────────────
-const invoiceModal = reactive({ open: false })
-
-const invoiceGrandTotal = computed(() =>
-  ordersModal.orders.reduce((s, o) => s + o.total, 0)
-)
-const invoiceTotalQty = computed(() =>
-  ordersModal.orders.reduce((s, o) => s + o.items.reduce((q, i) => q + i.quantity, 0), 0)
-)
-
-function openInvoice() { invoiceModal.open = true }
-
-function fmtDateFull(d: string) {
-  if (!d) return '—'
-  const dt = new Date(d)
-  if (isNaN(dt.getTime())) return '—'
-  return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+const resetForm = () => {
+  Object.assign(form, { name: '', email: '', phone: '', address: '', password: '' })
+  Object.assign(errors, { name: '', email: '', password: '' })
+  showPassword.value = false
 }
 
-function printInvoice() {
-  const el = document.getElementById('invoice-print-area')
-  if (!el) return
-
-  // Collect all <style> and <link rel="stylesheet"> from the current page
-  const styleNodes = [...document.querySelectorAll('style, link[rel="stylesheet"]')]
-  const styleHTML  = styleNodes.map(n => n.outerHTML).join('\n')
-
-  const win = window.open('', '_blank')
-  if (!win) return
-
-  win.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Invoice — ${ordersModal.customer?.name ?? ''}</title>
-  ${styleHTML}
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; background: #fff; }
-    /* force light-mode colours so the white invoice doc renders correctly */
-    :root {
-      --sidebar-bg: #ffffff;
-      --sidebar-border: #e5e7eb;
-      --surface: #f9fafb;
-      --surface-hover: #f3f4f6;
-      --text-primary: #111827;
-      --text-secondary: #6b7280;
-      --brand: #f97316;
-      --brand-dim: rgba(249,115,22,0.12);
-      --admin-bg: #f3f4f6;
-    }
-    /* strip modal chrome — only show the invoice doc */
-    .cmodal-overlay, .cmodal-box, .cmodal-header,
-    .invoice-toolbar, .cmodal-body { all: unset; display: block; }
-    .invoice-body { background: #f3f4f6; padding: 0; }
-  </style>
-</head>
-<body>
-  ${el.innerHTML}
-</body>
-</html>`)
-
-  win.document.close()
-
-  // Wait for resources then print
-  win.onload = () => {
-    win.focus()
-    win.print()
-    win.close()
+// ── Validate ───────────────────────────────────────────
+const validate = () => {
+  let valid = true
+  if (!form.name) { errors.name = 'Full name is required.'; valid = false }
+  if (!form.email) {
+    errors.email = 'Email is required.'; valid = false
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    errors.email = 'Enter a valid email address.'; valid = false
   }
-  // Fallback in case onload already fired
-  setTimeout(() => {
-    try { win.focus(); win.print(); win.close() } catch {}
-  }, 800)
+  if (!isEditing.value) {
+    if (!form.password) { errors.password = 'Password is required.'; valid = false }
+    else if (form.password.length < 8) { errors.password = 'Password must be at least 8 characters.'; valid = false }
+  }
+  return valid
 }
 
-// ── Load ─────────────────────────────────────────────────────────────────────
-async function load() { await adminStore.loadCustomers() }
-onMounted(load)
+// ── Modal controls ─────────────────────────────────────
+const openAddModal = () => {
+  isEditing.value = false
+  editingId.value = null
+  resetForm()
+  showModal.value = true
+}
 
-// ── Click-outside directive ──────────────────────────────────────────────────
-const vClickOutside = {
-  mounted(el: any, binding: any) {
-    el._clickHandler = (e: Event) => { if (!el.contains(e.target)) binding.value(e) }
-    document.addEventListener('click', el._clickHandler)
-  },
-  unmounted(el: any) { document.removeEventListener('click', el._clickHandler) }
+const editCustomer = customer => {
+  isEditing.value = true
+  editingId.value = customer.id
+  Object.assign(form, {
+    name: customer.name,
+    email: customer.email,
+    phone: customer.phone,
+    address: customer.address,
+    password: ''
+  })
+  Object.assign(errors, { name: '', email: '', password: '' })
+  showModal.value = true
+}
+
+const closeModal = () => {
+  showModal.value = false
+  resetForm()
+}
+
+// ── Submit ─────────────────────────────────────────────
+const submitForm = async () => {
+  if (!validate()) return
+  isSubmitting.value = true
+
+  // Simulate API call — replace with your real API call
+  await new Promise(r => setTimeout(r, 800))
+
+  if (isEditing.value) {
+    const idx = customers.value.findIndex(c => c.id === editingId.value)
+    if (idx !== -1) {
+      customers.value[idx] = {
+        ...customers.value[idx],
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+      }
+    }
+    showToast('Customer updated successfully.')
+  } else {
+    const newCustomer = {
+      id: Date.now(),
+      name: form.name,
+      email: form.email,
+      phone: form.phone,
+      address: form.address,
+      joinedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    }
+    customers.value.unshift(newCustomer)
+    showToast('Customer added successfully.')
+  }
+
+  isSubmitting.value = false
+  closeModal()
+}
+
+// ── Delete ─────────────────────────────────────────────
+const confirmDelete = customer => {
+  customerToDelete.value = customer
+  showDeleteModal.value = true
+}
+
+const deleteCustomer = () => {
+  customers.value = customers.value.filter(c => c.id !== customerToDelete.value.id)
+  showDeleteModal.value = false
+  customerToDelete.value = null
+  showToast('Customer removed.', 'error')
 }
 </script>
 
 <style scoped>
-/* ── Export dropdown ────────────────────────────────────────────────────── */
-.export-wrap { position: relative; }
-.export-dropdown {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
-  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
-  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-  min-width: 150px; overflow: hidden;
-}
-.export-dropdown button {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 10px 14px; background: none; border: none;
-  color: var(--text-primary); font-size: 13px; cursor: pointer;
-  text-align: left; transition: background 0.15s;
-}
-.export-dropdown button:hover { background: var(--surface-hover); }
-
-/* ── Column helpers ─────────────────────────────────────────────────────── */
-.col-index { color: var(--text-secondary); font-size: 12px; }
-.col-muted { color: var(--text-secondary); font-size: 11px; }
-
-/* ── Customer identity cell ─────────────────────────────────────────────── */
-.cust-identity { display: flex; align-items: flex-start; gap: 10px; }
-.customer-avatar {
-  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 800;
-}
-.cust-name  { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
-.cust-email { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
-
-/* ── Phone chips ────────────────────────────────────────────────────────── */
-.phone-list  { display: flex; flex-direction: column; gap: 4px; }
-.phone-chip  {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 500; color: var(--text-primary);
-  text-decoration: none; white-space: nowrap;
-  transition: color 0.15s;
-  i { font-size: 10px; color: var(--brand); }
-}
-.phone-chip:hover { color: var(--brand); }
-
-/* ── Address rows ───────────────────────────────────────────────────────── */
-.address-list  { display: flex; flex-direction: column; gap: 5px; }
-.address-row   { display: flex; align-items: flex-start; gap: 5px; }
-.address-text  {
-  font-size: 11px; color: var(--text-secondary); line-height: 1.4;
-  max-width: 180px; word-break: break-word;
-}
-.map-link {
-  flex-shrink: 0; display: inline-flex; align-items: center;
-  font-size: 12px; color: var(--brand); opacity: 0.7;
-  text-decoration: none; margin-top: 1px; transition: opacity 0.15s;
-}
-.map-link:hover { opacity: 1; }
-
-/* ── Orders count badge ─────────────────────────────────────────────────── */
-.orders-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 28px; height: 24px; padding: 0 8px;
-  background: var(--brand-dim); color: var(--brand);
-  border-radius: 20px; font-size: 12px; font-weight: 700;
-}
-
-/* ── Spent ──────────────────────────────────────────────────────────────── */
-.spent-value { font-size: 13px; font-weight: 700; color: var(--brand); }
-
-/* ── Account age pill ───────────────────────────────────────────────────── */
-.age-pill {
-  display: inline-block; margin-top: 3px;
-  padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600;
-  background: rgba(59,130,246,0.1); color: #3b82f6;
-}
-
-/* ── Action buttons ─────────────────────────────────────────────────────── */
-.action-btns { display: flex; gap: 6px; justify-content: center; }
-.action-btn {
-  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--sidebar-border);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 13px; transition: all 0.15s;
-  background: var(--surface);
-}
-.action-btn.edit   { color: #3b82f6; }
-.action-btn.edit:hover   { background: rgba(59,130,246,0.12); border-color: #3b82f6; }
-.action-btn.delete { color: #ef4444; }
-.action-btn.delete:hover { background: rgba(239,68,68,0.12); border-color: #ef4444; }
-.action-btn:active { transform: scale(0.92); }
-
-/* ── Table min-width for horizontal scroll ──────────────────────────────── */
-.customers-table { min-width: 1100px; }
-
-/* ══════════════════════════════════════════════════════════════════════════
-   MODAL SHARED STYLES
-══════════════════════════════════════════════════════════════════════════ */
-.cmodal-overlay {
-  position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px;
-}
-.cmodal-box {
-  background: var(--sidebar-bg); border: 1px solid var(--sidebar-border);
-  border-radius: 16px; width: 100%; max-width: 760px;
-  max-height: 86vh; display: flex; flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
-}
-.cmodal-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 18px 20px 14px; border-bottom: 1px solid var(--sidebar-border); flex-shrink: 0;
-}
-.cmodal-title { font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
-.cmodal-sub   { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
-.cmodal-body  { overflow-y: auto; padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
-
-/* ── Order card inside modal ────────────────────────────────────────────── */
-.order-card {
-  background: var(--surface); border: 1px solid var(--sidebar-border);
-  border-radius: 12px; overflow: hidden;
-}
-.order-card-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px; border-bottom: 1px solid var(--sidebar-border);
-  flex-wrap: wrap; gap: 8px;
-}
-.order-id    { font-size: 12px; font-weight: 700; color: var(--text-primary); font-family: monospace; }
-.order-total { font-size: 14px; font-weight: 800; color: var(--brand); }
-.order-items { display: flex; flex-direction: column; gap: 0; }
-.order-item  {
-  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  border-bottom: 1px solid var(--sidebar-border);
-  &:last-child { border-bottom: none; }
-}
-.order-item-img {
-  width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
-}
-.order-item-img-placeholder {
-  width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
-  background: var(--surface-hover); display: flex; align-items: center; justify-content: center;
-}
-.order-item-info { flex: 1; min-width: 0; }
-.order-item-name { font-size: 12px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.order-item-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
-.order-item-subtotal { font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; flex-shrink: 0; }
-.order-totals {
-  display: flex; flex-wrap: wrap; gap: 8px 14px;
-  padding: 8px 14px; font-size: 11px; border-top: 1px solid var(--sidebar-border);
-  background: var(--surface-hover);
-}
-
-/* ── Edit form ──────────────────────────────────────────────────────────── */
-.edit-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-.edit-field label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
-.edit-field textarea.admin-input { font-family: inherit; }
-
-/* ── Modal transition ───────────────────────────────────────────────────── */
-.cmodal-enter-active, .cmodal-leave-active { transition: opacity 0.2s, transform 0.2s; }
-.cmodal-enter-from, .cmodal-leave-to { opacity: 0; }
-.cmodal-enter-from .cmodal-box, .cmodal-leave-to .cmodal-box { transform: translateY(12px) scale(0.98); }
-
-/* ── Orders badge as clickable button ──────────────────────────────────── */
-.orders-badge-btn {
-  border: none; cursor: pointer; gap: 5px;
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.orders-badge-btn:hover {
-  transform: scale(1.08);
-  box-shadow: 0 2px 10px rgba(249,115,22,0.3);
-}
-.orders-badge-btn:active { transform: scale(0.96); }
-
-/* ══════════════════════════════════════════════════════════════════════════
-   INVOICE MODAL
-══════════════════════════════════════════════════════════════════════════ */
-.invoice-modal-box { max-width: 860px; }
-.invoice-toolbar   { background: var(--surface-hover); border-radius: 16px 16px 0 0; }
-.invoice-body      { background: var(--admin-bg); padding: 24px; }
-
-/* The white invoice document inside the modal */
-.inv-doc {
-  background: #ffffff;
-  color: #111111;
-  border-radius: 10px;
-  box-shadow: 0 4px 32px rgba(0,0,0,0.18);
-  overflow: hidden;
+/* ── Layout ── */
+.customers-view {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
   font-family: 'Inter', system-ui, sans-serif;
 }
 
-/* ── Invoice head ───────────────────────────────────────────────────────── */
-.inv-head {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 28px 28px 20px;
-  background: linear-gradient(135deg, #f97316 0%, #d946ef 100%);
-  color: #ffffff;
-  flex-wrap: wrap; gap: 12px;
-}
-.inv-brand-name { font-size: 22px; font-weight: 900; letter-spacing: -0.03em; }
-.inv-brand-sub  { font-size: 11px; opacity: 0.8; margin-top: 2px; }
-.inv-meta       { text-align: right; }
-.inv-meta-title { font-size: 14px; font-weight: 800; letter-spacing: 0.1em; opacity: 0.9; }
-.inv-meta-row   { font-size: 11px; opacity: 0.85; margin-top: 4px; display: flex; gap: 6px; justify-content: flex-end; }
-
-/* ── Bill to / summary ──────────────────────────────────────────────────── */
-.inv-bill-section {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 20px 28px; border-bottom: 2px solid #f0f0f0;
-  flex-wrap: wrap; gap: 16px;
-}
-.inv-section-label   { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: #888; margin-bottom: 6px; }
-.inv-customer-name   { font-size: 16px; font-weight: 700; color: #111; }
-.inv-customer-detail { font-size: 12px; color: #555; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
-.inv-summary-box     { min-width: 200px; }
-.inv-summary-row     {
-  display: flex; justify-content: space-between; gap: 24px;
-  font-size: 12px; padding: 5px 0; border-bottom: 1px solid #f0f0f0; color: #444;
-  strong { color: #111; font-weight: 700; }
-  &:last-child { border-bottom: none; }
-}
-.inv-summary-total { font-size: 14px !important; font-weight: 700; color: #f97316 !important; border-top: 2px solid #f97316 !important; margin-top: 4px; padding-top: 8px !important; }
-
-/* ── Per-order block ────────────────────────────────────────────────────── */
-.inv-order-block   { border-bottom: 2px solid #f0f0f0; }
-.inv-order-head    {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 28px; background: #fafafa;
-  flex-wrap: wrap; gap: 8px;
-}
-.inv-order-num     { font-size: 12px; font-weight: 700; color: #111; font-family: monospace; }
-.inv-date          { font-size: 11px; color: #777; }
-
-.inv-status-dot {
-  padding: 2px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase;
-  &.pending    { background: #fef9c3; color: #a16207; }
-  &.processing { background: #dbeafe; color: #1e40af; }
-  &.shipped    { background: #ede9fe; color: #6d28d9; }
-  &.delivered  { background: #dcfce7; color: #166534; }
-  &.cancelled  { background: #fee2e2; color: #991b1b; }
+/* ── Header ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
 
-/* ── Items table ────────────────────────────────────────────────────────── */
-.inv-items-table {
-  width: 100%; border-collapse: collapse; font-size: 12px;
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
 
-  th {
-    padding: 8px 14px; text-align: left; font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.07em; color: #888;
-    background: #f8f8f8; border-bottom: 1px solid #eee;
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.customer-count {
+  font-size: 13px;
+  color: #6b7280;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  margin-bottom: 16px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 14px;
+  max-width: 320px;
+}
+
+.search-box svg {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.search-box input {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #374151;
+  background: transparent;
+  width: 100%;
+}
+
+/* ── Table ── */
+.table-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.customers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.customers-table thead {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.customers-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.customers-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+}
+
+.customers-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.customers-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.text-muted {
+  color: #9ca3af;
+}
+
+/* ── Customer Info Cell ── */
+.customer-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.customer-name {
+  font-weight: 500;
+  color: #111827;
+}
+
+.customer-email {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+/* ── Action Buttons ── */
+.action-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.btn-icon:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-icon.btn-danger:hover {
+  background: #fef2f2;
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+/* ── Empty State ── */
+.empty-state {
+  text-align: center;
+  padding: 60px 16px;
+  color: #9ca3af;
+}
+
+.empty-icon {
+  font-size: 36px;
+  margin-bottom: 10px;
+}
+
+.empty-state p {
+  font-weight: 500;
+  color: #374151;
+  margin: 0 0 4px;
+}
+
+.empty-state span {
+  font-size: 13px;
+}
+
+/* ── Primary Button ── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover {
+  background: #4f46e5;
+}
+
+.btn-primary:disabled {
+  background: #a5b4fc;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-secondary:hover {
+  background: #f9fafb;
+}
+
+.btn-delete {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-delete:hover {
+  background: #dc2626;
+}
+
+/* ── Modal Backdrop ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* ── Modal Box ── */
+.modal {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.modal.modal-sm {
+  max-width: 380px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+}
+
+.modal-header h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.btn-close:hover {
+  color: #374151;
+}
+
+.modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── Form ── */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.required {
+  color: #ef4444;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+
+.form-group textarea {
+  resize: vertical;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+}
+
+.error-msg {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 4px;
+  display: block;
+}
+
+/* ── Password toggle ── */
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 40px;
+}
+
+.toggle-pw {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.toggle-pw:hover {
+  color: #374151;
+}
+
+/* ── Spinner ── */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
-  td {
-    padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #333; vertical-align: middle;
-  }
-  tbody tr:hover td { background: #fffbf7; }
-  tfoot td { padding: 8px 14px; font-size: 12px; color: #444; background: #fafafa; border-top: 1px solid #eee; }
 }
-.inv-item-num   { color: #aaa; font-size: 11px; width: 24px; }
-.inv-item-name  { font-weight: 500; color: #222; }
-.inv-item-thumb { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
-.inv-subtotal-row td { color: #666; }
-.inv-total-row   td  { color: #111; font-size: 13px; border-top: 2px solid #eee; }
 
-/* ── Grand total footer ─────────────────────────────────────────────────── */
-.inv-grand-footer {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 20px 28px; background: #111;
-  flex-wrap: wrap; gap: 12px;
+/* ── Delete Confirm ── */
+.delete-msg {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.6;
 }
-.inv-grand-left  { color: rgba(255,255,255,0.7); font-size: 12px; }
-.inv-grand-note  { color: rgba(255,255,255,0.6); }
-.inv-grand-total { text-align: right; }
-.inv-grand-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: rgba(255,255,255,0.5); }
-.inv-grand-value { font-size: 26px; font-weight: 900; color: #f97316; letter-spacing: -0.03em; margin-top: 2px; }
 
-/* ── Print styles ───────────────────────────────────────────────────────── */
-@media print {
-  /* Hide everything on the page */
-  body * { visibility: hidden !important; }
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
 
-  /* Show only the invoice document itself */
-  #invoice-print-area,
-  #invoice-print-area * { visibility: visible !important; }
+.toast.success {
+  background: #10b981;
+  color: #fff;
+}
 
-  /* Position the invoice to fill the page from top-left */
-  #invoice-print-area {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: visible !important;
+.toast.error {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* ── Transitions ── */
+.modal-enter-active,
+.modal-leave-active {
+  transition: all 0.2s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .modal,
+.modal-leave-to .modal {
+  transform: scale(0.95) translateY(10px);
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.25s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .customers-view {
+    padding: 16px;
   }
 
-  /* Clean up the doc card for paper */
-  .inv-doc { box-shadow: none !important; border-radius: 0 !important; }
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 
-  /* Hide the toolbar (Print button, close button) */
-  .invoice-toolbar { display: none !important; }
-
-  /* Avoid page breaks inside a single order block */
-  .inv-order-block { page-break-inside: avoid; break-inside: avoid; }
+  .customers-table th:nth-child(3),
+  .customers-table td:nth-child(3) {
+    display: none;
+  }
 }
 </style>
