@@ -305,3 +305,535 @@ async function saveOrder(o) {
 async function deleteOrder(id) {
   await sql`DELETE FROM orders WHERE id = ${id}`
 }
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+async function getUsers() {
+  const rows = await sql`SELECT * FROM users ORDER BY created_at DESC`
+  return rows.map(r => ({
+    id: r.id, name: r.name, email: r.email, phone: r.phone,
+    division: r.division, password: r.password, createdAt: r.created_at,
+  }))
+}
+
+async function saveUser(u) {
+  await sql`
+    INSERT INTO users (id,name,email,phone,division,password,created_at)
+    VALUES (${u.id}, ${u.name}, ${u.email}, ${u.phone??''}, ${u.division??'Dhaka'}, ${u.password}, ${u.createdAt??new Date().toISOString()})
+    ON CONFLICT (id) DO UPDATE SET
+      name=EXCLUDED.name, email=EXCLUDED.email, phone=EXCLUDED.phone,
+      division=EXCLUDED.division, password=EXCLUDED.password`
+}
+
+// ── Categories ────────────────────────────────────────────────────────────────
+async function getCategories() {
+  const rows = await sql`SELECT * FROM categories ORDER BY name`
+  if (rows.length === 0) {
+    await seedCategories()
+    return SEED_CATEGORIES
+  }
+  return rows.map(rowToCategory)
+}
+
+async function seedCategories() {
+  for (const c of SEED_CATEGORIES) {
+    await sql`
+      INSERT INTO categories (id,slug,name,name_bn,icon,color,subcategories)
+      VALUES (
+        ${c.id}, ${c.slug}, ${c.name}, ${c.nameBn??''}, ${c.icon??'fa-tag'},
+        ${c.color??'#6b7280'}, ${JSON.stringify(c.subcategories??[])}::jsonb
+      )
+      ON CONFLICT (id) DO NOTHING`
+  }
+}
+
+async function saveCategory(c) {
+  await sql`
+    INSERT INTO categories (id,slug,name,name_bn,icon,color,subcategories)
+    VALUES (
+      ${c.id}, ${c.slug}, ${c.name}, ${c.nameBn??''}, ${c.icon??'fa-tag'},
+      ${c.color??'#6b7280'}, ${JSON.stringify(c.subcategories??[])}::jsonb
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      slug=EXCLUDED.slug, name=EXCLUDED.name, name_bn=EXCLUDED.name_bn,
+      icon=EXCLUDED.icon, color=EXCLUDED.color, subcategories=EXCLUDED.subcategories`
+}
+
+async function deleteCategory(id) {
+  await sql`DELETE FROM categories WHERE id = ${id}`
+}
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+async function getReviews() {
+  const rows = await sql`SELECT * FROM reviews ORDER BY created_at DESC`
+  return rows.map(rowToReview)
+}
+
+async function saveReview(r) {
+  await sql`
+    INSERT INTO reviews
+      (id,product_id,product_slug,product_name,order_id,user_id,user_name,user_email,
+       rating,title,body,images,status,helpful,admin_note,created_at)
+    VALUES (
+      ${r.id}, ${r.productId}, ${r.productSlug}, ${r.productName??''},
+      ${r.orderId}, ${r.userId}, ${r.userName??'Anonymous'}, ${r.userEmail??''},
+      ${r.rating}, ${r.title??''}, ${r.body??''}, ${JSON.stringify(r.images??[])}::jsonb,
+      ${r.status??'pending'}, ${r.helpful??0}, ${r.adminNote??''},
+      ${r.createdAt??new Date().toISOString()}
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      product_slug=EXCLUDED.product_slug, product_name=EXCLUDED.product_name,
+      rating=EXCLUDED.rating, title=EXCLUDED.title, body=EXCLUDED.body,
+      images=EXCLUDED.images, status=EXCLUDED.status, helpful=EXCLUDED.helpful,
+      admin_note=EXCLUDED.admin_note, user_name=EXCLUDED.user_name`
+}
+
+async function deleteReview(id) {
+  await sql`DELETE FROM reviews WHERE id = ${id}`
+}
+
+// ── Banners ───────────────────────────────────────────────────────────────────
+async function getBanners() {
+  const rows = await sql`SELECT * FROM banners ORDER BY display_order ASC`
+  return rows.map(rowToBanner)
+}
+
+async function saveBanner(b) {
+  await sql`
+    INSERT INTO banners (id,tag,title,subtitle,cta,link,image,active,display_order)
+    VALUES (
+      ${b.id}, ${b.tag??''}, ${b.title}, ${b.subtitle??''}, ${b.cta??'Shop Now'},
+      ${b.link??'/'}, ${b.image}, ${b.active??true}, ${b.order??0}
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      tag=EXCLUDED.tag, title=EXCLUDED.title, subtitle=EXCLUDED.subtitle,
+      cta=EXCLUDED.cta, link=EXCLUDED.link, image=EXCLUDED.image,
+      active=EXCLUDED.active, display_order=EXCLUDED.display_order`
+}
+
+async function deleteBanner(id) {
+  await sql`DELETE FROM banners WHERE id = ${id}`
+}
+
+// ── Cart & Wishlist ───────────────────────────────────────────────────────────
+async function getCart(uid) {
+  const rows = await sql`SELECT cart FROM user_carts WHERE user_id = ${uid}`
+  return rows[0]?.cart ?? []
+}
+async function setCart(uid, cart) {
+  await sql`
+    INSERT INTO user_carts (user_id, cart, updated_at)
+    VALUES (${uid}, ${JSON.stringify(cart)}::jsonb, NOW())
+    ON CONFLICT (user_id) DO UPDATE SET cart=EXCLUDED.cart, updated_at=NOW()`
+}
+async function deleteCart(uid) {
+  await sql`DELETE FROM user_carts WHERE user_id = ${uid}`
+}
+
+async function getWishlist(uid) {
+  const rows = await sql`SELECT wishlist FROM user_wishlists WHERE user_id = ${uid}`
+  return rows[0]?.wishlist ?? []
+}
+async function setWishlist(uid, wishlist) {
+  await sql`
+    INSERT INTO user_wishlists (user_id, wishlist, updated_at)
+    VALUES (${uid}, ${JSON.stringify(wishlist)}::jsonb, NOW())
+    ON CONFLICT (user_id) DO UPDATE SET wishlist=EXCLUDED.wishlist, updated_at=NOW()`
+}
+async function deleteWishlist(uid) {
+  await sql`DELETE FROM user_wishlists WHERE user_id = ${uid}`
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUTH ROUTES  /api/auth/*
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { phone, email, password } = req.body
+    if ((!phone && !email) || !password)
+      return res.status(400).json({ error: 'Phone/email and password required' })
+    const users = await getUsers()
+    const np = phone ? normalizePhone(phone) : null
+    const user = users.find(u =>
+      (np && normalizePhone(u.phone) === np) ||
+      (email && u.email === email.toLowerCase().trim())
+    )
+    if (!user) return res.status(401).json({ error: 'No account found with that phone number. Please register first.' })
+    if (user.password !== password) return res.status(401).json({ error: 'Incorrect password. Please try again.' })
+    const token = jwt.sign({ id:user.id, email:user.email, phone:user.phone, role:'user' }, JWT_SECRET, { expiresIn:'30d' })
+    const { password:_pw, ...safe } = user
+    res.json({ user: safe, token })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.post('/api/auth/check', async (req, res) => {
+  try {
+    const { email, phone } = req.body
+    const users = await getUsers()
+    if (email && users.find(u => u.email === email.toLowerCase().trim()))
+      return res.status(409).json({ field:'email', error:'This email is already registered' })
+    if (phone && users.find(u => normalizePhone(u.phone) === normalizePhone(phone)))
+      return res.status(409).json({ field:'phone', error:'This phone number is already registered' })
+    res.json({ available: true })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, phone, email, division, password } = req.body
+    if (!name || !phone || !email || !password) return res.status(400).json({ error: 'All fields required' })
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
+    const users = await getUsers()
+    if (users.find(u => u.email === email.toLowerCase().trim()))
+      return res.status(409).json({ field:'email', error:'This email is already registered' })
+    if (users.find(u => normalizePhone(u.phone) === normalizePhone(phone)))
+      return res.status(409).json({ field:'phone', error:'This phone number is already registered' })
+    const newUser = {
+      id: Date.now().toString(), name: name.trim(), email: email.toLowerCase().trim(),
+      phone: normalizePhone(phone), division: division??'Dhaka', password,
+      createdAt: new Date().toISOString(),
+    }
+    await saveUser(newUser)
+    const token = jwt.sign({ id:newUser.id, email:newUser.email, phone:newUser.phone, role:'user' }, JWT_SECRET, { expiresIn:'30d' })
+    const { password:_pw, ...safe } = newUser
+    res.json({ user: safe, token })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN AUTH  /api/admin/login|me|logout
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/admin/login', (req, res) => {
+  const { email, password } = req.body
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
+  const admin = ADMIN_ACCOUNTS.find(a => a.email === email && a.password === password)
+  if (!admin) return res.status(401).json({ error: 'Invalid credentials' })
+  const token = jwt.sign({ id:admin.id, email:admin.email, role:admin.role }, JWT_SECRET, { expiresIn:'24h' })
+  res.json({ token, admin:{ id:admin.id, email:admin.email, role:admin.role, name:admin.name } })
+})
+app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ admin: req.admin }))
+app.post('/api/admin/logout', requireAdmin, (_req, res) => res.json({ message: 'Logged out' }))
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRODUCTS  /api/products/*
+// ═══════════════════════════════════════════════════════════════════════════════
+function sortByLatest(arr) {
+  return [...arr].sort((a,b)=>new Date(b.updatedAt??b.createdAt??0)-new Date(a.updatedAt??a.createdAt??0))
+}
+
+app.get('/api/products', async (req, res) => {
+  try {
+    const { category, subcategory, q, limit, featured, sortBy, order } = req.query
+    let result = await getProducts()
+    if (category && category !== 'All') result = result.filter(p => p.category === category)
+    if (subcategory && subcategory !== 'All') result = result.filter(p => p.subcategory === subcategory)
+    if (q) result = result.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || p.brand.toLowerCase().includes(q.toLowerCase()))
+    if (featured === 'true') result = result.filter(p => p.isFeatured)
+    if (sortBy) {
+      const dir = order === 'asc' ? 1 : -1
+      result.sort((a,b) => a[sortBy] < b[sortBy] ? -dir : a[sortBy] > b[sortBy] ? dir : 0)
+    } else {
+      result = sortByLatest(result)
+    }
+    if (limit) result = result.slice(0, parseInt(limit))
+    res.json({ data: result, total: result.length })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.get('/api/products/:slug', async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM products WHERE slug = ${req.params.slug} OR id = ${req.params.slug} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error: 'Product not found' })
+    res.json(rowToProduct(rows[0]))
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.post('/api/products', requireAdmin, async (req, res) => {
+  try {
+    const b = req.body
+    if (!b.name || !b.brand || !b.category || !b.price)
+      return res.status(400).json({ error: 'name, brand, category and price are required' })
+    const id = String(Date.now()), now = new Date().toISOString()
+    const product = {
+      id, slug: toSlug(b.name) + '-' + id.slice(-4),
+      name:String(b.name), nameBn:b.nameBn?String(b.nameBn):String(b.name),
+      brand:String(b.brand), category:String(b.category),
+      subcategory:b.subcategory?String(b.subcategory):'',
+      categoryBn:b.categoryBn?String(b.categoryBn):String(b.category),
+      seller:b.seller?String(b.seller):String(b.brand),
+      description:b.description?String(b.description):'',
+      price:Number(b.price), salePrice:Number(b.salePrice)||0,
+      stock:Number(b.stock)||0, deliveryDays:Number(b.deliveryDays)||3,
+      rating:Number(b.rating)||4.5, reviewCount:0,
+      location:b.location?String(b.location):'Dhaka',
+      isFeatured:Boolean(b.isFeatured), isNew:b.isNew!==undefined?Boolean(b.isNew):true,
+      images:Array.isArray(b.images)?b.images:[], tags:Array.isArray(b.tags)?b.tags:[],
+      createdAt:now, updatedAt:now,
+    }
+    await saveProduct(product)
+    res.status(201).json(product)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.put('/api/products/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM products WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error: 'Product not found' })
+    const cur = rowToProduct(rows[0]), b = req.body
+    const updated = {
+      ...cur,
+      ...(b.name!==undefined&&{name:String(b.name)}),
+      ...(b.nameBn!==undefined&&{nameBn:String(b.nameBn)}),
+      ...(b.brand!==undefined&&{brand:String(b.brand)}),
+      ...(b.category!==undefined&&{category:String(b.category)}),
+      ...(b.subcategory!==undefined&&{subcategory:String(b.subcategory)}),
+      ...(b.categoryBn!==undefined&&{categoryBn:String(b.categoryBn)}),
+      ...(b.seller!==undefined&&{seller:String(b.seller)}),
+      ...(b.description!==undefined&&{description:String(b.description)}),
+      ...(b.price!==undefined&&{price:Number(b.price)}),
+      ...(b.salePrice!==undefined&&{salePrice:Number(b.salePrice)}),
+      ...(b.stock!==undefined&&{stock:Number(b.stock)}),
+      ...(b.deliveryDays!==undefined&&{deliveryDays:Number(b.deliveryDays)}),
+      ...(b.rating!==undefined&&{rating:Number(b.rating)}),
+      ...(b.location!==undefined&&{location:String(b.location)}),
+      ...(b.isFeatured!==undefined&&{isFeatured:Boolean(b.isFeatured)}),
+      ...(b.isNew!==undefined&&{isNew:Boolean(b.isNew)}),
+      ...(Array.isArray(b.images)&&{images:b.images}),
+      ...(Array.isArray(b.tags)&&{tags:b.tags}),
+      updatedAt: new Date().toISOString(),
+    }
+    await saveProduct(updated)
+    res.json(updated)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT id FROM products WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error: 'Product not found' })
+    await deleteProduct(req.params.id)
+    res.json({ message: 'Product deleted', id: req.params.id })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ORDERS  /api/orders/*
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/api/orders/by-id/:id', async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM orders WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error: 'Order not found' })
+    const o = rowToOrder(rows[0])
+    const {id,items,subtotal,shipping,total,status,paymentMethod,paymentStatus,trackingNumber,createdAt,updatedAt,customer}=o
+    res.json({id,items,subtotal,shipping,total,status,paymentMethod,paymentStatus,trackingNumber,createdAt,updatedAt,customer})
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.get('/api/orders/stats', requireAdmin, async (_req, res) => {
+  try {
+    const orders = await getOrders()
+    const statusCounts = orders.reduce((acc,o)=>{ acc[o.status]=(acc[o.status]??0)+1; return acc },{})
+    const revenue = orders.filter(o=>o.paymentStatus==='paid').reduce((s,o)=>s+o.total,0)
+    res.json({ total:orders.length, statusCounts, revenue, pending:statusCounts['pending']??0 })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.get('/api/orders', requireAdmin, async (req, res) => {
+  try {
+    const { status, q, limit, page } = req.query
+    let result = await getOrders()
+    if (status && status !== 'all') result = result.filter(o => o.status === status)
+    if (q) {
+      const lq = q.toLowerCase()
+      result = result.filter(o =>
+        o.id.toLowerCase().includes(lq) || o.customer.name.toLowerCase().includes(lq) ||
+        o.customer.email.toLowerCase().includes(lq) || o.customer.phone.includes(lq)
+      )
+    }
+    result.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))
+    const total = result.length
+    const pageNum = parseInt(page??'1'), pageSize = parseInt(limit??'50')
+    result = result.slice((pageNum-1)*pageSize, pageNum*pageSize)
+    res.json({ data:result, total, page:pageNum, pageSize })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.get('/api/orders/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM orders WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error: 'Order not found' })
+    res.json(rowToOrder(rows[0]))
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { customer, items, subtotal, shipping, total, paymentMethod } = req.body
+    if (!customer || !items?.length || !total) return res.status(400).json({ error: 'customer, items, and total required' })
+    const order = {
+      id:`SB-${Date.now()}`, customer, items,
+      subtotal:Number(subtotal??total), shipping:Number(shipping??0),
+      discount:Number(req.body.discount??0), couponCode:req.body.couponCode??null,
+      total:Number(total), status:'pending', paymentMethod:paymentMethod??'cod',
+      paymentStatus:'pending', notes:req.body.notes??'', trackingNumber:'',
+      createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
+    }
+    await saveOrder(order)
+    res.status(201).json(order)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.put('/api/orders/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT * FROM orders WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error: 'Order not found' })
+    const cur = rowToOrder(rows[0])
+    const updated = { ...cur, ...req.body, id: cur.id, updatedAt: new Date().toISOString() }
+    await saveOrder(updated)
+    res.json(updated)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
+  try {
+    const rows = await sql`SELECT id FROM orders WHERE id = ${req.params.id} LIMIT 1`
+    if (!rows.length) return res.status(404).json({ error: 'Order not found' })
+    await deleteOrder(req.params.id)
+    res.json({ message:'Order deleted', id: req.params.id })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USER DATA  /api/user/cart  /api/user/wishlist
+// ═══════════════════════════════════════════════════════════════════════════════
+function getUserId(req) { return req.headers['x-user-id'] ?? req.body?.userId ?? null }
+
+app.get('/api/user/cart', async (req, res) => {
+  try {
+    const uid = getUserId(req); if (!uid) return res.status(401).json({ error:'Unauthorized' })
+    res.json({ cart: await getCart(uid) })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.post('/api/user/cart', async (req, res) => {
+  try {
+    const uid = getUserId(req); if (!uid) return res.status(401).json({ error:'Unauthorized' })
+    const { cart } = req.body; if (!Array.isArray(cart)) return res.status(400).json({ error:'cart must be array' })
+    await setCart(uid, cart); res.json({ ok:true })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.get('/api/user/wishlist', async (req, res) => {
+  try {
+    const uid = getUserId(req); if (!uid) return res.status(401).json({ error:'Unauthorized' })
+    res.json({ wishlist: await getWishlist(uid) })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.post('/api/user/wishlist', async (req, res) => {
+  try {
+    const uid = getUserId(req); if (!uid) return res.status(401).json({ error:'Unauthorized' })
+    const { wishlist } = req.body; if (!Array.isArray(wishlist)) return res.status(400).json({ error:'wishlist must be array' })
+    await setWishlist(uid, wishlist); res.json({ ok:true })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+app.delete('/api/user/userdata', async (req, res) => {
+  try {
+    const uid = getUserId(req); if (!uid) return res.status(401).json({ error:'Unauthorized' })
+    await deleteCart(uid); await deleteWishlist(uid); res.json({ ok:true })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CATEGORIES  /api/categories/*
+// ═══════════════════════════════════════════════════════════════════════════════
+app.get('/api/categories', async (_req, res) => {
+  try {
+    const [cats, products] = await Promise.all([getCategories(), getProducts()])
+    const enriched = cats.map(cat => ({
+      ...cat,
+      productCount: products.filter(p => p.category === cat.name).length,
+      subcategories: cat.subcategories.map(sub => ({
+        ...sub, productCount: products.filter(p => p.subcategory === sub.slug).length,
+      })),
+    }))
+    res.json({ data:enriched, total:enriched.length })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.get('/api/categories/:slug', async (req, res) => {
+  try {
+    const [cats, products] = await Promise.all([getCategories(), getProducts()])
+    const cat = cats.find(c => c.slug === req.params.slug)
+    if (!cat) return res.status(404).json({ error:'Category not found' })
+    res.json({ ...cat,
+      productCount: products.filter(p => p.category === cat.name).length,
+      subcategories: cat.subcategories.map(sub => ({ ...sub, productCount: products.filter(p => p.subcategory === sub.slug).length })),
+    })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.post('/api/categories', requireAdmin, async (req, res) => {
+  try {
+    const { name, nameBn, icon, color, slug } = req.body
+    if (!name || !slug) return res.status(400).json({ error:'name and slug required' })
+    const cats = await getCategories()
+    if (cats.find(c => c.slug === slug)) return res.status(409).json({ error:'Slug exists' })
+    const newCat = { id:`c${Date.now()}`, slug, name, nameBn:nameBn??name, icon:icon??'fa-tag', color:color??'#6b7280', subcategories:[] }
+    await saveCategory(newCat); res.status(201).json(newCat)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.put('/api/categories/:slug', requireAdmin, async (req, res) => {
+  try {
+    const cats = await getCategories()
+    const cat = cats.find(c => c.slug === req.params.slug)
+    if (!cat) return res.status(404).json({ error:'Category not found' })
+    const updated = { ...cat, ...req.body, id:cat.id, slug:cat.slug }
+    await saveCategory(updated); res.json(updated)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.delete('/api/categories/:slug', requireAdmin, async (req, res) => {
+  try {
+    const cats = await getCategories()
+    const cat = cats.find(c => c.slug === req.params.slug)
+    if (!cat) return res.status(404).json({ error:'Category not found' })
+    await deleteCategory(cat.id)
+    res.json({ message:'Category deleted', slug:cat.slug })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.post('/api/categories/:slug/subcategories', requireAdmin, async (req, res) => {
+  try {
+    const cats = await getCategories()
+    const cat = cats.find(c => c.slug === req.params.slug)
+    if (!cat) return res.status(404).json({ error:'Category not found' })
+    const { name, nameBn, icon, slug } = req.body
+    if (!name || !slug) return res.status(400).json({ error:'name and slug required' })
+    if (cat.subcategories.find(s => s.slug === slug)) return res.status(409).json({ error:'Subcategory slug exists' })
+    const newSub = { id:`s${Date.now()}`, slug, name, nameBn:nameBn??name, icon:icon??'fa-tag' }
+    cat.subcategories.push(newSub)
+    await saveCategory(cat); res.status(201).json(newSub)
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.put('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (req, res) => {
+  try {
+    const cats = await getCategories()
+    const cat = cats.find(c => c.slug === req.params.slug)
+    if (!cat) return res.status(404).json({ error:'Category not found' })
+    const subIdx = cat.subcategories.findIndex(s => s.slug === req.params.subSlug)
+    if (subIdx===-1) return res.status(404).json({ error:'Subcategory not found' })
+    cat.subcategories[subIdx] = { ...cat.subcategories[subIdx], ...req.body, id:cat.subcategories[subIdx].id, slug:cat.subcategories[subIdx].slug }
+    await saveCategory(cat); res.json(cat.subcategories[subIdx])
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (req, res) => {
+  try {
+    const cats = await getCategories()
+    const cat = cats.find(c => c.slug === req.params.slug)
+    if (!cat) return res.status(404).json({ error:'Category not found' })
+    const subIdx = cat.subcategories.findIndex(s => s.slug === req.params.subSlug)
+    if (subIdx===-1) return res.status(404).json({ error:'Subcategory not found' })
+    const [removed] = cat.subcategories.splice(subIdx,1)
+    await saveCategory(cat); res.json({ message:'Subcategory deleted', slug:removed.slug })
+  } catch(e) { res.status(500).json({ error:e.message }) }
+})
