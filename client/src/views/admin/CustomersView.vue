@@ -8,6 +8,9 @@
         <p class="page-subtitle">{{ filtered.length }} customers found</p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="admin-btn primary" @click="addModal.open = true">
+          <i class="fa-sharp fa-solid fa-user-plus"></i> Add Customer
+        </button>
         <button class="admin-btn secondary" @click="load">
           <i class="fa-sharp fa-solid fa-arrows-rotate" :class="{'fa-spin': adminStore.loading.customers}"></i> Refresh
         </button>
@@ -241,6 +244,57 @@
       </div>
     </div>
   </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       ADD NEW CUSTOMER MODAL
+  ══════════════════════════════════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="cmodal">
+      <div v-if="addModal.open" class="cmodal-overlay" @click.self="closeAddModal">
+        <div class="cmodal-box" style="max-width:480px">
+          <div class="cmodal-header">
+            <div class="cmodal-title">
+              <i class="fa-sharp fa-solid fa-user-plus" style="color:var(--brand)"></i>
+              Add New Customer
+            </div>
+            <button class="admin-btn ghost" style="padding:6px 10px" @click="closeAddModal">
+              <i class="fa-sharp fa-solid fa-xmark fa-lg"></i>
+            </button>
+          </div>
+
+          <div class="cmodal-body" style="padding:20px">
+            <div class="edit-field">
+              <label>Full Name <span style="color:#ef4444">*</span></label>
+              <input class="admin-input" v-model="addForm.name" placeholder="e.g. Rahim Uddin" />
+              <span v-if="addErrors.name" class="field-error">{{ addErrors.name }}</span>
+            </div>
+            <div class="edit-field">
+              <label>Email</label>
+              <input class="admin-input" v-model="addForm.email" type="email" placeholder="email@example.com" />
+              <span v-if="addErrors.email" class="field-error">{{ addErrors.email }}</span>
+            </div>
+            <div class="edit-field">
+              <label>Phone <span style="color:#ef4444">*</span></label>
+              <input class="admin-input" v-model="addForm.phone" placeholder="+8801XXXXXXXXX" />
+              <span v-if="addErrors.phone" class="field-error">{{ addErrors.phone }}</span>
+            </div>
+            <div class="edit-field">
+              <label>Address</label>
+              <textarea class="admin-input" v-model="addForm.address" rows="3" placeholder="Full address" style="resize:vertical"></textarea>
+            </div>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+              <button class="admin-btn secondary" @click="closeAddModal">Cancel</button>
+              <button class="admin-btn primary" :disabled="addModal.saving" @click="saveNewCustomer">
+                <i class="fa-sharp fa-solid fa-user-plus"></i>
+                {{ addModal.saving ? 'Adding…' : 'Add Customer' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 
   <!-- ══════════════════════════════════════════════════════════════════════
        ORDERS POPUP MODAL
@@ -730,6 +784,47 @@ const filtered = computed(() => {
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / perPage)))
 const paginated  = computed(() => filtered.value.slice((page.value - 1) * perPage, page.value * perPage))
 
+// ── Add Customer modal ───────────────────────────────────────────────────────
+const addModal = reactive({ open: false, saving: false })
+const addForm  = reactive({ name: '', email: '', phone: '', address: '' })
+const addErrors = reactive({ name: '', email: '', phone: '' })
+
+function closeAddModal() {
+  addModal.open = false
+  addForm.name = ''; addForm.email = ''; addForm.phone = ''; addForm.address = ''
+  addErrors.name = ''; addErrors.email = ''; addErrors.phone = ''
+}
+
+async function saveNewCustomer() {
+  // Validation
+  addErrors.name  = addForm.name.trim()  ? '' : 'Name is required.'
+  addErrors.phone = addForm.phone.trim() ? '' : 'Phone is required.'
+  addErrors.email = (!addForm.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addForm.email))
+    ? '' : 'Enter a valid email.'
+  if (addErrors.name || addErrors.phone || addErrors.email) return
+
+  addModal.saving = true
+  try {
+    const now = new Date().toISOString()
+    const newCustomer = {
+      id:           'cust_' + Date.now().toString(36),
+      name:         addForm.name.trim(),
+      email:        addForm.email.trim(),
+      phone:        addForm.phone.trim(),
+      address:      addForm.address.trim(),
+      orderCount:   0,
+      totalSpent:   0,
+      lastOrder:    now,
+      firstOrder:   now,
+      paymentMethod: '',
+    }
+    adminStore.customers.unshift(newCustomer)
+    closeAddModal()
+  } finally {
+    addModal.saving = false
+  }
+}
+
 // ── Orders modal ─────────────────────────────────────────────────────────────
 const ordersModal = reactive({
   open: false,
@@ -1113,6 +1208,11 @@ const vClickOutside = {
   display: flex; flex-wrap: wrap; gap: 8px 14px;
   padding: 8px 14px; font-size: 11px; border-top: 1px solid var(--sidebar-border);
   background: var(--surface-hover);
+}
+
+/* ── Field error ────────────────────────────────────────────────────────── */
+.field-error {
+  font-size: 11px; color: #ef4444; margin-top: -2px;
 }
 
 /* ── Edit form ──────────────────────────────────────────────────────────── */
