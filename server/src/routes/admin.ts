@@ -7,6 +7,22 @@ import { requireAdmin } from '../middleware/auth.js'
 import { redis, KEYS } from '../lib/redis.js'
 import { broadcast } from './events.js'
 
+type User = { id: string; name: string; email: string; phone: string; division: string; password: string }
+
+async function getUsers(): Promise<User[]> {
+  return (await redis.get<User[]>(KEYS.users)) ?? []
+}
+async function saveUsers(users: User[]) {
+  await redis.set(KEYS.users, users)
+}
+
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('880')) return '+' + digits
+  if (digits.startsWith('0'))   return '+880' + digits.slice(1)
+  return '+880' + digits
+}
+
 const router = Router()
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -94,6 +110,37 @@ router.get('/dashboard', requireAdmin, async (_req, res) => {
     totalProducts, lowStockCount, outOfStock, avgRating: Number(avgRating), uniqueCustomers,
     last7Days: last7, revenueByStatus, categoryBreakdown, recentOrders,
   })
+})
+
+// ── POST /api/admin/customers ───────────────────────────────────────────────
+router.post('/customers', requireAdmin, async (req, res) => {
+  const { name, email, phone, division, password } = req.body
+  if (!name || !phone || !email || !password)
+    return res.status(400).json({ error: 'Name, email, phone and password are required' })
+  if (password.length < 6)
+    return res.status(400).json({ error: 'Password must be at least 6 characters' })
+
+  const users = await getUsers()
+  const normalizedPhone = normalizePhone(phone)
+
+  if (users.find(u => u.email === email.toLowerCase().trim()))
+    return res.status(409).json({ field: 'email', error: 'This email is already registered' })
+  if (users.find(u => normalizePhone(u.phone) === normalizedPhone))
+    return res.status(409).json({ field: 'phone', error: 'This phone number is already registered' })
+
+  const newUser: User = {
+    id:       'admin_' + Date.now().toString(36),
+    name:     name.trim(),
+    email:    email.toLowerCase().trim(),
+    phone:    normalizedPhone,
+    division: division ?? 'Dhaka',
+    password,
+  }
+  users.push(newUser)
+  await saveUsers(users)
+
+  const { password: _pw, ...safe } = newUser
+  res.status(201).json({ ok: true, customer: safe })
 })
 
 // ── GET /api/admin/customers ─────────────────────────────────────────────────
