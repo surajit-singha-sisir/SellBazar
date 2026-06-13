@@ -1044,19 +1044,57 @@ app.get('/api/admin/dashboard', requireAdmin, async (_req, res) => {
 
 app.get('/api/admin/customers', requireAdmin, async (_req, res) => {
   try {
-    const orders = await getOrders()
-    const map={}
-    orders.forEach(o=>{
-      const email=o.customer?.email??o.id
-      if(!map[email]) map[email]={id:email,name:o.customer?.name??'Unknown',email:o.customer?.email??'',phone:o.customer?.phone??'',address:o.customer?.address??'',orderCount:0,totalSpent:0,lastOrder:o.createdAt,firstOrder:o.createdAt,orders:[]}
-      map[email].orderCount++; map[email].totalSpent+=o.total
-      if(o.createdAt>map[email].lastOrder) map[email].lastOrder=o.createdAt
-      if(o.createdAt<map[email].firstOrder) map[email].firstOrder=o.createdAt
-      map[email].orders.push(o.id)
+    // ── Pull real registered users from the users table ───────────────────
+    const users = await getUsers()
+
+    if (!users.length) {
+      return res.json({ data: [], total: 0 })
+    }
+
+    // ── Enrich each user with their order stats ───────────────────────────
+    const orders = await sql`SELECT * FROM orders ORDER BY created_at DESC`
+    const orderList = orders.map(rowToOrder)
+
+    const customers = users.map(u => {
+      // Match orders by email or normalised phone
+      const userOrders = orderList.filter(o =>
+        (u.email && o.customer?.email?.toLowerCase() === u.email.toLowerCase()) ||
+        (u.phone && o.customer?.phone && normalizePhone(o.customer.phone) === normalizePhone(u.phone))
+      )
+
+      const totalSpent  = userOrders.reduce((s, o) => s + o.total, 0)
+      const orderDates  = userOrders.map(o => o.createdAt).sort()
+      const lastOrder   = orderDates.at(-1) ?? u.createdAt
+      const firstOrder  = orderDates[0]     ?? u.createdAt
+
+      // Pick most-used payment method
+      const pmCounts = {}
+      userOrders.forEach(o => { pmCounts[o.paymentMethod] = (pmCounts[o.paymentMethod] ?? 0) + 1 })
+      const paymentMethod = Object.entries(pmCounts).sort((a,b) => b[1]-a[1])[0]?.[0] ?? ''
+
+      // Latest address from orders, fall back to registration data
+      const latestOrder = [...userOrders].sort((a,b) => b.createdAt.localeCompare(a.createdAt))[0]
+      const address = latestOrder?.customer?.address || ''
+
+      return {
+        id:           u.id,
+        name:         u.name,
+        email:        u.email,
+        phone:        u.phone,
+        address,
+        division:     u.division ?? '',
+        orderCount:   userOrders.length,
+        totalSpent,
+        lastOrder,
+        firstOrder:   u.createdAt,   // account creation = true "first order" baseline
+        paymentMethod,
+        orders:       userOrders.map(o => o.id),
+      }
     })
-    const customers=Object.values(map).sort((a,b)=>b.totalSpent-a.totalSpent)
-    res.json({ data:customers, total:customers.length })
-  } catch(e) { res.status(500).json({ error:e.message }) }
+
+    customers.sort((a, b) => b.totalSpent - a.totalSpent)
+    res.json({ data: customers, total: customers.length })
+  } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
 // reset-collection — truncates a table and re-seeds on next request
