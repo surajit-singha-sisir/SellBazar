@@ -890,10 +890,23 @@ app.get('/api/reviews', async (_req, res) => {
   catch(e) { res.status(500).json({ error:e.message }) }
 })
 
+// POST /api/reviews/:slug  — called from user account OrdersView
+// productSlug is in the URL; orderId + productId come from the body
+app.post('/api/reviews/:slug', async (req, res) => {
+  // Merge slug from URL into body so the shared handler below works
+  req.body.productSlug = req.params.slug
+  return reviewPostHandler(req, res)
+})
+
 app.post('/api/reviews', async (req, res) => {
+  return reviewPostHandler(req, res)
+})
+
+async function reviewPostHandler(req, res) {
   try {
     const { orderId, productId, productSlug, productName, userId, userName, userEmail, rating, title, body, images } = req.body
-    if (!orderId||!productId||!productSlug||!userId||!rating) return res.status(400).json({ error:'orderId, productId, productSlug, userId and rating required' })
+    if (!productSlug||!userId||!rating) return res.status(400).json({ error:'productSlug, userId and rating required' })
+    if (!orderId||!productId) return res.status(400).json({ error:'orderId and productId required' })
     if (rating<1||rating>5) return res.status(400).json({ error:'Rating must be 1-5' })
     const orderRows = await sql`SELECT * FROM orders WHERE id = ${orderId} LIMIT 1`
     if (!orderRows.length) return res.status(404).json({ error:'Order not found' })
