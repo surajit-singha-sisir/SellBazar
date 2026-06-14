@@ -435,7 +435,7 @@
               </div>
 
               <!-- Per-order blocks -->
-              <div v-for="(ord, oi) in ordersModal.orders" :key="ord.id" class="inv-order-block">
+              <div v-for="(ord) in ordersModal.orders" :key="ord.id" class="inv-order-block">
 
                 <!-- Order header bar -->
                 <div class="inv-order-head">
