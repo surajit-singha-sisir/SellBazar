@@ -412,20 +412,74 @@ function openEdit(review: ApiReview) {
   }
 }
 
+// ── ImgBB direct upload (same key & pipeline as ProductFormView) ──────────────
+const IMGBB_API_KEY = 'f3c12080238055cf04e5a657a47ee058'
+const IMGBB_MAX_PX  = 1920
+const IMGBB_QUALITY = 0.82
+
+function compressToWebP(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      let { naturalWidth: w, naturalHeight: h } = img
+      if (w > IMGBB_MAX_PX || h > IMGBB_MAX_PX) {
+        if (w >= h) { h = Math.round((h / w) * IMGBB_MAX_PX); w = IMGBB_MAX_PX }
+        else        { w = Math.round((w / h) * IMGBB_MAX_PX); h = IMGBB_MAX_PX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, w, h)
+      ctx.drawImage(img, 0, 0, w, h)
+      canvas.toBlob(
+        blob => {
+          if (blob) return resolve(blob)
+          canvas.toBlob(
+            jpgBlob => jpgBlob ? resolve(jpgBlob) : reject(new Error('Canvas toBlob failed')),
+            'image/jpeg', IMGBB_QUALITY
+          )
+        },
+        'image/webp', IMGBB_QUALITY
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Could not load image')) }
+    img.src = objectUrl
+  })
+}
+
+async function uploadToImgBB(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Only image files are supported')
+  if (file.size > 25 * 1024 * 1024)   throw new Error('Image must be smaller than 25 MB')
+  const blob     = await compressToWebP(file)
+  const baseName = file.name.replace(/\.[^.]+$/, '')
+  const webpFile = new File([blob], `${baseName}.webp`, { type: blob.type })
+  const formData = new FormData()
+  formData.append('image', webpFile)
+  formData.append('name', baseName)
+  const res = await fetch(
+    `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+    { method: 'POST', body: formData }
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `ImgBB upload failed (HTTP ${res.status})`)
+  }
+  const json = await res.json()
+  if (!json.success) throw new Error('ImgBB upload was not successful')
+  return json.data.display_url as string
+}
+
 async function onEditImagePick(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file || editForm.value.images.length >= 5) return
-  if (!file.type.startsWith('image/')) { editImageError.value = 'Only image files are supported'; return }
-  if (file.size > 32 * 1024 * 1024)   { editImageError.value = 'Image must be smaller than 32 MB'; return }
   editImageUploading.value = true
   editImageError.value = ''
   try {
-    const form = new FormData()
-    form.append('image', file, file.name)
-    const res = await fetch('/api/upload/imgbb', { method: 'POST', body: form })
-    const data = await res.json()
-    if (!res.ok || !data.url) throw new Error(data?.error ?? 'Upload failed')
-    editForm.value.images.push(data.url as string)
+    const url = await uploadToImgBB(file)
+    editForm.value.images.push(url)
   } catch (err: any) {
     editImageError.value = err.message ?? 'Image upload failed'
   } finally {
