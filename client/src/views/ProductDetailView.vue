@@ -450,10 +450,11 @@ function formatDate(iso: string) {
 async function loadReviews(slug: string) {
   reviewsLoading.value = true
   try {
-    const res = await fetch(`/api/reviews/${slug}`, { cache: 'no-store' })
+    const res = await fetch(`/api/reviews/product/${slug}`, { cache: 'no-store' })
     if (res.ok) {
       const data = await res.json()
-      reviews.value = data.data ?? []
+      // backend returns a plain array
+      reviews.value = Array.isArray(data) ? data : (data.data ?? [])
     }
   } catch (e) {
     console.error('[Reviews] load failed:', e)
@@ -463,9 +464,8 @@ async function loadReviews(slug: string) {
 }
 
 async function markHelpful(review: Review) {
-  if (!product.value) return
   try {
-    const res = await fetch(`/api/reviews/${product.value.slug}/${review.id}/helpful`, { method: 'POST' })
+    const res = await fetch(`/api/reviews/${review.id}/helpful`, { method: 'POST' })
     if (res.ok) {
       const data = await res.json()
       review.helpful = data.helpful
