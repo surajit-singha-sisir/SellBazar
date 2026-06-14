@@ -151,31 +151,43 @@ function onDocClick(e: MouseEvent) {
   }
 }
 
-// Auto-refresh polling — driven by settings
-let pollingTimer: number = 0
-function startPolling() {
-  clearInterval(pollingTimer)
-  if (settingsStore.settings.autoRefresh) {
-    const ms = (settingsStore.settings.autoRefreshInterval ?? 60) * 1000
-    pollingTimer = window.setInterval(() => adminStore.loadAll(), ms)
-  }
+// ── Auto-refresh — controls BOTH the polling timer AND the SSE reconnect cycle ──
+//
+// On Vercel serverless the SSE endpoint closes immediately after the snapshot,
+// so connectSSE() is a one-shot fetch. We own the reconnect loop here so that
+// the autoRefresh toggle has full control: OFF = no reconnects, no polling.
+let pollingTimer: ReturnType<typeof setInterval> | null = null
+
+function stopPolling() {
+  if (pollingTimer !== null) { clearInterval(pollingTimer); pollingTimer = null }
+  adminStore.disconnectSSE()   // kill any open SSE connection too
 }
-// Re-wire whenever settings change
+
+function startPolling() {
+  stopPolling()
+  if (!settingsStore.settings.autoRefresh) return   // toggle is OFF — do nothing
+  const ms = (settingsStore.settings.autoRefreshInterval ?? 60) * 1_000
+  // Fire once immediately to re-sync, then on the chosen interval
+  adminStore.connectSSE()
+  pollingTimer = setInterval(() => {
+    adminStore.connectSSE()    // SSE = one-shot snapshot on Vercel; this IS the poll
+  }, ms)
+}
+
+// Re-wire whenever the toggle or interval is changed (even mid-session)
 watch(
   () => [settingsStore.settings.autoRefresh, settingsStore.settings.autoRefreshInterval],
-  () => startPolling()
+  () => startPolling(),
 )
 
 onMounted(() => {
   document.addEventListener('click', onDocClick)
-  adminStore.loadAll()          // initial full fetch
-  adminStore.connectSSE()       // open SSE stream — live updates from here on
-  startPolling()                // keep optional heartbeat polling if user wants it
+  adminStore.loadAll()    // initial full REST fetch (always runs once, ignores toggle)
+  startPolling()          // SSE reconnect loop only starts if autoRefresh is ON
 })
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
-  clearInterval(pollingTimer)
-  adminStore.disconnectSSE()    // close SSE when admin logs out / navigates away
+  stopPolling()
 })
 
 function handleLogout() {

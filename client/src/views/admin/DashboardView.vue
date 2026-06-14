@@ -365,12 +365,10 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useAdminStore } from '@/stores/useAdminStore'
 import { useThemeStore } from '@/stores/useThemeStore'
-import { useSettingsStore } from '@/stores/useSettingsStore'
 import Chart from 'chart.js/auto'
 
-const adminStore    = useAdminStore()
-const themeStore    = useThemeStore()
-const settingsStore = useSettingsStore()
+const adminStore = useAdminStore()
+const themeStore = useThemeStore()
 const barChartRef  = ref<HTMLCanvasElement | null>(null)
 const doughnutRef  = ref<HTMLCanvasElement | null>(null)
 const lineChartRef = ref<HTMLCanvasElement | null>(null)
@@ -728,32 +726,6 @@ function buildCharts() {
   }
 }
 
-// ── Auto-refresh polling ─────────────────────────────────────────────────────
-let refreshTimer: ReturnType<typeof setInterval> | null = null
-
-function startRefreshTimer() {
-  stopRefreshTimer()
-  const s = settingsStore.settings
-  if (!s.autoRefresh) return                         // toggle is OFF — do nothing
-  const ms = (s.autoRefreshInterval ?? 60) * 1_000
-  refreshTimer = setInterval(() => {
-    adminStore.loadAll()
-  }, ms)
-}
-
-function stopRefreshTimer() {
-  if (refreshTimer !== null) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-}
-
-// Re-wire the timer whenever the toggle or interval changes
-watch(
-  () => [settingsStore.settings.autoRefresh, settingsStore.settings.autoRefreshInterval],
-  () => startRefreshTimer(),
-)
-
 onMounted(async () => {
   if (!adminStore.orders.length && !adminStore.products.length) {
     await adminStore.loadAll()
@@ -761,11 +733,9 @@ onMounted(async () => {
   await nextTick()
   buildCharts()
   initDashMap()
-  startRefreshTimer()   // kick off only if the setting is ON
 })
 
 onUnmounted(() => {
-  stopRefreshTimer()
   if (leafletMap) { leafletMap.remove(); leafletMap = null }
 })
 

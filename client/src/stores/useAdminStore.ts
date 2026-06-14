@@ -75,7 +75,23 @@ export const useAdminStore = defineStore('admin', () => {
   })
 
   // ── SSE real-time connection ──────────────────────────────────────────────
+  // NOTE: Vercel serverless can't hold persistent SSE connections. The server
+  // sends one snapshot then closes. The client onerror fires immediately, which
+  // previously caused an unconditional 5-second reconnect loop — effectively
+  // polling every 5 s regardless of the Auto Refresh setting.
+  //
+  // Fix: reconnect ONLY when autoRefresh is ON. The AdminLayout watches the
+  // setting and calls connectSSE / disconnectSSE to honour changes in real time.
+
   let sseSource: EventSource | null = null
+  let sseReconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  function _clearReconnectTimer() {
+    if (sseReconnectTimer !== null) {
+      clearTimeout(sseReconnectTimer)
+      sseReconnectTimer = null
+    }
+  }
 
   function connectSSE() {
     if (sseSource) return // already connected
@@ -127,16 +143,18 @@ export const useAdminStore = defineStore('admin', () => {
     })
 
     src.onerror = () => {
-      // SSE connection dropped — reconnect after 5 s
+      // SSE connection dropped (expected on Vercel serverless — server closes after snapshot).
+      // Do NOT auto-reconnect here. AdminLayout is responsible for re-calling
+      // connectSSE on a timer only when autoRefresh is enabled.
       src.close()
       sseSource = null
-      setTimeout(connectSSE, 5_000)
     }
 
     sseSource = src
   }
 
   function disconnectSSE() {
+    _clearReconnectTimer()
     if (sseSource) { sseSource.close(); sseSource = null }
   }
 
