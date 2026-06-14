@@ -6,6 +6,7 @@ const cors           = require('cors')
 const jwt            = require('jsonwebtoken')
 const { neon }       = require('@neondatabase/serverless')
 const { randomBytes } = require('crypto')
+const multer         = require('multer')
 
 // ── Neon client ───────────────────────────────────────────────────────────────
 if (!process.env.DATABASE_URL) {
@@ -856,22 +857,27 @@ app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (
   } catch(e) { res.status(500).json({ error:e.message }) }
 })
 
+// ── multer: memory storage, 32 MB limit ──────────────────────────────────────
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 32 * 1024 * 1024 } })
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // IMAGE UPLOAD  /api/upload/imgbb
+// Receives raw binary file (multipart/form-data field: "image")
+// and forwards it directly to ImgBB as multipart — no base64 involved
 // ═══════════════════════════════════════════════════════════════════════════════
-app.post('/api/upload/imgbb', async (req, res) => {
+app.post('/api/upload/imgbb', upload.single('image'), async (req, res) => {
   try {
-    const { base64, name } = req.body
-    if (!base64) return res.status(400).json({ error: 'base64 image data required' })
     const apiKey = process.env.IMGBB_API_KEY
     if (!apiKey) return res.status(500).json({ error: 'ImgBB API key not configured' })
-    const form = new URLSearchParams()
-    form.append('key', apiKey)
-    form.append('image', base64)
-    if (name) form.append('name', String(name).slice(0, 100))
-    const upstream = await fetch('https://api.imgbb.com/1/upload', {
+    if (!req.file) return res.status(400).json({ error: 'No image file received' })
+
+    // Build multipart form for ImgBB — include the key as a query param (simplest)
+    const form = new FormData()
+    form.append('image', new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname)
+
+    const upstream = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
       method: 'POST',
-      body: form,
+      body:   form,
     })
     const data = await upstream.json()
     if (!data.success) {

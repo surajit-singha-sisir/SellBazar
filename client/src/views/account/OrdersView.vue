@@ -656,43 +656,17 @@ async function onReviewImagePick(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file || reviewForm.value.images.length >= 5) return
   if (!file.type.startsWith('image/')) { reviewImageError.value = 'Only image files are supported'; return }
-  if (file.size > 25 * 1024 * 1024)   { reviewImageError.value = 'Image must be smaller than 25 MB'; return }
+  if (file.size > 32 * 1024 * 1024)   { reviewImageError.value = 'Image must be smaller than 32 MB'; return }
   reviewImageUploading.value = true
   reviewImageError.value = ''
   try {
-    // Compress via canvas (max 1600px, webp 0.82)
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      const url = URL.createObjectURL(file)
-      const img = new Image()
-      img.onload = () => {
-        URL.revokeObjectURL(url)
-        let w = img.naturalWidth, h = img.naturalHeight
-        const MAX = 1600
-        if (w > MAX || h > MAX) {
-          if (w >= h) { h = Math.round(h / w * MAX); w = MAX }
-          else        { w = Math.round(w / h * MAX); h = MAX }
-        }
-        const canvas = document.createElement('canvas')
-        canvas.width = w; canvas.height = h
-        const ctx = canvas.getContext('2d')!
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h)
-        ctx.drawImage(img, 0, 0, w, h)
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compression failed')), 'image/webp', 0.82)
-      }
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image')) }
-      img.src = url
-    })
-    const base64 = await new Promise<string>((res, rej) => {
-      const reader = new FileReader()
-      reader.onload  = () => res((reader.result as string).split(',')[1])
-      reader.onerror = () => rej(new Error('Failed to read file'))
-      reader.readAsDataURL(blob)
-    })
-    const baseName = file.name.replace(/\.[^.]+$/, '')
+    // Send raw binary file — no base64, no canvas
+    const form = new FormData()
+    form.append('image', file, file.name)
     const uploadRes = await fetch('/api/upload/imgbb', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ base64, name: baseName }),
+      method: 'POST',
+      body:   form,
+      // No Content-Type header — browser sets it automatically with boundary
     })
     const data = await uploadRes.json()
     if (!uploadRes.ok || !data.url) throw new Error(data?.error ?? 'Upload failed')
