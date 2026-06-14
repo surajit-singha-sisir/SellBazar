@@ -857,6 +857,35 @@ app.delete('/api/categories/:slug/subcategories/:subSlug', requireAdmin, async (
 })
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// IMAGE UPLOAD  /api/upload/imgbb
+// ═══════════════════════════════════════════════════════════════════════════════
+app.post('/api/upload/imgbb', async (req, res) => {
+  try {
+    const { base64, name } = req.body
+    if (!base64) return res.status(400).json({ error: 'base64 image data required' })
+    const apiKey = process.env.IMGBB_API_KEY
+    if (!apiKey) return res.status(500).json({ error: 'ImgBB API key not configured' })
+    const form = new URLSearchParams()
+    form.append('key', apiKey)
+    form.append('image', base64)
+    if (name) form.append('name', String(name).slice(0, 100))
+    const upstream = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      body: form,
+    })
+    const data = await upstream.json()
+    if (!data.success) {
+      return res.status(502).json({ error: data.error?.message ?? 'ImgBB upload failed' })
+    }
+    res.json({
+      url:       data.data.display_url,
+      deleteUrl: data.data.delete_url,
+      thumb:     data.data.thumb?.url ?? data.data.display_url,
+    })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // REVIEWS  /api/reviews/*
 // ═══════════════════════════════════════════════════════════════════════════════
 app.get('/api/reviews/product/:slug', async (req, res) => {
@@ -890,14 +919,6 @@ app.get('/api/reviews', async (_req, res) => {
   catch(e) { res.status(500).json({ error:e.message }) }
 })
 
-// POST /api/reviews/:slug  — called from user account OrdersView
-// productSlug is in the URL; orderId + productId come from the body
-app.post('/api/reviews/:slug', async (req, res) => {
-  // Merge slug from URL into body so the shared handler below works
-  req.body.productSlug = req.params.slug
-  return reviewPostHandler(req, res)
-})
-
 app.post('/api/reviews', async (req, res) => {
   return reviewPostHandler(req, res)
 })
@@ -924,7 +945,7 @@ async function reviewPostHandler(req, res) {
     await saveReview(review)
     res.status(201).json(review)
   } catch(e) { res.status(500).json({ error:e.message }) }
-})
+}
 
 app.post('/api/reviews/:id/helpful', async (req, res) => {
   try {
@@ -934,6 +955,13 @@ app.post('/api/reviews/:id/helpful', async (req, res) => {
     r.helpful = (r.helpful??0) + 1
     await saveReview(r); res.json({ helpful:r.helpful })
   } catch(e) { res.status(500).json({ error:e.message }) }
+})
+
+// POST /api/reviews/:slug  — called from user account OrdersView
+// Registered AFTER /helpful to avoid that path being swallowed by :slug
+app.post('/api/reviews/:slug', async (req, res) => {
+  req.body.productSlug = req.params.slug
+  return reviewPostHandler(req, res)
 })
 
 app.put('/api/reviews/:id', async (req, res) => {

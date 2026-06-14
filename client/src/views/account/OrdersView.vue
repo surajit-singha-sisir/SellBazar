@@ -2,7 +2,7 @@
   <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
     <h1 class="font-display font-bold text-2xl mb-6 flex items-center gap-2">
       <i class="fa-sharp fa-regular fa-box text-orange-500"></i>
-      My Ordersw
+      My Orders
     </h1>
 
     <div v-if="loading" class="text-center py-16 text-[var(--color-text-muted)]">
@@ -728,6 +728,10 @@ async function submitReview() {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        orderId:     order.id,
+        productId:   item.productId,
+        productSlug,
+        productName: item.name,
         userEmail:   user.email ?? '',
         userName:    user.name  ?? 'Customer',
         userId:      user.id    ?? '',
