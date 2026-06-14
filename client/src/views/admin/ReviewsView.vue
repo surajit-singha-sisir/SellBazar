@@ -261,6 +261,36 @@
                 <input v-model="editForm.adminNote" class="admin-input" placeholder="Optional internal note…" />
               </div>
 
+              <!-- Images -->
+              <div class="edit-field">
+                <label class="edit-label">
+                  Photos
+                  <span style="font-weight:400;font-size:10px;color:var(--text-secondary)">(up to 5)</span>
+                </label>
+                <div class="edit-img-row">
+                  <div v-for="(img, i) in editForm.images" :key="i" class="edit-img-thumb">
+                    <img :src="img" style="width:100%;height:100%;object-fit:cover" />
+                    <button class="edit-img-remove" @click="editForm.images.splice(i, 1)" title="Remove">
+                      <i class="fa-sharp fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+                  <label
+                    v-if="editForm.images.length < 5"
+                    class="edit-img-add"
+                    :class="{ 'edit-img-uploading': editImageUploading }"
+                  >
+                    <i v-if="editImageUploading" class="fa-sharp fa-solid fa-spinner fa-spin" style="color:#8b5cf6"></i>
+                    <template v-else>
+                      <i class="fa-sharp fa-regular fa-camera" style="font-size:16px"></i>
+                      <span style="font-size:9px;margin-top:2px">Add Photo</span>
+                    </template>
+                    <input type="file" accept="image/*" class="edit-img-input"
+                      :disabled="editImageUploading" @change="onEditImagePick" />
+                  </label>
+                </div>
+                <p v-if="editImageError" style="font-size:11px;color:#ef4444;margin:0">{{ editImageError }}</p>
+              </div>
+
               <!-- Error -->
               <div v-if="editError" style="display:flex;align-items:center;gap:8px;font-size:12px;color:#ef4444;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:10px 14px">
                 <i class="fa-sharp fa-solid fa-circle-exclamation"></i>
@@ -346,10 +376,12 @@ const deleting     = ref(false)
 const preview      = ref<string | null>(null)
 
 // ── Edit state ─────────────────────────────────────────────────────────────────
-const editTarget = ref<ApiReview | null>(null)
-const editSaving = ref(false)
-const editError  = ref('')
-const editHover  = ref(0)
+const editTarget      = ref<ApiReview | null>(null)
+const editSaving      = ref(false)
+const editError       = ref('')
+const editHover       = ref(0)
+const editImageUploading = ref(false)
+const editImageError  = ref('')
 const editForm = ref({
   userName:  '',
   rating:    5,
@@ -357,6 +389,7 @@ const editForm = ref({
   body:      '',
   status:    'approved' as 'approved' | 'pending' | 'rejected',
   adminNote: '',
+  images:    [] as string[],
 })
 const ratingLabels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
 const editRatingLabel = computed(() =>
@@ -364,16 +397,40 @@ const editRatingLabel = computed(() =>
 )
 
 function openEdit(review: ApiReview) {
-  editTarget.value = review
-  editError.value  = ''
-  editHover.value  = 0
-  editForm.value   = {
+  editTarget.value     = review
+  editError.value      = ''
+  editImageError.value = ''
+  editHover.value      = 0
+  editForm.value = {
     userName:  review.userName,
     rating:    review.rating,
     title:     review.title  ?? '',
     body:      review.body,
     status:    review.status as 'approved' | 'pending' | 'rejected',
     adminNote: review.adminNote ?? '',
+    images:    [...(review.images ?? [])],
+  }
+}
+
+async function onEditImagePick(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file || editForm.value.images.length >= 5) return
+  if (!file.type.startsWith('image/')) { editImageError.value = 'Only image files are supported'; return }
+  if (file.size > 32 * 1024 * 1024)   { editImageError.value = 'Image must be smaller than 32 MB'; return }
+  editImageUploading.value = true
+  editImageError.value = ''
+  try {
+    const form = new FormData()
+    form.append('image', file, file.name)
+    const res = await fetch('/api/upload/imgbb', { method: 'POST', body: form })
+    const data = await res.json()
+    if (!res.ok || !data.url) throw new Error(data?.error ?? 'Upload failed')
+    editForm.value.images.push(data.url as string)
+  } catch (err: any) {
+    editImageError.value = err.message ?? 'Image upload failed'
+  } finally {
+    editImageUploading.value = false
+    ;(e.target as HTMLInputElement).value = ''
   }
 }
 
@@ -382,7 +439,6 @@ async function saveEdit() {
   editSaving.value = true
   editError.value  = ''
   try {
-    // Local server: PUT /api/reviews/:id
     const updated = await apiFetch(`/reviews/${editTarget.value.id}`, {
       method: 'PUT',
       body: JSON.stringify(editForm.value),
@@ -578,4 +634,37 @@ onMounted(loadReviews)
 .admin-btn.danger:hover:not(:disabled) { background: #dc2626; }
 .modal-enter-active, .modal-leave-active { transition: opacity .2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
+
+/* ── Edit modal image upload ─────────────────────────────────────────────────── */
+.edit-img-row {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px;
+}
+.edit-img-thumb {
+  position: relative; width: 64px; height: 64px;
+  border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--border-color); flex-shrink: 0;
+}
+.edit-img-remove {
+  position: absolute; top: 2px; right: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(0,0,0,.6); border: none; color: #fff;
+  font-size: 9px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .15s;
+}
+.edit-img-thumb:hover .edit-img-remove { opacity: 1; }
+.edit-img-add {
+  width: 64px; height: 64px; border-radius: 10px;
+  border: 2px dashed var(--border-color);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-secondary);
+  transition: border-color .15s, background .15s; gap: 2px;
+}
+.edit-img-add:hover {
+  border-color: #8b5cf6; background: rgba(139,92,246,.06); color: #8b5cf6;
+}
+.edit-img-add.edit-img-uploading {
+  opacity: .6; cursor: not-allowed; pointer-events: none;
+}
+.edit-img-input { display: none; }
 </style>
